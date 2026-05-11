@@ -23,7 +23,6 @@ import requests
 
 from scrapers import polttoaine, tankille, bensahinta
 
-TOP_N = 3
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 STATE_PATH = Path(os.environ.get("STATE_PATH", "state.json"))
 
@@ -51,17 +50,16 @@ def gather_all_prices() -> list[dict]:
     return all_rows
 
 
-def top_cheapest(rows: list[dict], cities: set[str], n: int) -> list[dict]:
-    if cities:
-        rows = [r for r in rows if r["city"].lower() in cities]
-    # Deduplicate by (city, station, address) — same station can be reported
-    # multiple times by different sources. Keep the cheapest report per station.
-    best: dict[tuple, dict] = {}
+def cheapest_per_city(rows: list[dict], cities: set[str]) -> list[dict]:
+    """One cheapest station per configured city, sorted by price ascending."""
+    best: dict[str, dict] = {}
     for r in rows:
-        key = (r["city"].lower(), r["station"].lower(), r["address"].lower())
-        if key not in best or r["price"] < best[key]["price"]:
-            best[key] = r
-    return sorted(best.values(), key=lambda r: r["price"])[:n]
+        city = r["city"].lower()
+        if cities and city not in cities:
+            continue
+        if city not in best or r["price"] < best[city]["price"]:
+            best[city] = r
+    return sorted(best.values(), key=lambda r: r["price"])
 
 
 def load_state() -> dict:
@@ -79,14 +77,14 @@ def save_state(state: dict) -> None:
 
 def send_ntfy(topic: str, top: list[dict]) -> None:
     cheapest = top[0]
-    title = f"Halvin 95E10: {cheapest['price']:.3f} EUR/L"
+    title = f"Halvin 95E10: {cheapest['price']:.3f} EUR/L ({cheapest['city']})"
     lines = []
-    for i, r in enumerate(top, 1):
+    for r in top:
         lines.append(
-            f"{i}. {r['price']:.3f} EUR  {r['city']}  {r['station']}\n"
-            f"   {r['address']}"
+            f"{r['city']}: {r['price']:.3f} EUR\n"
+            f"  {r['station']} - {r['address']}"
         )
-    body = "\n".join(lines)
+    body = "\n\n".join(lines)
 
     url = f"{NTFY_SERVER}/{topic}"
     headers = {
@@ -111,16 +109,16 @@ def main() -> int:
         print("[info] no price data fetched")
         return 1
 
-    top = top_cheapest(rows, cfg["cities"], TOP_N)
+    top = cheapest_per_city(rows, cfg["cities"])
     if not top:
         print(f"[info] no stations in cities={cfg['cities']}")
         return 0
 
-    for i, r in enumerate(top, 1):
-        print(f"[info] {i}. {r['price']:.3f} EUR  {r['city']}  {r['station']} ({r['source']})")
+    for r in top:
+        print(f"[info] {r['price']:.3f} EUR  {r['city']}  {r['station']} ({r['source']})")
 
     send_ntfy(cfg["topic"], top)
-    print(f"[info] sent digest of {len(top)} stations")
+    print(f"[info] sent digest of {len(top)} cities")
 
     state["last_run"] = datetime.now(timezone.utc).isoformat()
     state["last_top"] = [

@@ -1,5 +1,5 @@
 {
-  "last_run": "2026-05-11T19:13:29.372947+00:00",
+  "last_run": "2026-05-11T19:14:49.447297+00:00",
   "last_top": [
     {
       "price": 1.937,
@@ -8,16 +8,16 @@
       "address": "Kuninkaanm\u00e4ki Kankikuja 2"
     },
     {
-      "price": 1.949,
-      "city": "Vantaa",
+      "price": 1.959,
+      "city": "Helsinki",
       "station": "Neste Oil Express",
-      "address": "Siltam\u00e4ki Kirkkotie 2"
+      "address": "Ala-Tikkurila Aamuruskontie 2"
     },
     {
-      "price": 1.949,
-      "city": "Vantaa",
+      "price": 1.963,
+      "city": "Espoo",
       "station": "ABC",
-      "address": "Prisma Jumbo Vantaanportinkatu 3"
+      "address": "Niittykumpu Niittymaantie 4 (E85 1.559)"
     }
   ]
 }
