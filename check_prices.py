@@ -117,14 +117,20 @@ def main() -> int:
     for r in top:
         print(f"[info] {r['price']:.3f} EUR  {r['city']}  {r['station']} ({r['source']})")
 
-    send_ntfy(cfg["topic"], top)
-    print(f"[info] sent digest of {len(top)} cities")
-
-    state["last_run"] = datetime.now(timezone.utc).isoformat()
-    state["last_top"] = [
-        {"price": r["price"], "city": r["city"], "station": r["station"], "address": r["address"]}
+    fingerprint = [
+        {"city": r["city"], "price": round(r["price"], 3),
+         "station": r["station"], "address": r["address"]}
         for r in top
     ]
+    last_sent = state.get("last_sent")
+    if last_sent == fingerprint:
+        print("[info] cheapest unchanged since last alert — skipping notification")
+    else:
+        send_ntfy(cfg["topic"], top)
+        state["last_sent"] = fingerprint
+        print(f"[info] sent digest ({len(top)} cities)")
+
+    state["last_run"] = datetime.now(timezone.utc).isoformat()
     save_state(state)
     return 0
 

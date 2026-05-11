@@ -1,23 +1,23 @@
 {
-  "last_run": "2026-05-11T19:14:49.447297+00:00",
-  "last_top": [
+  "last_sent": [
     {
-      "price": 1.937,
       "city": "Vantaa",
+      "price": 1.937,
       "station": "Neste Oil Express",
       "address": "Kuninkaanm\u00e4ki Kankikuja 2"
     },
     {
-      "price": 1.959,
       "city": "Helsinki",
+      "price": 1.959,
       "station": "Neste Oil Express",
       "address": "Ala-Tikkurila Aamuruskontie 2"
     },
     {
-      "price": 1.963,
       "city": "Espoo",
+      "price": 1.963,
       "station": "ABC",
       "address": "Niittykumpu Niittymaantie 4 (E85 1.559)"
     }
-  ]
+  ],
+  "last_run": "2026-05-11T20:22:24.061169+00:00"
 }
