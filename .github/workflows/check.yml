@@ -2,9 +2,8 @@ name: Check gas prices
 
 on:
   schedule:
-    # Every 2 hours. Polttoaine.net only updates from user reports, so
-    # checking more often than this is mostly pointless.
-    - cron: "0 */2 * * *"
+    # TESTING: every 5 minutes. Revert to "0 */2 * * *" once verified.
+    - cron: "*/5 * * * *"
   workflow_dispatch:  # manual trigger from the Actions tab
 
 jobs:
