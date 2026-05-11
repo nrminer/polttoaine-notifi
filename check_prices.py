@@ -87,15 +87,18 @@ def send_ntfy(topic: str, top: list[dict]) -> None:
     body = "\n\n".join(lines)
 
     url = f"{NTFY_SERVER}/{topic}"
+    if not url.startswith("https://"):
+        sys.exit(f"error: refusing to POST credentials over non-HTTPS URL {url!r}")
+    token = os.environ.get("NTFY_TOKEN")
+    if not token:
+        sys.exit("error: NTFY_TOKEN env var is required (auth-protected topic)")
     headers = {
         "Title": title.encode("utf-8"),
         "Content-Type": "text/plain; charset=utf-8",
         "Priority": "default",
         "Tags": "fuelpump",
+        "Authorization": f"Bearer {token}",
     }
-    token = os.environ.get("NTFY_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     resp = requests.post(url, data=body.encode("utf-8"), headers=headers, timeout=30)
     resp.raise_for_status()
 
