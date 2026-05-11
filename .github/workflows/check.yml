@@ -2,8 +2,8 @@ name: Check gas prices
 
 on:
   schedule:
-    # TESTING: every 5 minutes. Revert to "0 */2 * * *" once verified.
-    - cron: "*/5 * * * *"
+    # Every 5 hours.
+    - cron: "0 */5 * * *"
   workflow_dispatch:  # manual trigger from the Actions tab
 
 jobs:
@@ -25,7 +25,6 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
-          PRICE_THRESHOLD: ${{ vars.PRICE_THRESHOLD }}
           CITIES: Helsinki,Vantaa,Espoo
         run: python check_prices.py
 

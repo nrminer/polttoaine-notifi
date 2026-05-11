@@ -1,19 +1,15 @@
 """
-Gas price alert: checks 95E10 prices across Finnish sources, finds the
-cheapest one (optionally filtered to nearby cities), and sends an ntfy.sh
-push notification when it crosses below a user-defined threshold.
+Polttoaine Notifi — digest mode.
 
-Configuration via environment variables:
-    NTFY_TOPIC        (required) ntfy.sh topic name, e.g. "my-secret-gas-alerts-xyz123"
-    PRICE_THRESHOLD   (required) trigger when cheapest price is at or below this, e.g. "1.85"
-    CITIES            (optional) comma-separated whitelist, e.g. "Espoo,Helsinki,Vantaa,Kauniainen"
-                                 leave unset to scan all of Finland
-    NTFY_SERVER       (optional) default https://ntfy.sh — change if self-hosting
-    STATE_PATH        (optional) default ./state.json
+Every run, fetches current 95E10 prices, filters to the configured cities,
+and sends a single ntfy.sh push notification listing the 3 cheapest stations.
 
-State file tracks the last alerted price so you don't get spammed. A new
-alert only fires when the price *re-crosses* below the threshold after
-going back above it (configurable via RE_ALERT_DELTA below).
+Environment variables:
+    NTFY_TOPIC   (required) ntfy.sh topic
+    NTFY_TOKEN   (optional) ntfy bearer token, if topic requires auth
+    CITIES       (optional) comma-separated, default "Helsinki,Vantaa,Espoo"
+    NTFY_SERVER  (optional) default https://ntfy.sh
+    STATE_PATH   (optional) default ./state.json
 """
 
 from __future__ import annotations
@@ -27,53 +23,45 @@ import requests
 
 from scrapers import polttoaine, tankille, bensahinta
 
-# If price drops further by this much after an alert, send another one.
-# e.g. alerted at 1.84 with threshold 1.85, and price falls to 1.79 → re-alert.
-RE_ALERT_DELTA = 0.03
-
+TOP_N = 3
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 STATE_PATH = Path(os.environ.get("STATE_PATH", "state.json"))
 
 
 def load_config() -> dict:
     topic = os.environ.get("NTFY_TOPIC")
-    threshold = os.environ.get("PRICE_THRESHOLD")
     if not topic:
         sys.exit("error: NTFY_TOPIC env var is required")
-    if not threshold:
-        sys.exit("error: PRICE_THRESHOLD env var is required")
-    try:
-        threshold_f = float(threshold)
-    except ValueError:
-        sys.exit(f"error: PRICE_THRESHOLD must be a number, got {threshold!r}")
 
     cities_raw = os.environ.get("CITIES", "Helsinki,Vantaa,Espoo").strip()
     cities = {c.strip().lower() for c in cities_raw.split(",") if c.strip()}
 
-    return {"topic": topic, "threshold": threshold_f, "cities": cities}
+    return {"topic": topic, "cities": cities}
 
 
 def gather_all_prices() -> list[dict]:
-    """Run every scraper, merge results. Failures in one source are ignored."""
     all_rows: list[dict] = []
     for name, mod in [("polttoaine", polttoaine),
                       ("tankille", tankille),
                       ("bensahinta", bensahinta)]:
         try:
-            rows = mod.fetch_prices()
-            all_rows.extend(rows)
+            all_rows.extend(mod.fetch_prices())
         except Exception as e:
-            # Don't let one broken source kill the run
             print(f"[warn] {name} failed: {e}", file=sys.stderr)
     return all_rows
 
 
-def filter_and_pick_cheapest(rows: list[dict], cities: set[str]) -> dict | None:
+def top_cheapest(rows: list[dict], cities: set[str], n: int) -> list[dict]:
     if cities:
         rows = [r for r in rows if r["city"].lower() in cities]
-    if not rows:
-        return None
-    return min(rows, key=lambda r: r["price"])
+    # Deduplicate by (city, station, address) — same station can be reported
+    # multiple times by different sources. Keep the cheapest report per station.
+    best: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r["city"].lower(), r["station"].lower(), r["address"].lower())
+        if key not in best or r["price"] < best[key]["price"]:
+            best[key] = r
+    return sorted(best.values(), key=lambda r: r["price"])[:n]
 
 
 def load_state() -> dict:
@@ -82,51 +70,35 @@ def load_state() -> dict:
             return json.loads(STATE_PATH.read_text())
         except json.JSONDecodeError:
             pass
-    return {"last_alerted_price": None, "last_run": None}
+    return {}
 
 
 def save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2))
 
 
-def should_alert(cheapest_price: float, threshold: float, state: dict) -> bool:
-    """
-    Alert if:
-      - price is at or below threshold, AND
-      - either we haven't alerted before, OR
-      - price has dropped at least RE_ALERT_DELTA below the last alerted price
-    """
-    if cheapest_price > threshold:
-        return False
-    last = state.get("last_alerted_price")
-    if last is None:
-        return True
-    return cheapest_price <= last - RE_ALERT_DELTA
+def send_ntfy(topic: str, top: list[dict]) -> None:
+    cheapest = top[0]
+    title = f"Halvin 95E10: {cheapest['price']:.3f} EUR/L"
+    lines = []
+    for i, r in enumerate(top, 1):
+        lines.append(
+            f"{i}. {r['price']:.3f} EUR  {r['city']}  {r['station']}\n"
+            f"   {r['address']}"
+        )
+    body = "\n".join(lines)
 
-
-def send_ntfy(topic: str, cheapest: dict, threshold: float) -> None:
-    price = cheapest["price"]
-    title = f"⛽ 95E10 @ {price:.3f} € — below {threshold:.2f}"
-    body = (
-        f"{cheapest['city']} · {cheapest['station']}\n"
-        f"{cheapest['address']}\n"
-        f"Updated {cheapest['date']} · via {cheapest['source']}"
-    )
     url = f"{NTFY_SERVER}/{topic}"
     headers = {
         "Title": title.encode("utf-8"),
+        "Content-Type": "text/plain; charset=utf-8",
         "Priority": "default",
         "Tags": "fuelpump",
     }
     token = os.environ.get("NTFY_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    resp = requests.post(
-        url,
-        data=body.encode("utf-8"),
-        headers=headers,
-        timeout=30,
-    )
+    resp = requests.post(url, data=body.encode("utf-8"), headers=headers, timeout=30)
     resp.raise_for_status()
 
 
@@ -136,33 +108,25 @@ def main() -> int:
 
     rows = gather_all_prices()
     if not rows:
-        print("[info] no price data fetched (all sources empty/failed)")
+        print("[info] no price data fetched")
         return 1
 
-    cheapest = filter_and_pick_cheapest(rows, cfg["cities"])
-    if cheapest is None:
-        print(f"[info] no matching stations in cities={cfg['cities']}")
+    top = top_cheapest(rows, cfg["cities"], TOP_N)
+    if not top:
+        print(f"[info] no stations in cities={cfg['cities']}")
         return 0
 
-    print(f"[info] cheapest 95E10: {cheapest['price']:.3f} € at "
-          f"{cheapest['city']} {cheapest['station']} ({cheapest['source']})")
-    print(f"[info] threshold: {cfg['threshold']:.3f} €  "
-          f"last alerted: {state.get('last_alerted_price')}")
+    for i, r in enumerate(top, 1):
+        print(f"[info] {i}. {r['price']:.3f} EUR  {r['city']}  {r['station']} ({r['source']})")
 
-    if should_alert(cheapest["price"], cfg["threshold"], state):
-        send_ntfy(cfg["topic"], cheapest, cfg["threshold"])
-        state["last_alerted_price"] = cheapest["price"]
-        print(f"[info] ALERT sent: {cheapest['price']:.3f} €")
-    else:
-        # Reset alert state if price has climbed back above threshold,
-        # so a future dip triggers a fresh alert.
-        if cheapest["price"] > cfg["threshold"] and state.get("last_alerted_price"):
-            state["last_alerted_price"] = None
-            print("[info] price back above threshold, alert state cleared")
-        else:
-            print("[info] no alert (either above threshold or already alerted)")
+    send_ntfy(cfg["topic"], top)
+    print(f"[info] sent digest of {len(top)} stations")
 
     state["last_run"] = datetime.now(timezone.utc).isoformat()
+    state["last_top"] = [
+        {"price": r["price"], "city": r["city"], "station": r["station"], "address": r["address"]}
+        for r in top
+    ]
     save_state(state)
     return 0
 

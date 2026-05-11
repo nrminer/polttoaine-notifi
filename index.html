@@ -30,27 +30,29 @@
 <p class="sub">95E10 hintavahti — Helsinki, Vantaa, Espoo</p>
 
 <p>Seuraava tarkistus:</p>
-<p class="timer" id="t">--:--</p>
+<p class="timer" id="t">--:--:--</p>
 
 <hr>
 
-<p>Tarkistaa polttoaine.net-sivuston joka 5. minuutti (testitila).</p>
-<p>Lähettää push-ilmoituksen, kun 95E10 laskee alle <b>1,85 €/L</b>.</p>
+<p>Tarkistaa polttoaine.net-sivuston <b>5 tunnin välein</b>.</p>
+<p>Lähettää push-ilmoituksen, jossa on <b>3 halvinta 95E10-asemaa</b> Helsingissä, Vantaalla ja Espoossa.</p>
 <p>Ilmoitukset välitetään <a href="https://ntfy.sh">ntfy.sh</a>-palvelun kautta, aihe <code>polttoaine</code>.</p>
 
 <p><a href="https://github.com/nrminer/polttoaine-notifi">lähdekoodi githubissa</a></p>
 
 <script>
   function tick() {
+    // Cron: "0 */5 * * *" UTC — fires at 00, 05, 10, 15, 20 UTC
     const now = new Date();
     const next = new Date(now);
-    next.setSeconds(0, 0);
-    next.setMinutes((Math.floor(now.getMinutes() / 5) + 1) * 5);
+    next.setUTCMinutes(0, 0, 0);
+    next.setUTCHours((Math.floor(now.getUTCHours() / 5) + 1) * 5);
     let d = Math.max(0, next - now);
-    const m = Math.floor(d / 60000); d -= m * 60000;
+    const h = Math.floor(d / 3600000); d -= h * 3600000;
+    const m = Math.floor(d / 60000);   d -= m * 60000;
     const s = Math.floor(d / 1000);
     const p = n => String(n).padStart(2, '0');
-    document.getElementById('t').textContent = p(m) + ':' + p(s);
+    document.getElementById('t').textContent = p(h) + ':' + p(m) + ':' + p(s);
   }
   tick();
   setInterval(tick, 1000);
