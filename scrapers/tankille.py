@@ -15,5 +15,5 @@ are a few community Python/Node clients you can crib from. For now this
 returns an empty list and the runner will just skip it.
 """
 
-def fetch_prices() -> list[dict]:
+def fetch_prices(fuel: str = "95E10") -> list[dict]:
     return []

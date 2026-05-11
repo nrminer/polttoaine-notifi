@@ -17,5 +17,5 @@ If you want this data, the practical options are:
 Returning empty for now.
 """
 
-def fetch_prices() -> list[dict]:
+def fetch_prices(fuel: str = "95E10") -> list[dict]:
     return []
