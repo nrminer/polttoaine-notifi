@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Polttoaine Notifi</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(ellipse at top, #1a2332, #0a0f18);
+    color: #e8eef5;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 24px;
+  }
+  .card {
+    max-width: 560px; width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 40px 28px;
+    backdrop-filter: blur(8px);
+  }
+  h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: 0.3px; }
+  .sub { color: #8a9bb0; font-size: 14px; margin-bottom: 32px; }
+  .countdown {
+    font-variant-numeric: tabular-nums;
+    font-size: 64px; font-weight: 700;
+    letter-spacing: -1px; color: #6fdc8c;
+    margin: 12px 0 8px;
+  }
+  .label { color: #8a9bb0; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; }
+  .meta {
+    margin-top: 32px; padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 13px; color: #8a9bb0; line-height: 1.7;
+  }
+  .meta strong { color: #cfd8e3; font-weight: 500; }
+  a { color: #6fdc8c; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>⛽ Polttoaine Notifi</h1>
+    <div class="sub">95E10 hintavahti · Helsinki, Vantaa, Espoo</div>
+
+    <div class="label">Next check in</div>
+    <div class="countdown" id="countdown">--:--:--</div>
+
+    <div class="meta">
+      <div>Checks every <strong>2 hours</strong> via GitHub Actions.</div>
+      <div>Alerts when cheapest 95E10 drops below <strong>1.85 €/L</strong>.</div>
+      <div>Notifications via <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a> · topic <strong>polttoaine</strong>.</div>
+      <div style="margin-top:10px"><a href="https://github.com/nrminer/polttoaine-notifi" target="_blank" rel="noopener">View on GitHub →</a></div>
+    </div>
+  </div>
+
+<script>
+  function nextRun() {
+    // Cron: "0 */2 * * *" UTC — fires at 00, 02, 04 … UTC
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCMinutes(0, 0, 0);
+    const h = now.getUTCHours();
+    const nextH = (Math.floor(h / 2) + 1) * 2;
+    next.setUTCHours(nextH);
+    return next;
+  }
+  function tick() {
+    const target = nextRun();
+    let diff = Math.max(0, target - new Date());
+    const h = Math.floor(diff / 3600000); diff -= h * 3600000;
+    const m = Math.floor(diff / 60000);   diff -= m * 60000;
+    const s = Math.floor(diff / 1000);
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('countdown').textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
