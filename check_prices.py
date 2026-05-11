@@ -80,15 +80,14 @@ def build_digest(cities: list[str]) -> dict:
 
 
 def fingerprint(digest: dict) -> list:
-    def key(r):
-        return None if not r else [
-            round(r["price"], 3), r["city"], r["station"], r["address"]
-        ]
+    """Only the cheapest *price* per slot — station identity is ignored."""
+    def price(r):
+        return None if not r else round(r["price"], 3)
     out = []
     for fuel in ("95E10", "diesel"):
         for city, r in digest[fuel].items():
-            out.append([fuel, city, key(r)])
-    out.append(["diesel_any", None, key(digest["diesel_any"])])
+            out.append([fuel, city, price(r)])
+    out.append(["diesel_any", None, price(digest["diesel_any"])])
     return out
 
 
