@@ -61,6 +61,33 @@ def cheapest_any(rows: list[dict]) -> dict | None:
     return min(rows, key=lambda r: r["price"]) if rows else None
 
 
+def per_source_cheapest(rows: list[dict], city: str) -> dict[str, dict]:
+    """Returns {source_name: cheapest_row_in_city} — used for cross-source validation."""
+    best: dict[str, dict] = {}
+    for r in rows:
+        if r["city"].lower() != city.lower():
+            continue
+        s = r["source"]
+        if s not in best or r["price"] < best[s]["price"]:
+            best[s] = r
+    return best
+
+
+# If sources disagree by more than this many euros on the cheapest in a city,
+# include a note in the notification body.
+SOURCE_TOLERANCE = 0.005  # half a cent
+
+
+def discrepancy_note(by_src: dict[str, dict]) -> str | None:
+    if len(by_src) < 2:
+        return None
+    prices = [r["price"] for r in by_src.values()]
+    if max(prices) - min(prices) <= SOURCE_TOLERANCE:
+        return None
+    parts = sorted(by_src.items(), key=lambda kv: kv[1]["price"])
+    return "  Lähteet: " + " | ".join(f"{s} {r['price']:.3f}" for s, r in parts)
+
+
 def fmt_station(r: dict | None) -> str:
     if not r:
         return "ei tietoa"
@@ -71,12 +98,15 @@ def build_digest(cities: list[str]) -> dict:
     e10 = gather("95E10")
     diesel = gather("diesel")
 
-    digest = {
+    return {
         "95E10": {c: cheapest_in(e10, c) for c in cities},
         "diesel": {c: cheapest_in(diesel, c) for c in cities},
         "diesel_any": cheapest_any(diesel),
+        "_per_source": {
+            "95E10":  {c: per_source_cheapest(e10, c)    for c in cities},
+            "diesel": {c: per_source_cheapest(diesel, c) for c in cities},
+        },
     }
-    return digest
 
 
 def fingerprint(digest: dict) -> list:
@@ -100,28 +130,31 @@ def render_body(digest: dict, cities: list[str]) -> tuple[str, str]:
     else:
         title = "Polttoaine-paivitys"
 
+    per_src = digest.get("_per_source", {"95E10": {}, "diesel": {}})
+
+    def render_city(fuel: str, c: str) -> list[str]:
+        r = digest[fuel].get(c)
+        if not r:
+            return [f"{c}: ei tietoa"]
+        out = [f"{c}: {r['price']:.3f} EUR",
+               f"  {r['station']} - {r['address']}".rstrip(" -")]
+        note = discrepancy_note(per_src.get(fuel, {}).get(c, {}))
+        if note:
+            out.append(note)
+        return out
+
     lines = ["=== 95E10 ==="]
     for c in cities:
-        r = digest["95E10"].get(c)
-        if r:
-            lines.append(f"{c}: {r['price']:.3f} EUR")
-            lines.append(f"  {r['station']} - {r['address']}")
-        else:
-            lines.append(f"{c}: ei tietoa")
+        lines.extend(render_city("95E10", c))
 
     lines.append("")
     lines.append("=== Diesel ===")
     any_d = digest["diesel_any"]
     if any_d:
         lines.append(f"Halvin koko Suomessa: {any_d['price']:.3f} EUR")
-        lines.append(f"  {any_d['city']} - {any_d['station']} - {any_d['address']}")
+        lines.append(f"  {any_d['city']} - {any_d['station']} - {any_d['address']}".rstrip(" -"))
     for c in cities:
-        r = digest["diesel"].get(c)
-        if r:
-            lines.append(f"{c}: {r['price']:.3f} EUR")
-            lines.append(f"  {r['station']} - {r['address']}")
-        else:
-            lines.append(f"{c}: ei tietoa")
+        lines.extend(render_city("diesel", c))
 
     return title, "\n".join(lines)
 
