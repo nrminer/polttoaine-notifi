@@ -1,0 +1,488 @@
+"""
+BensaVahti - polttoaineen hintaennustaja Suomeen.
+
+FastAPI-palvelin, joka:
+  - Skrapeerää nykyhinnat (polttoaine.net + tankille.fi)
+  - Tallentaa havaintoja MongoDB:hen
+  - Generoi simuloidun historian seed-vaiheessa
+  - Laskee 4 ennustetta + ensemble (MA, LR, Holt, Claude Sonnet 4.5)
+  - Hakee Brent + EUR/USD Yahoo Financelta
+  - Tarjoaa REST-rajapinnan dashboardille
+"""
+from __future__ import annotations
+import asyncio
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel
+
+from scrapers import polttoaine, tankille
+import factors as factors_mod
+from simulate import simulate_history, BASELINE, CITY_FACTORS
+from predict import predict_tomorrow
+
+# ---------------- konfiguraatio ----------------
+
+load_dotenv()
+logger = logging.getLogger("bensavahti")
+logging.basicConfig(level=logging.INFO)
+
+MONGO_URL = os.environ["MONGO_URL"]
+DB_NAME = os.environ["DB_NAME"]
+
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
+
+FUELS = ("95E10", "diesel")
+SUPPORTED_REGIONS = [
+    "Helsinki", "Espoo", "Vantaa", "Tampere", "Turku",
+    "Oulu", "Jyväskylä", "Kuopio", "Lahti", "Suomi",
+]
+
+executor = ThreadPoolExecutor(max_workers=6)
+
+app = FastAPI(title="BensaVahti API", version="2.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------- skrapaus-apurit ----------------
+
+async def _scrape_all(fuel: str) -> list[dict]:
+    """Hae nykyhinnat molemmista skrapereista taustasäikeessä."""
+    loop = asyncio.get_event_loop()
+    p_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
+    t_task = loop.run_in_executor(executor, tankille.fetch_prices, fuel)
+    try:
+        p_rows, t_rows = await asyncio.gather(p_task, t_task, return_exceptions=True)
+    except Exception as e:
+        logger.warning("scrape error: %s", e)
+        return []
+    rows = []
+    for r in (p_rows, t_rows):
+        if isinstance(r, list):
+            rows.extend(r)
+        else:
+            logger.warning("scraper failed: %s", r)
+    return rows
+
+
+def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
+    """{ city: { count, min, mean, station_min } }"""
+    by_city: dict[str, list[dict]] = {}
+    for r in rows:
+        c = r.get("city") or "?"
+        by_city.setdefault(c, []).append(r)
+    out = {}
+    for c, lst in by_city.items():
+        prices = [x["price"] for x in lst]
+        cheapest = min(lst, key=lambda x: x["price"])
+        out[c] = {
+            "count": len(lst),
+            "min": round(min(prices), 4),
+            "mean": round(sum(prices) / len(prices), 4),
+            "station_min": cheapest.get("station", ""),
+            "address_min": cheapest.get("address", ""),
+        }
+    return out
+
+
+def _national_average(rows: list[dict]) -> Optional[float]:
+    """Painottamaton keskiarvo kaikista havainnoista (filtteröi ulkopuoliset)."""
+    prices = [r["price"] for r in rows if r.get("price")]
+    if not prices:
+        return None
+    # poista räikeät outlier-arvot
+    s = sorted(prices)
+    lo = s[len(s) // 10] if len(s) >= 10 else s[0]
+    hi = s[-(len(s) // 10 + 1)] if len(s) >= 10 else s[-1]
+    filtered = [p for p in prices if lo <= p <= hi]
+    if not filtered:
+        return round(sum(prices) / len(prices), 4)
+    return round(sum(filtered) / len(filtered), 4)
+
+
+# ---------------- skeemat ----------------
+
+class HistoryPoint(BaseModel):
+    date: str
+    price: float
+    fuel: str
+    region: str
+    source: str
+
+
+class PredictionRequest(BaseModel):
+    fuel: str = "95E10"
+    region: str = "Suomi"
+
+
+# ---------------- reitit ----------------
+
+@app.get("/api/health")
+async def health():
+    return {"ok": True, "service": "bensavahti", "time": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/meta")
+async def meta():
+    return {
+        "fuels": list(FUELS),
+        "regions": SUPPORTED_REGIONS,
+        "city_factors": CITY_FACTORS,
+        "baseline": BASELINE,
+    }
+
+
+@app.post("/api/seed")
+async def seed_history(days: int = 180, force: bool = False):
+    """Generoi simuloitu historia (käytä jos kanta on tyhjä).
+
+    Käyttää viim. scrapatun hintatason kalibrointiin jos saatavilla.
+    """
+    coll = db.history
+    if not force:
+        n = await coll.count_documents({})
+        if n > 0:
+            return {"seeded": False, "reason": f"history not empty ({n} docs); use force=true"}
+    else:
+        await coll.delete_many({"source": "simulated"})
+
+    inserted = 0
+    for fuel in FUELS:
+        # yritä saada kalibrointihinta nykyhinnasta
+        latest_doc = await db.snapshots.find_one(
+            {"fuel": fuel, "region": "Suomi"},
+            sort=[("ts", -1)],
+        )
+        end_price = latest_doc.get("national_avg") if latest_doc else None
+
+        for region in SUPPORTED_REGIONS:
+            series = simulate_history(fuel, region=region, days=days,
+                                      end_price=end_price, seed=42 + len(region))
+            if series:
+                await coll.insert_many(series)
+                inserted += len(series)
+
+    return {"seeded": True, "rows": inserted, "days": days}
+
+
+@app.get("/api/prices/current")
+async def current_prices(fuel: str = Query("95E10")):
+    """Skrapaa nykyhinnat ja palauta yhteenveto."""
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    rows = await _scrape_all(fuel)
+    if not rows:
+        # fallback: viimeisin tallennettu snapshot
+        last = await db.snapshots.find_one({"fuel": fuel, "region": "Suomi"},
+                                           sort=[("ts", -1)])
+        if last:
+            return {
+                "fuel": fuel,
+                "fetched_at": last.get("ts"),
+                "stations_count": last.get("stations_count", 0),
+                "national_avg": last.get("national_avg"),
+                "national_min": last.get("national_min"),
+                "by_city": last.get("by_city", {}),
+                "stations": [],
+                "stale": True,
+            }
+        raise HTTPException(503, "no data: scrapers returned empty and no cache")
+
+    by_city = _city_aggregate(rows)
+    nat_avg = _national_average(rows)
+    nat_min = min(r["price"] for r in rows)
+
+    ts = datetime.now(timezone.utc).isoformat()
+    # tallenna snapshot
+    snap = {
+        "ts": ts,
+        "fuel": fuel,
+        "region": "Suomi",
+        "national_avg": nat_avg,
+        "national_min": nat_min,
+        "by_city": by_city,
+        "stations_count": len(rows),
+    }
+    await db.snapshots.insert_one(snap.copy())
+
+    # tallenna myös history-pisteet päiväkohtaisesti (yksi per fuel/region/päivä)
+    today = datetime.now(timezone.utc).date().isoformat()
+    await db.history.update_one(
+        {"date": today, "fuel": fuel, "region": "Suomi"},
+        {"$set": {
+            "date": today, "fuel": fuel, "region": "Suomi",
+            "price": nat_avg, "source": "scraped",
+        }},
+        upsert=True,
+    )
+    for city, agg in by_city.items():
+        if city in SUPPORTED_REGIONS:
+            await db.history.update_one(
+                {"date": today, "fuel": fuel, "region": city},
+                {"$set": {
+                    "date": today, "fuel": fuel, "region": city,
+                    "price": agg["mean"], "source": "scraped",
+                }},
+                upsert=True,
+            )
+
+    return {
+        "fuel": fuel,
+        "fetched_at": ts,
+        "stations_count": len(rows),
+        "national_avg": nat_avg,
+        "national_min": nat_min,
+        "by_city": by_city,
+        "stations": [
+            {"city": r["city"], "station": r["station"], "address": r.get("address", ""),
+             "price": r["price"], "source": r["source"]}
+            for r in sorted(rows, key=lambda x: x["price"])[:40]
+        ],
+        "stale": False,
+    }
+
+
+@app.get("/api/prices/history")
+async def history(fuel: str = Query("95E10"),
+                  region: str = Query("Suomi"),
+                  days: int = Query(180, ge=7, le=730)):
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+    cur = db.history.find(
+        {"fuel": fuel, "region": region, "date": {"$gte": cutoff}},
+        {"_id": 0},
+    ).sort("date", 1)
+    rows = await cur.to_list(length=days + 5)
+    return {"fuel": fuel, "region": region, "days": days, "rows": rows}
+
+
+@app.get("/api/factors")
+async def get_factors():
+    """Brent + EUR/USD (60 päivän sarja + nykyarvo + delta)."""
+    loop = asyncio.get_event_loop()
+    brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 60)
+    fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 60)
+    brent, eur_usd = await asyncio.gather(brent_task, fx_task)
+
+    return {
+        "brent": {
+            "series": brent,
+            "latest": factors_mod.latest_value(brent),
+            "delta_pct": factors_mod.delta_pct(brent),
+            "unit": "USD/bbl",
+        },
+        "eur_usd": {
+            "series": eur_usd,
+            "latest": factors_mod.latest_value(eur_usd),
+            "delta_pct": factors_mod.delta_pct(eur_usd),
+            "unit": "EUR/USD",
+        },
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.post("/api/predict/run")
+async def run_prediction(req: PredictionRequest):
+    fuel = req.fuel
+    region = req.region
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    if region not in SUPPORTED_REGIONS:
+        raise HTTPException(400, f"unknown region {region}")
+
+    # historia
+    cur = db.history.find(
+        {"fuel": fuel, "region": region},
+        {"_id": 0},
+    ).sort("date", 1)
+    hist = await cur.to_list(length=400)
+    if len(hist) < 7:
+        raise HTTPException(400, "ei riittävästi historiaa, kutsu /api/seed ensin")
+    dates = [r["date"] for r in hist]
+    prices = [r["price"] for r in hist]
+
+    # tekijät
+    brent_series = await asyncio.get_event_loop().run_in_executor(
+        executor, factors_mod.fetch_brent, 30)
+    fx_series = await asyncio.get_event_loop().run_in_executor(
+        executor, factors_mod.fetch_eur_usd, 30)
+    brent_val = factors_mod.latest_value(brent_series)
+    fx_val = factors_mod.latest_value(fx_series)
+
+    result = await predict_tomorrow(fuel, dates, prices, brent_val, fx_val, region)
+
+    # tallenna ennuste tulevan päivän accuracy-trackausta varten
+    target_date = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    doc = {
+        "target_date": target_date,
+        "fuel": fuel,
+        "region": region,
+        "generated_at": result["generated_at"],
+        "methods": {k: v.get("value") for k, v in result["methods"].items()},
+        "methods_full": result["methods"],
+        "ensemble": result["ensemble"].get("value"),
+        "ensemble_full": result["ensemble"],
+        "current_price": result["current_price"],
+        "brent": brent_val,
+        "eur_usd": fx_val,
+    }
+    await db.predictions.update_one(
+        {"target_date": target_date, "fuel": fuel, "region": region},
+        {"$set": doc},
+        upsert=True,
+    )
+
+    result["target_date"] = target_date
+    result["brent"] = brent_val
+    result["eur_usd"] = fx_val
+    return result
+
+
+@app.get("/api/predict/latest")
+async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suomi")):
+    doc = await db.predictions.find_one(
+        {"fuel": fuel, "region": region},
+        {"_id": 0},
+        sort=[("generated_at", -1)],
+    )
+    if not doc:
+        return {"available": False}
+    # palauta rikastettu rakenne joka vastaa /api/predict/run -vastausta
+    return {
+        "available": True,
+        "fuel": doc.get("fuel"),
+        "region": doc.get("region"),
+        "generated_at": doc.get("generated_at"),
+        "target_date": doc.get("target_date"),
+        "current_price": doc.get("current_price"),
+        "methods": doc.get("methods_full") or {
+            k: {"value": v} for k, v in (doc.get("methods") or {}).items()
+        },
+        "ensemble": doc.get("ensemble_full") or {"value": doc.get("ensemble")},
+        "brent": doc.get("brent"),
+        "eur_usd": doc.get("eur_usd"),
+    }
+
+
+@app.get("/api/regional")
+async def regional(fuel: str = Query("95E10")):
+    """Viimeisimmät hinnat jokaiselle alueelle (todelliset jos saatavilla,
+    muuten viimeisin simuloitu)."""
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    out = []
+    for region in SUPPORTED_REGIONS:
+        if region == "Suomi":
+            continue
+        doc = await db.history.find_one(
+            {"fuel": fuel, "region": region},
+            {"_id": 0},
+            sort=[("date", -1)],
+        )
+        if doc:
+            # päivän muutos
+            prev = await db.history.find_one(
+                {"fuel": fuel, "region": region, "date": {"$lt": doc["date"]}},
+                {"_id": 0},
+                sort=[("date", -1)],
+            )
+            delta = round(doc["price"] - prev["price"], 4) if prev else 0.0
+            out.append({
+                "region": region,
+                "price": doc["price"],
+                "date": doc["date"],
+                "delta": delta,
+                "source": doc.get("source", "unknown"),
+            })
+    # järjestä halvimmasta kalleimpaan
+    out.sort(key=lambda x: x["price"])
+    return {"fuel": fuel, "fetched_at": datetime.now(timezone.utc).isoformat(), "rows": out}
+
+
+@app.get("/api/accuracy")
+async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
+                   days: int = Query(30, ge=7, le=180)):
+    """Vertaa menneitä ennusteita toteutuneisiin hintoihin."""
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+    cur = db.predictions.find(
+        {"fuel": fuel, "region": region, "target_date": {"$gte": cutoff}},
+        {"_id": 0},
+    ).sort("target_date", 1)
+    preds = await cur.to_list(length=days + 5)
+
+    # hae toteutuneet
+    method_errors: dict[str, list[float]] = {
+        "moving_average": [], "linear_regression": [], "exp_smoothing": [],
+        "ai_llm": [], "ensemble": [],
+    }
+    rows = []
+    for p in preds:
+        actual_doc = await db.history.find_one(
+            {"fuel": fuel, "region": region, "date": p["target_date"]},
+            {"_id": 0},
+        )
+        actual = actual_doc.get("price") if actual_doc else None
+        row = {
+            "target_date": p["target_date"],
+            "actual": actual,
+            "ensemble": p.get("ensemble"),
+            "methods": p.get("methods", {}),
+        }
+        rows.append(row)
+        if actual is None:
+            continue
+        for m, v in (p.get("methods") or {}).items():
+            if v is not None and m in method_errors:
+                method_errors[m].append(abs(v - actual))
+        if p.get("ensemble") is not None:
+            method_errors["ensemble"].append(abs(p["ensemble"] - actual))
+
+    summary = {}
+    for m, errs in method_errors.items():
+        if errs:
+            mae = sum(errs) / len(errs)
+            # within 1 cent
+            within1c = sum(1 for e in errs if e <= 0.01) / len(errs) * 100
+            summary[m] = {
+                "n": len(errs),
+                "mae": round(mae, 4),
+                "within_1c_pct": round(within1c, 1),
+            }
+        else:
+            summary[m] = {"n": 0, "mae": None, "within_1c_pct": None}
+
+    return {"fuel": fuel, "region": region, "days": days,
+            "rows": rows, "summary": summary}
+
+
+@app.on_event("startup")
+async def on_startup():
+    # indeksit
+    await db.history.create_index([("fuel", 1), ("region", 1), ("date", 1)], unique=True)
+    await db.predictions.create_index(
+        [("fuel", 1), ("region", 1), ("target_date", 1)], unique=True)
+    await db.snapshots.create_index([("fuel", 1), ("ts", -1)])
+    logger.info("BensaVahti up - MONGO_URL=%s DB=%s", MONGO_URL, DB_NAME)
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    client.close()
+    executor.shutdown(wait=False)
