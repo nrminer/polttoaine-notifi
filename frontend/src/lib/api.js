@@ -20,5 +20,10 @@ export const fetchAccuracy = (fuel, region, days) =>
   api.get(`/accuracy`, { params: { fuel, region, days } });
 export const fetchNews = (maxAgeDays = 14, limit = 8) =>
   api.get(`/news`, { params: { max_age_days: maxAgeDays, limit } });
+export const fetchTrackHistory = (fuel, days = 60) =>
+  api.get(`/track/history`, { params: { fuel, days } });
+export const runTrackCapture = (fuel) =>
+  api.post(`/track/run`, null, { params: { fuel } });
+export const runTrackCaptureAll = () => api.post(`/track/run-all`);
 export const seedHistory = (days, force) =>
   api.post(`/seed`, null, { params: { days, force } });

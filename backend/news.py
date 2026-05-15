@@ -1,8 +1,11 @@
 """
-Real-time Finnish fuel + global oil news via Google News RSS.
+Real-time Finnish fuel + oil news via direct publisher RSS feeds.
 
-No API key needed. Returns recent headlines with publish date and source.
-Used both for displaying in the UI and as context for the AI prediction.
+We pull from publishers directly (Iltalehti, Helsingin Sanomat, Ilta-Sanomat)
+so links are canonical — no Google News opaque redirect tokens — and they
+open the actual article when clicked.
+
+We filter by fuel/oil keywords client-side.
 """
 from __future__ import annotations
 import re
@@ -14,30 +17,56 @@ from xml.etree import ElementTree as ET
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BensaVahti/2.0)"}
 TIMEOUT = 12
 
+# Lähde-feedit + kanavanimet näytettäväksi UI:ssa
+FEEDS = [
+    ("https://www.iltalehti.fi/rss/uutiset.xml", "Iltalehti"),
+    ("https://www.iltalehti.fi/rss/talous.xml", "Iltalehti · Talous"),
+    ("https://www.iltalehti.fi/rss/autot.xml", "Iltalehti · Autot"),
+    ("https://www.iltalehti.fi/rss/kotimaa.xml", "Iltalehti · Kotimaa"),
+    ("https://www.hs.fi/rss/tuoreimmat.xml", "Helsingin Sanomat"),
+    ("https://www.hs.fi/rss/talous.xml", "HS · Talous"),
+    ("https://www.is.fi/rss/tuoreimmat.xml", "Ilta-Sanomat"),
+    ("https://www.is.fi/rss/taloussanomat.xml", "Taloussanomat"),
+    ("https://www.is.fi/rss/autot.xml", "IS · Autot"),
+    ("https://www.mtvuutiset.fi/api/feed/rss/uutiset_uusimmat", "MTV Uutiset"),
+]
 
-def _parse_rss(xml_text: str) -> list[dict]:
+# Avainsanat: polttoaine, raakaöljy-hinta, vero, OPEC, Brent, asemaketjut
+# (riittävän tiukka jotta ei matchaa esim. liikenneonnettomuus-uutisia)
+KEYWORDS = re.compile(
+    r"("
+    r"polttoaine|"
+    r"bensiini|bensii?nin|95E10|"
+    r"\bdiesel|dieselin|dieselöljy|"
+    r"raakaöljy|öljyn\s+hin|öljymarkkin|"
+    r"polttoaineverot|valmistevero|"
+    r"\bOPEC|\bBrent\b|"
+    r"Neste\s+(Oil|Express|huoltoasem)|Teboil|huoltoasem|tankkau"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
     out = []
     try:
         root = ET.fromstring(xml_text)
     except Exception:
         return out
     for it in root.findall(".//item"):
-        title = it.findtext("title") or ""
-        link = it.findtext("link") or ""
-        pub_raw = it.findtext("pubDate") or ""
-        source_el = it.find("source")
-        source = source_el.text if source_el is not None and source_el.text else ""
+        title = (it.findtext("title") or "").strip()
+        link = (it.findtext("link") or "").strip()
+        desc = (it.findtext("description") or "").strip()
+        pub_raw = (it.findtext("pubDate") or "").strip()
         try:
             pub_dt = parsedate_to_datetime(pub_raw).astimezone(timezone.utc)
         except Exception:
             pub_dt = None
-        # remove " - SourceName" tail that Google adds
-        clean_title = re.sub(r"\s*[-—]\s*[^-—]+$", "", title).strip() if " - " in title else title
         out.append({
-            "title": clean_title or title,
-            "raw_title": title,
-            "source": source,
+            "title": title,
+            "description": re.sub(r"<[^>]+>", "", desc)[:240],
             "link": link,
+            "source": source_label,
             "published": pub_dt.isoformat() if pub_dt else None,
             "age_hours": (
                 (datetime.now(timezone.utc) - pub_dt).total_seconds() / 3600.0
@@ -47,48 +76,34 @@ def _parse_rss(xml_text: str) -> list[dict]:
     return out
 
 
-def fetch_news(queries: list[str] | None = None, max_age_days: int = 14,
-               limit: int = 8) -> list[dict]:
-    if not queries:
-        queries = [
-            "polttoaine hinta suomi",
-            "bensiini diesel hinta",
-            "brent öljy OPEC",
-        ]
+def fetch_news(queries=None, max_age_days: int = 14, limit: int = 8) -> list[dict]:
+    """queries argumentti säilytetty allekirjoituksen yhteensopivuuden vuoksi
+    mutta filtteröinti tehdään aina KEYWORDS-patternilla."""
     all_items: list[dict] = []
-    for q in queries:
-        is_fi = any(w in q for w in ("polttoaine", "bensiini", "diesel"))
-        url = (
-            f"https://news.google.com/rss/search?q={q.replace(' ', '+')}"
-            f"&hl={'fi' if is_fi else 'en-US'}"
-            f"&gl={'FI' if is_fi else 'US'}"
-            f"&ceid={'FI:fi' if is_fi else 'US:en'}"
-        )
+    for url, label in FEEDS:
         try:
             r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-            r.raise_for_status()
-            items = _parse_rss(r.text)
-            for it in items:
-                it["query"] = q
-            all_items.extend(items)
+            if r.status_code != 200:
+                continue
+            all_items.extend(_parse_rss(r.text, label))
         except Exception:
             continue
 
-    # filter by age + dedupe by title
     cutoff_h = max_age_days * 24
     seen = set()
-    filtered = []
+    matched = []
     for it in all_items:
-        if it.get("age_hours") is None:
+        if it.get("age_hours") is None or it["age_hours"] > cutoff_h:
             continue
-        if it["age_hours"] > cutoff_h:
+        # match VAIN otsikkoa vasten — kuvaukset usein matchaavat aiheeseen
+        # vain väljästi (esim. "huoltoaseman lähellä kolari")
+        if not KEYWORDS.search(it["title"]):
             continue
         key = it["title"][:80].lower()
         if key in seen:
             continue
         seen.add(key)
-        filtered.append(it)
+        matched.append(it)
 
-    # sort newest first
-    filtered.sort(key=lambda x: x["age_hours"])
-    return filtered[:limit]
+    matched.sort(key=lambda x: x["age_hours"])
+    return matched[:limit]

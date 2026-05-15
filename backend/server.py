@@ -27,6 +27,7 @@ from scrapers import polttoaine, tankille
 import factors as factors_mod
 import statfin
 import news as news_mod
+import tracker as tracker_mod
 from simulate import simulate_history, BASELINE, CITY_FACTORS
 from real_history import build_history
 from predict import predict_tomorrow
@@ -721,6 +722,60 @@ async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
             "rows": rows, "summary": summary}
 
 
+# ---------------- daily prediction-vs-actual tracker ----------------
+
+@app.post("/api/track/run")
+async def track_run(fuel: str = Query("95E10")):
+    """Aja päivän capture nyt (skraapaa halvin + ennusta huominen).
+    Idempotentti: saman päivän uusinta-ajo korvaa rivin.
+    Vain support fuels.
+    """
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    doc = await tracker_mod.capture_daily(db, executor, fuel)
+    doc.pop("prediction_full", None)  # iso, jätetään pois yhdestä endpointista
+    return doc
+
+
+@app.post("/api/track/run-all")
+async def track_run_all():
+    out = []
+    for fuel in FUELS:
+        doc = await tracker_mod.capture_daily(db, executor, fuel)
+        doc.pop("prediction_full", None)
+        out.append(doc)
+    return {"captured": out}
+
+
+@app.get("/api/track/history")
+async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, le=365)):
+    if fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {fuel}")
+    cutoff = (tracker_mod.helsinki_today() - timedelta(days=days)).isoformat()
+    cur = db.daily_tracker.find(
+        {"fuel": fuel, "date": {"$gte": cutoff}},
+        {"_id": 0, "prediction_full": 0},
+    ).sort("date", 1)
+    rows = await cur.to_list(length=days + 5)
+    # tarkkuusyhteenveto
+    errs = [
+        abs(r["predicted_cheapest_for_today"] - r["actual_cheapest"])
+        for r in rows
+        if r.get("predicted_cheapest_for_today") is not None
+        and r.get("actual_cheapest") is not None
+    ]
+    summary = {
+        "n_compared": len(errs),
+        "mae": round(sum(errs) / len(errs), 4) if errs else None,
+        "within_1c_pct": (round(sum(1 for e in errs if e <= 0.01) / len(errs) * 100, 1)
+                          if errs else None),
+        "tomorrow_prediction": rows[-1].get("prediction_for_tomorrow_cheapest") if rows else None,
+        "today_actual": rows[-1].get("actual_cheapest") if rows else None,
+        "today_date": rows[-1].get("date") if rows else None,
+    }
+    return {"fuel": fuel, "days": days, "rows": rows, "summary": summary}
+
+
 @app.on_event("startup")
 async def on_startup():
     # indeksit
@@ -728,10 +783,23 @@ async def on_startup():
     await db.predictions.create_index(
         [("fuel", 1), ("region", 1), ("target_date", 1)], unique=True)
     await db.snapshots.create_index([("fuel", 1), ("ts", -1)])
+    await db.daily_tracker.create_index(
+        [("fuel", 1), ("region", 1), ("date", 1)], unique=True)
+    # taustaprosessi: 18:00 Helsinki-aika
+    app.state.tracker_task = asyncio.create_task(
+        tracker_mod.scheduler_loop(db, executor, FUELS)
+    )
     logger.info("BensaVahti up - MONGO_URL=%s DB=%s", MONGO_URL, DB_NAME)
 
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    task = getattr(app.state, "tracker_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except Exception:
+            pass
     client.close()
     executor.shutdown(wait=False)

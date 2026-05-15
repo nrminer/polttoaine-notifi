@@ -16,7 +16,7 @@ export default function NewsCard({ items = [], fetchedAt }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Newspaper size={14} className="text-brand" strokeWidth={2.4} />
-          <CardLabel>Markkinauutiset · Google News</CardLabel>
+          <CardLabel>Markkinauutiset · Iltalehti · HS · IS · MTV</CardLabel>
         </div>
         <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
           {items.length} otsikkoa

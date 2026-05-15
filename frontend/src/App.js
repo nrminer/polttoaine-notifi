@@ -17,6 +17,7 @@ import { Card, CardLabel, StatNumber, DeltaBadge } from "./components/Card";
 import FuelToggle from "./components/FuelToggle";
 import RangeToggle from "./components/RangeToggle";
 import HistoryChart from "./components/HistoryChart";
+import TrackingChart from "./components/TrackingChart";
 import MethodTable from "./components/MethodTable";
 import AiAnalysis from "./components/AiAnalysis";
 import RegionalGrid from "./components/RegionalGrid";
@@ -31,6 +32,8 @@ import {
   fetchRegional,
   fetchAccuracy,
   fetchNews,
+  fetchTrackHistory,
+  runTrackCapture,
   seedHistory,
 } from "./lib/api";
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
@@ -52,6 +55,7 @@ export default function App() {
   const [regional, setRegional] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
   const [news, setNews] = useState([]);
+  const [tracking, setTracking] = useState(null);
   const [loading, setLoading] = useState({});
   const [seeded, setSeeded] = useState(false);
   const [error, setError] = useState(null);
@@ -173,6 +177,30 @@ export default function App() {
     }
   }, []);
 
+  const loadTracking = useCallback(async (f) => {
+    setLoad("tracking", true);
+    try {
+      const { data } = await fetchTrackHistory(f, 60);
+      setTracking(data);
+    } catch (e) {
+      console.warn("tracking failed", e);
+    } finally {
+      setLoad("tracking", false);
+    }
+  }, []);
+
+  const captureToday = useCallback(async () => {
+    setLoad("capture", true);
+    try {
+      await runTrackCapture(fuel);
+      await loadTracking(fuel);
+    } catch (e) {
+      console.warn("capture failed", e);
+    } finally {
+      setLoad("capture", false);
+    }
+  }, [fuel, loadTracking]);
+
   // init
   useEffect(() => {
     (async () => {
@@ -185,6 +213,7 @@ export default function App() {
         loadRegional(fuel),
         loadAccuracy(fuel),
         loadNews(),
+        loadTracking(fuel),
       ]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,6 +229,7 @@ export default function App() {
         loadPrediction(fuel, false),
         loadRegional(fuel),
         loadAccuracy(fuel),
+        loadTracking(fuel),
       ]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -438,20 +468,39 @@ export default function App() {
       {/* CHART + METHOD COMPARE */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <div className="grid grid-cols-12 gap-6">
-          <Card span="col-span-12 lg:col-span-8" className="p-6" testId="history-chart-card">
-            <div className="flex items-center justify-between mb-4">
+          <Card span="col-span-12 lg:col-span-8" className="p-6" testId="tracking-chart-card">
+            <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
               <div>
-                <CardLabel>Hintahistoria + ennuste · todellinen data</CardLabel>
+                <CardLabel>Ennuste vs. toteutunut · halvin asema</CardLabel>
                 <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                  {fuel} · valtakunnan keskihinta
+                  {fuel} · päivittäinen otanta 18:00 (Helsinki)
                 </h3>
                 <p className="text-[11px] text-muted font-mono mt-1">
-                  Lähde: Tilastokeskus 12ge (oikea kk-ka. 2020-2025) · Brent-ekstrapolointi joulukuusta 2025 alkaen · tämän päivän piste = live-skrapaus
+                  Vain todellisia havaintoja. Sininen viiva = päivän halvin asema, harmaa risti = edellisen päivän ennuste tästä päivästä, keltainen pisteviiva = huomisen ennuste.
                 </p>
               </div>
-              <RangeToggle value={range} onChange={setRange} options={RANGE_OPTIONS} />
+              <button
+                data-testid="capture-now-btn"
+                onClick={captureToday}
+                disabled={loading.capture}
+                className="inline-flex items-center gap-2 px-4 h-9 bg-nordDark text-white hover:bg-black font-mono text-xs font-semibold transition-colors disabled:opacity-60"
+              >
+                <RefreshCw size={12} className={loading.capture ? "animate-spin" : ""} />
+                {loading.capture ? "Tallennetaan…" : "Tallenna nyt"}
+              </button>
             </div>
-            <HistoryChart data={history} prediction={prediction} />
+            <TrackingChart
+              rows={tracking?.rows || []}
+              tomorrow={
+                tracking?.summary?.tomorrow_prediction != null && tracking?.summary?.today_date
+                  ? {
+                      date: getNextDay(tracking.summary.today_date),
+                      value: tracking.summary.tomorrow_prediction,
+                    }
+                  : null
+              }
+            />
+            <TrackingFooter summary={tracking?.summary} fuel={fuel} />
           </Card>
 
           <div className="col-span-12 lg:col-span-4">
@@ -512,8 +561,74 @@ export default function App() {
   );
 }
 
-function DirectionPill({ delta }) {
-  if (delta === null || delta === undefined || isNaN(delta)) {
+function getNextDay(isoDate) {
+  if (!isoDate) return null;
+  const d = new Date(isoDate);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function TrackingFooter({ summary, fuel }) {
+  if (!summary) return null;
+  const {
+    n_compared,
+    mae,
+    within_1c_pct,
+    today_actual,
+    tomorrow_prediction,
+    today_date,
+  } = summary;
+  return (
+    <div
+      data-testid="tracking-footer"
+      className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-px bg-line border-t border-line"
+    >
+      <div className="bg-white p-3">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+          Tänään · {today_date ? today_date.slice(8, 10) + "." + today_date.slice(5, 7) + "." : "—"}
+        </div>
+        <div className="font-mono tnum text-lg font-bold mt-1">
+          {today_actual != null ? today_actual.toFixed(3) : "—"}
+          <span className="text-secondary text-xs ml-1">€/L</span>
+        </div>
+      </div>
+      <div className="bg-white p-3">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+          Huominen ({fuel})
+        </div>
+        <div
+          className="font-mono tnum text-lg font-bold mt-1 text-brand"
+          data-testid="tomorrow-cheapest-prediction"
+        >
+          {tomorrow_prediction != null ? tomorrow_prediction.toFixed(3) : "—"}
+          <span className="text-secondary text-xs ml-1">€/L</span>
+        </div>
+      </div>
+      <div className="bg-white p-3">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+          MAE (vertailtu)
+        </div>
+        <div className="font-mono tnum text-lg font-bold mt-1">
+          {mae != null ? mae.toFixed(4) : "—"}
+          <span className="text-secondary text-xs ml-1">€/L</span>
+        </div>
+        <div className="font-mono text-[10px] text-muted mt-0.5">
+          {n_compared > 0 ? `${n_compared} pv` : "kerää dataa"}
+        </div>
+      </div>
+      <div className="bg-white p-3">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+          ≤1 snt tarkkuus
+        </div>
+        <div className="font-mono tnum text-lg font-bold mt-1">
+          {within_1c_pct != null ? `${within_1c_pct.toFixed(0)}%` : "—"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DirectionPill({ delta }) {  if (delta === null || delta === undefined || isNaN(delta)) {
     return (
       <span className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800 text-slate-300 font-mono text-xs">
         <Minus size={12} /> ei dataa
