@@ -14,7 +14,7 @@ export default function RangeToggle({ value, onChange, options, testIdPrefix = "
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            data-testid={`${testIdPrefix}-${opt.value}`}
+            data-testid={`${testIdPrefix}-toggle-${opt.value}`}
             className={cn(
               "px-3 h-8 font-mono text-xs font-semibold transition-colors",
               active ? "bg-nordDark text-white" : "text-secondary hover:text-ink"
