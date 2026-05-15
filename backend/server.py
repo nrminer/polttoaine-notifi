@@ -45,10 +45,12 @@ client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
 FUELS = ("95E10", "diesel")
+# Käyttäjän valitsemat "alueelliset" kaupungit — vain näistä näytetään hinnat
 SUPPORTED_REGIONS = [
-    "Helsinki", "Espoo", "Vantaa", "Tampere", "Turku",
-    "Oulu", "Jyväskylä", "Kuopio", "Lahti", "Suomi",
+    "Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti", "Suomi",
 ]
+# Set jotka kuuluvat suodatukseen (ei Suomi-aggregaatti)
+ALLOWED_CITIES = {r for r in SUPPORTED_REGIONS if r != "Suomi"}
 
 executor = ThreadPoolExecutor(max_workers=12)
 
@@ -87,10 +89,12 @@ async def _scrape_all(fuel: str) -> list[dict]:
 
 
 def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
-    """{ city: { count, min, mean, station_min } }"""
+    """{ city: { count, min, mean, station_min } } — vain ALLOWED_CITIES."""
     by_city: dict[str, list[dict]] = {}
     for r in rows:
         c = r.get("city") or "?"
+        if c not in ALLOWED_CITIES:
+            continue
         by_city.setdefault(c, []).append(r)
     out = {}
     for c, lst in by_city.items():
@@ -106,12 +110,17 @@ def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
     return out
 
 
+def _filter_to_allowed(rows: list[dict]) -> list[dict]:
+    """Suodata kaikki rivit ALLOWED_CITIES -joukkoon."""
+    return [r for r in rows if (r.get("city") or "") in ALLOWED_CITIES]
+
+
 def _national_average(rows: list[dict]) -> Optional[float]:
-    """Painottamaton keskiarvo kaikista havainnoista (filtteröi ulkopuoliset)."""
+    """Otoskeskiarvo, suodatettu ALLOWED_CITIES -kaupunkeihin."""
+    rows = _filter_to_allowed(rows)
     prices = [r["price"] for r in rows if r.get("price")]
     if not prices:
         return None
-    # poista räikeät outlier-arvot
     s = sorted(prices)
     lo = s[len(s) // 10] if len(s) >= 10 else s[0]
     hi = s[-(len(s) // 10 + 1)] if len(s) >= 10 else s[-1]
