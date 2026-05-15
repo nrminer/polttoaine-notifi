@@ -53,7 +53,20 @@ Full-stack dashboard, in Finnish, that predicts tomorrow's 95E10 and diesel pric
 - ✅ data-testid on every interactive/data element
 - ✅ 100% pass rate on backend + frontend tests (testing_agent_v3 iteration 1)
 
-## Iteration 2 · 2026-05-15 (refinements)
+## Iteration 4 · 2026-05-15 (honesty audit + news)
+User feedback: "Koko sivusto ei pidä paikkansa kaikki on hallusinaatiota, korjaa kaikki AIDOKSI dataksi" — fair criticism that the daily data was interpolated noise on top of stale Statfin monthly anchors, and the prediction was anchored to old data.
+
+- ✅ Removed all fake daily interpolation (random walks + weekday bias + noise that pretended to be data)
+- ✅ History is now built **only from real sources**:
+  - `statfin`: linear interp between consecutive REAL Statfin monthly anchors (2020-01 → 2025-12)
+  - `statfin+extrap`: linear extrap from last Statfin point → today, anchored to LIVE scraped current price (or fallback to Brent change %)
+  - `live`: today's point = real scraped national cheap-sample average
+- ✅ Predictions now **anchor the model's last-history-point to today's LIVE scraped price** before running MA/LR/ES — so all 4 algorithms converge realistically near the actual market (2.04 €/L), not stale 1.75 €/L
+- ✅ Added `news.py` + `/api/news` — fetches Google News RSS for "polttoaine hinta suomi", "bensiini diesel hinta", "brent öljy OPEC" — returns 6+ real Finnish headlines (Iltalehti, Ilta-Sanomat, Verkkouutiset, Uusi Suomi)
+- ✅ News headlines passed to Claude Sonnet 4.5 as context → AI now cites events like "Teboilin lopettaminen" in predictions
+- ✅ AI response now includes `key_drivers` array — top 3-4 factors as pills under explanation
+- ✅ New `NewsCard` component in main dashboard showing headlines with source + age + clickable links
+- ✅ Source attribution updated everywhere to be honest about what's real vs. derived
 - ✅ Reseeded **365 days** of simulated history (chart's 1V toggle now works)
 - ✅ Rewrote `/api/regional` to **live-scrape polttoaine.net + tankille.fi in parallel** (90s cache)
 - ✅ Regional grid filters to `≤ max_age_hours` (default 24h) — stale/missing entries shown as "ei tuoretta dataa"

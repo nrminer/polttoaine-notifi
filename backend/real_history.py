@@ -1,101 +1,114 @@
 """
-Real historical price interpolator.
+Real-data-only historical price builder.
 
-Takes monthly anchor points from Tilastokeskus and produces daily price
-estimates by:
-  - placing each monthly value on the 15th of that month
-  - linearly interpolating daily prices between anchors
-  - adding small weekday + noise variation so chart isn't a straight line
+Strategy:
+  - Real MONTHLY values from Statistics Finland (Tilastokeskus) → placed on
+    each month's 15th, then interpolated linearly between adjacent months
+    (this is a fair representation since within a single month prices don't
+     vary wildly).
+  - When Stat Finland data ends (typical lag ~5 months), we EXTRAPOLATE the
+    gap to today using two real signals:
+      a) Brent oil month-over-month change (Yahoo Finance)
+      b) EUR/USD change
+    Pass-through factor: Δ retail ≈ 0.6 × Δ crude (€-adjusted)
+  - The very last point is "today" = anchored to the LIVE scraped national
+    cheapest-sample average (this is what the user can actually pay).
+  - NO weekday or random noise added — keeping only signals we can defend.
 
-Regional values are scaled by CITY_FACTORS from simulate.py.
-
-The final tail of the series (last 30 days) is calibrated to the latest
-scraped current price if provided, so the chart smoothly connects to
-"today".
+Returns a list of {date, price, source} where source is one of:
+  - "statfin"            (interpolation between two real monthly anchors)
+  - "statfin+extrap"     (extrapolated past Stat Finland's last month using
+                          Brent/FX trend)
+  - "live"               (today's scraped value)
 """
 from __future__ import annotations
-import math
-import random
 from datetime import date, timedelta
 
-from simulate import CITY_FACTORS
 
-
-def _weekday_bias(d: date) -> float:
-    return {0: -0.002, 1: 0.008, 2: 0.010, 3: 0.004,
-            4: -0.005, 5: -0.008, 6: -0.007}[d.weekday()]
-
-
-def build_real_daily(anchors: list[dict], days: int = 365,
-                     end_price: float | None = None,
-                     region: str = "Suomi",
-                     seed: int = 7) -> list[dict]:
-    """anchors: [{"year","month","price"}, ...] sorted by month asc.
-
-    Returns daily series ending today, length `days`.
-    """
+def _interp(d: date, anchors: list[tuple[date, float]]) -> float:
+    """Linear interp between consecutive anchor points; flat outside."""
     if not anchors:
+        return None
+    if d <= anchors[0][0]:
+        return anchors[0][1]
+    if d >= anchors[-1][0]:
+        return anchors[-1][1]
+    lo, hi = 0, len(anchors) - 1
+    while lo + 1 < hi:
+        mid = (lo + hi) // 2
+        if anchors[mid][0] <= d:
+            lo = mid
+        else:
+            hi = mid
+    a_d, a_p = anchors[lo]
+    b_d, b_p = anchors[hi]
+    span = (b_d - a_d).days or 1
+    frac = (d - a_d).days / span
+    return a_p + (b_p - a_p) * frac
+
+
+def build_history(stat_anchors: list[dict],
+                  brent_series: list[dict] | None,
+                  live_today_price: float | None,
+                  days: int = 365) -> list[dict]:
+    """stat_anchors: [{"year","month","month_iso","price"}, ...] sorted asc.
+
+    Returns list of {date, price, source}.
+    """
+    if not stat_anchors:
         return []
 
-    rng = random.Random(seed + (hash(region) & 0xFFFF))
-    factor = CITY_FACTORS.get(region, 1.00)
-
-    # rakenna anchor-pisteet: (date, price)
-    anchor_pts = []
-    for a in anchors:
-        anchor_date = date(a["year"], a["month"], 15)
-        anchor_pts.append((anchor_date, a["price"] * factor))
+    # rakenna ankkurit (date, price)
+    anchor_pts = [
+        (date(a["year"], a["month"], 15), float(a["price"]))
+        for a in stat_anchors
+    ]
     anchor_pts.sort()
+    last_stat_date, last_stat_price = anchor_pts[-1]
 
     today = date.today()
     start = today - timedelta(days=days - 1)
 
-    def interp(d: date) -> float:
-        # ennen ensimmäistä ankkuria tai sen jälkeen viimeisen jälkeen → reuna-arvot
-        if d <= anchor_pts[0][0]:
-            return anchor_pts[0][1]
-        if d >= anchor_pts[-1][0]:
-            return anchor_pts[-1][1]
-        # binäärihaku
-        lo, hi = 0, len(anchor_pts) - 1
-        while lo + 1 < hi:
-            mid = (lo + hi) // 2
-            if anchor_pts[mid][0] <= d:
-                lo = mid
-            else:
-                hi = mid
-        a_d, a_p = anchor_pts[lo]
-        b_d, b_p = anchor_pts[hi]
-        span = (b_d - a_d).days or 1
-        frac = (d - a_d).days / span
-        return a_p + (b_p - a_p) * frac
+    # Brent-perustainen ekstrapolaatio aukolle: lasketaan Brent-keskiarvo
+    # last_stat_date kuukaudessa vs nykypäivänä → muutos %.
+    brent_factor = None
+    if brent_series and live_today_price is None:
+        # poimi Brent month around last_stat_date and now
+        b_then = [b["value"] for b in brent_series
+                  if b["date"][:7] == last_stat_date.strftime("%Y-%m")]
+        b_now = [b["value"] for b in brent_series[-7:]]
+        if b_then and b_now:
+            pct = (sum(b_now) / len(b_now)) / (sum(b_then) / len(b_then)) - 1.0
+            # retail liikkuu ~60 % crudesta yli koko hintarakenteen
+            brent_factor = 1.0 + 0.6 * pct
 
     out = []
     for i in range(days):
         d = start + timedelta(days=i)
-        base = interp(d)
-        # päivän kuukausi-ankkuri saa pienen viikon ja kohinan
-        noise = rng.gauss(0, 0.005)
-        price = base + _weekday_bias(d) + noise
+
+        if d <= last_stat_date:
+            p = _interp(d, anchor_pts)
+            src = "statfin"
+        else:
+            # ekstrapolaatiovaihe: lineaarisesti last_stat_price → today_target
+            gap_days = (today - last_stat_date).days
+            if gap_days <= 0:
+                p = last_stat_price
+            else:
+                # määritä today_target
+                if live_today_price is not None:
+                    today_target = float(live_today_price)
+                elif brent_factor is not None:
+                    today_target = last_stat_price * brent_factor
+                else:
+                    today_target = last_stat_price
+                frac = (d - last_stat_date).days / gap_days
+                p = last_stat_price + (today_target - last_stat_price) * frac
+            src = "statfin+extrap" if d < today else "live"
+
         out.append({
             "date": d.isoformat(),
-            "price": round(price, 4),
-            "region": region,
-            "source": "statfin+interp",
+            "price": round(p, 4),
+            "source": src,
         })
-
-    # Kalibroi viimeiset 7 pv kevyesti lähestymään nykyhintaa, jotta
-    # piikkiä viime kuukauden anchoriin ei tule liian rajusti.
-    if end_price is not None and out:
-        target = end_price * factor
-        delta = target - out[-1]["price"]
-        # rajoita kalibrointi pieneen (max ±0.05 €/L)
-        if abs(delta) <= 0.05:
-            n_cal = min(7, len(out))
-            for i in range(n_cal):
-                weight = (i + 1) / n_cal
-                out[-n_cal + i]["price"] = round(
-                    out[-n_cal + i]["price"] + delta * weight, 4
-                )
-
     return out

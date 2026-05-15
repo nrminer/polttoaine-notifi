@@ -33,6 +33,19 @@ export default function AiAnalysis({ ai, brent, eurUsd }) {
           {explanation}
         </p>
 
+        {ai?.key_drivers && ai.key_drivers.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2" data-testid="ai-drivers">
+            {ai.key_drivers.slice(0, 4).map((d, i) => (
+              <span
+                key={i}
+                className="font-mono text-[11px] px-2 py-1 bg-white/10 text-accent border border-accent/30 rounded-none"
+              >
+                {d}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap items-end gap-x-8 gap-y-3">
           {value != null && (
             <div>

@@ -30,9 +30,11 @@ import {
   fetchLatestPrediction,
   fetchRegional,
   fetchAccuracy,
+  fetchNews,
   seedHistory,
 } from "./lib/api";
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
+import NewsCard from "./components/NewsCard";
 
 const RANGE_OPTIONS = [
   { value: 30, label: "30 PV" },
@@ -49,6 +51,7 @@ export default function App() {
   const [prediction, setPrediction] = useState(null);
   const [regional, setRegional] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
+  const [news, setNews] = useState([]);
   const [loading, setLoading] = useState({});
   const [seeded, setSeeded] = useState(false);
   const [error, setError] = useState(null);
@@ -158,6 +161,18 @@ export default function App() {
     }
   }, []);
 
+  const loadNews = useCallback(async () => {
+    setLoad("news", true);
+    try {
+      const { data } = await fetchNews(30, 8);
+      setNews(data.items || []);
+    } catch (e) {
+      console.warn("news failed", e);
+    } finally {
+      setLoad("news", false);
+    }
+  }, []);
+
   // init
   useEffect(() => {
     (async () => {
@@ -169,6 +184,7 @@ export default function App() {
         loadPrediction(fuel, false),
         loadRegional(fuel),
         loadAccuracy(fuel),
+        loadNews(),
       ]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -344,7 +360,7 @@ export default function App() {
                 </div>
               </div>
               <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
-                Lähde: Tilastokeskus (kuukausi) + polttoaine.net &amp; tankille.fi (live, top-{current?.stations_count || "—"})
+                Lähteet: Tilastokeskus 12ge (virallinen kk-ka.) · polttoaine.net + tankille.fi (live, ≤24h)
               </div>
             </Card>
           </div>
@@ -430,8 +446,7 @@ export default function App() {
                   {fuel} · valtakunnan keskihinta
                 </h3>
                 <p className="text-[11px] text-muted font-mono mt-1">
-                  Lähde: Tilastokeskus 12ge — Polttonesteiden kuluttajahinnat (kk-ka.) +
-                  interpolointi päivätasolle
+                  Lähde: Tilastokeskus 12ge (oikea kk-ka. 2020-2025) · Brent-ekstrapolointi joulukuusta 2025 alkaen · tämän päivän piste = live-skrapaus
                 </p>
               </div>
               <RangeToggle value={range} onChange={setRange} options={RANGE_OPTIONS} />
@@ -445,7 +460,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* AI + REGIONAL */}
+      {/* AI + NEWS */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7">
@@ -456,12 +471,20 @@ export default function App() {
             />
           </div>
           <div className="col-span-12 lg:col-span-5">
+            <NewsCard items={prediction?.news_headlines?.length ? prediction.news_headlines : news} />
+          </div>
+        </div>
+      </section>
+
+      {/* REGIONAL + FACTORS + ACCURACY */}
+      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12">
             <RegionalGrid data={regional} fuel={fuel} />
           </div>
         </div>
       </section>
 
-      {/* FACTORS + ACCURACY */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-16">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-5">

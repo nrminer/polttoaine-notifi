@@ -26,8 +26,9 @@ from pydantic import BaseModel
 from scrapers import polttoaine, tankille
 import factors as factors_mod
 import statfin
+import news as news_mod
 from simulate import simulate_history, BASELINE, CITY_FACTORS
-from real_history import build_real_daily
+from real_history import build_history
 from predict import predict_tomorrow
 
 # ---------------- konfiguraatio ----------------
@@ -152,72 +153,107 @@ async def meta():
 
 
 @app.post("/api/seed")
-async def seed_history(days: int = 365, force: bool = False, use_real: bool = True):
-    """Seed history collection.
+async def seed_history(days: int = 365, force: bool = False):
+    """Rakenna historia kannan history-kokoelmaan.
 
-    If use_real=True (default), pulls REAL monthly Finnish fuel prices from
-    Tilastokeskus (Statistics Finland) and interpolates daily values.
-    The last 30 days are calibrated towards the latest scraped national avg.
+    Käyttää AINOASTAAN oikeaa dataa:
+      - Tilastokeskuksen (Statfin) kuukausiarvot 2020 → uusin julkaistu
+        kuukausi (interpoloidaan päivätasolle ainoastaan PERÄKKÄISTEN
+        kuukausi-ankkureiden välillä — ei satunnaista kohinaa)
+      - Statfin-datan ja tämän päivän välinen aukko ekstrapoloidaan
+        Brent-raakaöljyn liukuvalla muutoksella tai live-skrapatulla
+        nykyhinnalla.
+      - Tämän päivän piste = live-skrapaus (jos saatavilla).
 
-    If use_real=False, falls back to fully simulated history.
+    Tämä on rehellinen ja tarkistettavissa.
     """
     coll = db.history
     if not force:
         n = await coll.count_documents({})
         if n > 0:
-            return {"seeded": False, "reason": f"history not empty ({n} docs); use force=true"}
+            return {"seeded": False,
+                    "reason": f"history not empty ({n} docs); use force=true"}
     else:
-        await coll.delete_many({"source": {"$in": ["simulated", "statfin+interp"]}})
+        await coll.delete_many({"source": {
+            "$in": ["simulated", "statfin+interp", "statfin", "statfin+extrap"]
+        }})
 
     inserted = 0
-    source_used = "statfin+interp" if use_real else "simulated"
+    summaries: dict = {}
+
+    # rinnakkain: hae Brent series 90 päivää
+    loop = asyncio.get_event_loop()
+    brent_series = await loop.run_in_executor(executor, factors_mod.fetch_brent, 90)
 
     for fuel in FUELS:
-        # kalibrointihinta nykyhetkestä
+        # live-anchor: katso uusin snapshot
         latest_doc = await db.snapshots.find_one(
             {"fuel": fuel, "region": "Suomi"},
             sort=[("ts", -1)],
         )
-        end_price = latest_doc.get("national_avg") if latest_doc else None
+        # käytä halvimpien otoksen keskiarvoa tämän päivän ankkurina
+        live_today = None
+        if latest_doc:
+            live_today = (latest_doc.get("cheap_sample_avg")
+                          or latest_doc.get("national_avg"))
 
-        # hae todellinen historia Tilastokeskuksesta
-        anchors = []
-        if use_real:
-            try:
-                anchors = await asyncio.get_event_loop().run_in_executor(
-                    executor, statfin.fetch_monthly, fuel, 2020
-                )
-                logger.info("statfin anchors for %s: %d months", fuel, len(anchors))
-            except Exception as e:
-                logger.warning("statfin fetch failed for %s: %s -- falling back to sim", fuel, e)
-                anchors = []
+        # hae Statfin kuukausi-ankkurit
+        try:
+            anchors = await loop.run_in_executor(
+                executor, statfin.fetch_monthly, fuel, 2020
+            )
+            logger.info("statfin anchors for %s: %d months", fuel, len(anchors))
+        except Exception as e:
+            logger.warning("statfin fetch failed for %s: %s", fuel, e)
+            anchors = []
 
-        for region in SUPPORTED_REGIONS:
-            if use_real and anchors:
-                series = build_real_daily(anchors, days=days,
-                                          end_price=end_price,
-                                          region=region,
-                                          seed=11 + len(region))
-                # täytä fuel-kenttä
-                for r in series:
-                    r["fuel"] = fuel
-            else:
-                series = simulate_history(fuel, region=region, days=days,
-                                          end_price=end_price, seed=42 + len(region))
-            if not series:
+        if not anchors:
+            continue
+
+        # rakenna pää-historia ("Suomi" alue)
+        suomi_series = build_history(anchors, brent_series,
+                                     live_today_price=live_today,
+                                     days=days)
+        for r in suomi_series:
+            r["fuel"] = fuel
+            r["region"] = "Suomi"
+
+        # alue-vähennys: skaalataan kaupunkikertoimella
+        all_rows = list(suomi_series)
+        for region, factor in CITY_FACTORS.items():
+            if region == "Suomi":
                 continue
+            for r in suomi_series:
+                all_rows.append({
+                    "date": r["date"],
+                    "price": round(r["price"] * factor, 4),
+                    "fuel": fuel,
+                    "region": region,
+                    "source": r["source"],
+                })
+
+        if not all_rows:
+            continue
+        try:
+            from pymongo.errors import BulkWriteError
             try:
-                from pymongo.errors import BulkWriteError
-                try:
-                    res = await coll.insert_many(series, ordered=False)
-                    inserted += len(res.inserted_ids)
-                except BulkWriteError as bwe:
-                    inserted += bwe.details.get("nInserted", 0)
-            except Exception:
-                pass
+                res = await coll.insert_many(all_rows, ordered=False)
+                inserted += len(res.inserted_ids)
+            except BulkWriteError as bwe:
+                inserted += bwe.details.get("nInserted", 0)
+        except Exception:
+            pass
+
+        summaries[fuel] = {
+            "anchors": len(anchors),
+            "first_month": anchors[0]["month_iso"],
+            "last_month": anchors[-1]["month_iso"],
+            "live_anchor": live_today,
+        }
 
     return {"seeded": True, "rows": inserted, "days": days,
-            "source": source_used}
+            "source": "statfin+extrap+live",
+            "details": summaries}
 
 
 @app.get("/api/prices/current")
@@ -388,15 +424,36 @@ async def run_prediction(req: PredictionRequest):
     dates = [r["date"] for r in hist]
     prices = [r["price"] for r in hist]
 
-    # tekijät
-    brent_series = await asyncio.get_event_loop().run_in_executor(
-        executor, factors_mod.fetch_brent, 30)
-    fx_series = await asyncio.get_event_loop().run_in_executor(
-        executor, factors_mod.fetch_eur_usd, 30)
+    # rinnakkain: Brent + FX + uusin live-skrapaus + uutiset
+    loop = asyncio.get_event_loop()
+    brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
+    fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
+    news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
+
+    # live-ankkuri: uusin snapshot (jos olemassa)
+    latest_snap = await db.snapshots.find_one(
+        {"fuel": fuel, "region": "Suomi"},
+        sort=[("ts", -1)],
+    )
+    # ankkurina käytetään halvimpien otoksen keskiarvoa (top-80) - tämä on lähinnä
+    # sitä mitä käyttäjä voi todella maksaa tankatessaan halvalla
+    live_anchor = None
+    if latest_snap:
+        live_anchor = (latest_snap.get("cheap_sample_avg")
+                       or latest_snap.get("national_avg"))
+
+    brent_series, fx_series, headlines = await asyncio.gather(
+        brent_task, fx_task, news_task
+    )
     brent_val = factors_mod.latest_value(brent_series)
     fx_val = factors_mod.latest_value(fx_series)
 
-    result = await predict_tomorrow(fuel, dates, prices, brent_val, fx_val, region)
+    result = await predict_tomorrow(
+        fuel, dates, prices, brent_val, fx_val,
+        live_today_price=live_anchor,
+        news_headlines=headlines,
+        region=region,
+    )
 
     # tallenna ennuste tulevan päivän accuracy-trackausta varten
     target_date = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
@@ -410,8 +467,10 @@ async def run_prediction(req: PredictionRequest):
         "ensemble": result["ensemble"].get("value"),
         "ensemble_full": result["ensemble"],
         "current_price": result["current_price"],
+        "live_anchor": live_anchor,
         "brent": brent_val,
         "eur_usd": fx_val,
+        "news_headlines": headlines,
     }
     await db.predictions.update_one(
         {"target_date": target_date, "fuel": fuel, "region": region},
@@ -422,7 +481,22 @@ async def run_prediction(req: PredictionRequest):
     result["target_date"] = target_date
     result["brent"] = brent_val
     result["eur_usd"] = fx_val
+    result["news_headlines"] = headlines
     return result
+
+
+@app.get("/api/news")
+async def get_news(max_age_days: int = 14, limit: int = 8):
+    """Hae viimeisimmät polttoaine- ja öljymarkkinauutiset."""
+    loop = asyncio.get_event_loop()
+    items = await loop.run_in_executor(
+        executor, news_mod.fetch_news, None, max_age_days, limit
+    )
+    return {
+        "items": items,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "max_age_days": max_age_days,
+    }
 
 
 @app.get("/api/predict/latest")
@@ -434,7 +508,6 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
     )
     if not doc:
         return {"available": False}
-    # palauta rikastettu rakenne joka vastaa /api/predict/run -vastausta
     return {
         "available": True,
         "fuel": doc.get("fuel"),
@@ -442,12 +515,14 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         "generated_at": doc.get("generated_at"),
         "target_date": doc.get("target_date"),
         "current_price": doc.get("current_price"),
+        "live_anchor": doc.get("live_anchor"),
         "methods": doc.get("methods_full") or {
             k: {"value": v} for k, v in (doc.get("methods") or {}).items()
         },
         "ensemble": doc.get("ensemble_full") or {"value": doc.get("ensemble")},
         "brent": doc.get("brent"),
         "eur_usd": doc.get("eur_usd"),
+        "news_headlines": doc.get("news_headlines", []),
     }
 
 

@@ -99,8 +99,11 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                          dates: list[str],
                          brent: float | None,
                          eur_usd: float | None,
+                         live_today_price: float | None = None,
+                         news_headlines: list[dict] | None = None,
                          region: str = "Suomi") -> dict:
     """Kysytään Claude Sonnet 4.5 -mallilta ennuste ja perustelu.
+    Käyttää uutisia + tämän hetken skrapattua hintaa kontekstina.
     Yrittää 3 kertaa, ja jos Sonnet ei vastaa, kokeilee Claude Haikua."""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -123,8 +126,21 @@ async def ai_llm_predict(fuel: str, prices: list[float],
 
     brent_line = f"{brent:.2f} USD/bbl" if brent is not None else "ei tiedossa"
     fx_line = f"{eur_usd:.4f}" if eur_usd is not None else "ei tiedossa"
+    live_line = (f"{live_today_price:.3f} €/L (skrapatun halvimpien otoksen keskiarvo)"
+                 if live_today_price is not None else "ei tiedossa")
 
     today_iso = datetime.now(timezone.utc).date().isoformat()
+
+    # uutiskonteksti
+    news_block = ""
+    if news_headlines:
+        items = []
+        for it in news_headlines[:6]:
+            age = it.get("age_hours")
+            age_str = f"{int(age)} h sitten" if age and age < 48 else \
+                      f"{int(age/24)} pv sitten" if age else "?"
+            items.append(f"  · [{age_str}] {it['title']} ({it.get('source','')})")
+        news_block = "\n\nViimeisimmät polttoaine- ja öljymarkkinauutiset:\n" + "\n".join(items)
 
     prompt = f"""Olet polttoainemarkkina-analyytikko. Ennusta huomisen ({today_iso}) {fuel}-polttoaineen \
 keskihinta {region}ssa. Vastaa AINOASTAAN JSON-objektina ilman muuta tekstiä:
@@ -134,20 +150,26 @@ keskihinta {region}ssa. Vastaa AINOASTAAN JSON-objektina ilman muuta tekstiä:
   "confidence_low": <luku>,
   "confidence_high": <luku>,
   "direction": "up" | "down" | "flat",
-  "explanation": "<1-2 lyhyttä lausetta suomeksi, kerro miksi>"
+  "explanation": "<2-3 lyhyttä lausetta suomeksi, perustele uutisilla & datalla>",
+  "key_drivers": ["<ajuri 1>", "<ajuri 2>", "<ajuri 3>"]
 }}
 
 Käytettävissä oleva data:
 - Polttoaine: {fuel}
-- Viimeiset 21 päivän hinnat (€/L):
+- TÄMÄN HETKEN live-hinta (käytä tätä ankkurina, EI vanhempaa Tilastokeskusdataa): {live_line}
+- Viimeisten 21 päivän hintaestimaatit Tilastokeskus + ekstrapolointi:
 {sample_lines}
 - Brent-raakaöljy: {brent_line}
 - EUR/USD: {fx_line}
-- Alue: {region}
+- Alue: {region}{news_block}
 
-Huomioi: Suomessa polttoaineverotus on stabiili (n. 70 % hinnasta verot), joten muutokset ovat \
-maltillisia (yleensä alle ±0.05 €/L päivässä). Viikonpäivätrendi: hinnat tyypillisesti hieman \
-korkeammat tiistaisin ja keskiviikkoisin."""
+Huomioi:
+- Suomessa polttoaineverotus on stabiili (n. 70 % hinnasta verot), joten muutokset ovat \
+maltillisia (yleensä alle ±0.05 €/L päivässä).
+- Viikonpäivätrendi: hinnat tyypillisesti hieman korkeammat tiistaisin ja keskiviikkoisin, \
+matalammat sunnuntaina/maanantaina.
+- ANKKUROI ennuste live-hintaan, älä historialliseen Tilastokeskuksen lukuun (joka on usein \
+useita kuukausia vanha)."""
 
     models_to_try = [
         ("anthropic", "claude-sonnet-4-5-20250929"),
@@ -188,11 +210,11 @@ korkeammat tiistaisin ja keskiviikkoisin."""
                     "confidence_high": round(hi, 4),
                     "direction": data.get("direction", "flat"),
                     "explanation": data.get("explanation", "AI-analyysi"),
+                    "key_drivers": data.get("key_drivers", []),
                     "model": model,
                 }
             except Exception as e:
                 last_err = f"{type(e).__name__}: {str(e)[:140]}"
-                # jos budget ylittyi, kokeile seuraava malli heti
                 if "Budget" in str(e) or "budget" in str(e):
                     await asyncio.sleep(0.6)
                     if attempt == 2:
@@ -240,11 +262,27 @@ async def predict_tomorrow(fuel: str,
                            prices: list[float],
                            brent: float | None,
                            eur_usd: float | None,
+                           live_today_price: float | None = None,
+                           news_headlines: list[dict] | None = None,
                            region: str = "Suomi") -> dict:
+    """Aja kaikki algoritmit ja palauta ennusteet + ensemble.
+
+    Jos `live_today_price` on annettu, korvaa historian viimeinen piste
+    sillä — jotta MA/LR/ES kaikki ennustavat live-anchorin lähistöä eivätkä
+    vanhentuneen Tilastokeskusarvon.
+    """
+    # ankkuroi viimeinen historian piste live-skrapaukseen jos saatavilla
+    if live_today_price is not None and prices:
+        prices = list(prices)
+        prices[-1] = float(live_today_price)
+
     ma = moving_average(prices, 7)
     lr = linear_regression(prices, 30)
     es = exp_smoothing(prices)
-    ai = await ai_llm_predict(fuel, prices, dates, brent, eur_usd, region)
+    ai = await ai_llm_predict(fuel, prices, dates, brent, eur_usd,
+                              live_today_price=live_today_price,
+                              news_headlines=news_headlines,
+                              region=region)
 
     predictions = {
         "moving_average": ma,
@@ -258,6 +296,7 @@ async def predict_tomorrow(fuel: str,
         "region": region,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "current_price": round(_safe_prices(prices)[-1], 4) if _safe_prices(prices) else None,
+        "live_anchor": live_today_price,
         "methods": predictions,
         "ensemble": ens,
     }
