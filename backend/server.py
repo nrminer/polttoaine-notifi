@@ -25,7 +25,9 @@ from pydantic import BaseModel
 
 from scrapers import polttoaine, tankille
 import factors as factors_mod
+import statfin
 from simulate import simulate_history, BASELINE, CITY_FACTORS
+from real_history import build_real_daily
 from predict import predict_tomorrow
 
 # ---------------- konfiguraatio ----------------
@@ -150,10 +152,14 @@ async def meta():
 
 
 @app.post("/api/seed")
-async def seed_history(days: int = 365, force: bool = False):
-    """Generoi simuloitu historia (käytä jos kanta on tyhjä).
+async def seed_history(days: int = 365, force: bool = False, use_real: bool = True):
+    """Seed history collection.
 
-    Käyttää viim. scrapatun hintatason kalibrointiin jos saatavilla.
+    If use_real=True (default), pulls REAL monthly Finnish fuel prices from
+    Tilastokeskus (Statistics Finland) and interpolates daily values.
+    The last 30 days are calibrated towards the latest scraped national avg.
+
+    If use_real=False, falls back to fully simulated history.
     """
     coll = db.history
     if not force:
@@ -161,26 +167,46 @@ async def seed_history(days: int = 365, force: bool = False):
         if n > 0:
             return {"seeded": False, "reason": f"history not empty ({n} docs); use force=true"}
     else:
-        await coll.delete_many({"source": "simulated"})
+        await coll.delete_many({"source": {"$in": ["simulated", "statfin+interp"]}})
 
     inserted = 0
+    source_used = "statfin+interp" if use_real else "simulated"
+
     for fuel in FUELS:
-        # yritä saada kalibrointihinta nykyhinnasta
+        # kalibrointihinta nykyhetkestä
         latest_doc = await db.snapshots.find_one(
             {"fuel": fuel, "region": "Suomi"},
             sort=[("ts", -1)],
         )
         end_price = latest_doc.get("national_avg") if latest_doc else None
 
+        # hae todellinen historia Tilastokeskuksesta
+        anchors = []
+        if use_real:
+            try:
+                anchors = await asyncio.get_event_loop().run_in_executor(
+                    executor, statfin.fetch_monthly, fuel, 2020
+                )
+                logger.info("statfin anchors for %s: %d months", fuel, len(anchors))
+            except Exception as e:
+                logger.warning("statfin fetch failed for %s: %s -- falling back to sim", fuel, e)
+                anchors = []
+
         for region in SUPPORTED_REGIONS:
-            series = simulate_history(fuel, region=region, days=days,
-                                      end_price=end_price, seed=42 + len(region))
+            if use_real and anchors:
+                series = build_real_daily(anchors, days=days,
+                                          end_price=end_price,
+                                          region=region,
+                                          seed=11 + len(region))
+                # täytä fuel-kenttä
+                for r in series:
+                    r["fuel"] = fuel
+            else:
+                series = simulate_history(fuel, region=region, days=days,
+                                          end_price=end_price, seed=42 + len(region))
             if not series:
                 continue
-            # älä korvaa scrapattuja päiväkohtaisia merkintöjä — käytä upsertia
-            # joka asettaa "simulated" vain jos riviä ei jo ole
             try:
-                # nopeampi: insert_many ordered=False, sallii duplikaatit
                 from pymongo.errors import BulkWriteError
                 try:
                     res = await coll.insert_many(series, ordered=False)
@@ -190,17 +216,40 @@ async def seed_history(days: int = 365, force: bool = False):
             except Exception:
                 pass
 
-    return {"seeded": True, "rows": inserted, "days": days}
+    return {"seeded": True, "rows": inserted, "days": days,
+            "source": source_used}
 
 
 @app.get("/api/prices/current")
 async def current_prices(fuel: str = Query("95E10")):
-    """Skrapaa nykyhinnat ja palauta yhteenveto."""
+    """Skrapaa nykyhinnat (live, halvimmat asemat) + hae Tilastokeskuksen
+    viimeisin virallinen kuukausiarvo.
+
+    Palauttaa:
+      official_avg     - Tilastokeskuksen viimeisin kuukausiarvo (€/L)
+      official_month   - "2025-12" jne.
+      cheap_sample_avg - skrapatun otoksen (~80 halvinta) keskiarvo
+      national_min     - skrapatun otoksen halvin
+    """
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
-    rows = await _scrape_all(fuel)
+
+    # rinnakkaiset: scrape + statfin
+    loop = asyncio.get_event_loop()
+    scrape_task = _scrape_all(fuel)
+    statfin_task = loop.run_in_executor(executor, statfin.fetch_monthly, fuel, 2024)
+    rows, statfin_rows = await asyncio.gather(scrape_task, statfin_task,
+                                              return_exceptions=True)
+    if isinstance(rows, Exception):
+        rows = []
+    official_month = None
+    official_avg = None
+    if isinstance(statfin_rows, list) and statfin_rows:
+        latest = statfin_rows[-1]
+        official_month = latest["month_iso"]
+        official_avg = latest["price"]
+
     if not rows:
-        # fallback: viimeisin tallennettu snapshot
         last = await db.snapshots.find_one({"fuel": fuel, "region": "Suomi"},
                                            sort=[("ts", -1)])
         if last:
@@ -208,8 +257,11 @@ async def current_prices(fuel: str = Query("95E10")):
                 "fuel": fuel,
                 "fetched_at": last.get("ts"),
                 "stations_count": last.get("stations_count", 0),
-                "national_avg": last.get("national_avg"),
+                "cheap_sample_avg": last.get("cheap_sample_avg")
+                                    or last.get("national_avg"),
                 "national_min": last.get("national_min"),
+                "official_avg": official_avg,
+                "official_month": official_month,
                 "by_city": last.get("by_city", {}),
                 "stations": [],
                 "stale": True,
@@ -217,29 +269,33 @@ async def current_prices(fuel: str = Query("95E10")):
         raise HTTPException(503, "no data: scrapers returned empty and no cache")
 
     by_city = _city_aggregate(rows)
-    nat_avg = _national_average(rows)
+    cheap_avg = _national_average(rows)
     nat_min = min(r["price"] for r in rows)
 
     ts = datetime.now(timezone.utc).isoformat()
-    # tallenna snapshot
     snap = {
         "ts": ts,
         "fuel": fuel,
         "region": "Suomi",
-        "national_avg": nat_avg,
+        "cheap_sample_avg": cheap_avg,
+        "national_avg": official_avg,   # virallinen, jos saatavilla
         "national_min": nat_min,
+        "official_month": official_month,
         "by_city": by_city,
         "stations_count": len(rows),
     }
     await db.snapshots.insert_one(snap.copy())
 
-    # tallenna myös history-pisteet päiväkohtaisesti (yksi per fuel/region/päivä)
+    # päivitä history-piste tämän päivän osalta käyttäen *virallista* arvoa
+    # jos saatavilla, muuten halvinta keskiarvoa
+    history_price = official_avg if official_avg is not None else cheap_avg
     today = datetime.now(timezone.utc).date().isoformat()
     await db.history.update_one(
         {"date": today, "fuel": fuel, "region": "Suomi"},
         {"$set": {
             "date": today, "fuel": fuel, "region": "Suomi",
-            "price": nat_avg, "source": "scraped",
+            "price": history_price,
+            "source": "statfin" if official_avg is not None else "scraped",
         }},
         upsert=True,
     )
@@ -258,7 +314,9 @@ async def current_prices(fuel: str = Query("95E10")):
         "fuel": fuel,
         "fetched_at": ts,
         "stations_count": len(rows),
-        "national_avg": nat_avg,
+        "cheap_sample_avg": cheap_avg,
+        "official_avg": official_avg,
+        "official_month": official_month,
         "national_min": nat_min,
         "by_city": by_city,
         "stations": [

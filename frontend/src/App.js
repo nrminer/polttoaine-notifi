@@ -213,8 +213,10 @@ export default function App() {
   };
 
   // hero metrics
-  const todayAvg = current?.national_avg;
+  const todayAvg = current?.official_avg ?? current?.cheap_sample_avg;
+  const officialMonth = current?.official_month;
   const todayMin = current?.national_min;
+  const cheapAvg = current?.cheap_sample_avg;
   const yesterdayPrice = useMemo(() => {
     if (!history || history.length < 2) return null;
     // viim. ennen tämän päivän arvoa
@@ -309,7 +311,11 @@ export default function App() {
 
           <div className="col-span-12 lg:col-span-5">
             <Card testId="hero-today-card" className="p-7 h-full" >
-              <CardLabel className="mb-2">Tänään · valtakunnan keskiarvo</CardLabel>
+              <CardLabel className="mb-2">
+                {officialMonth
+                  ? `Virallinen kuukausiarvo · ${officialMonth.replace("-", "/")}`
+                  : "Tänään · valtakunnan keskiarvo"}
+              </CardLabel>
               <div className="flex items-end justify-between">
                 <StatNumber value={todayAvg} testId="today-avg-price" />
                 <DeltaBadge delta={dayDelta} />
@@ -317,7 +323,7 @@ export default function App() {
               <div className="mt-6 grid grid-cols-2 gap-4 tick-row border-t border-line pt-5">
                 <div>
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                    Halvin Suomessa
+                    Halvin asema (live)
                   </div>
                   <div
                     className="hero-num tnum text-2xl mt-1"
@@ -329,12 +335,16 @@ export default function App() {
                 </div>
                 <div className="pl-5">
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                    Asemia havaittu
+                    Top-{current?.stations_count || "—"} ka.
                   </div>
                   <div className="hero-num tnum text-2xl mt-1">
-                    {current?.stations_count ?? "—"}
+                    {cheapAvg != null ? cheapAvg.toFixed(3) : "—"}
+                    <span className="text-secondary text-xs ml-1">€/L</span>
                   </div>
                 </div>
+              </div>
+              <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
+                Lähde: Tilastokeskus (kuukausi) + polttoaine.net &amp; tankille.fi (live, top-{current?.stations_count || "—"})
               </div>
             </Card>
           </div>
@@ -415,10 +425,14 @@ export default function App() {
           <Card span="col-span-12 lg:col-span-8" className="p-6" testId="history-chart-card">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <CardLabel>Hintahistoria + ennuste</CardLabel>
+                <CardLabel>Hintahistoria + ennuste · todellinen data</CardLabel>
                 <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                  {fuel} · valtakunnan keskiarvo
+                  {fuel} · valtakunnan keskihinta
                 </h3>
+                <p className="text-[11px] text-muted font-mono mt-1">
+                  Lähde: Tilastokeskus 12ge — Polttonesteiden kuluttajahinnat (kk-ka.) +
+                  interpolointi päivätasolle
+                </p>
               </div>
               <RangeToggle value={range} onChange={setRange} options={RANGE_OPTIONS} />
             </div>
