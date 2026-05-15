@@ -172,6 +172,9 @@ matalammat sunnuntaina/maanantaina.
 useita kuukausia vanha)."""
 
     models_to_try = [
+        ("anthropic", "claude-opus-4-7"),
+        ("anthropic", "claude-opus-4-7-20260416"),
+        ("anthropic", "claude-opus-4-6"),
         ("anthropic", "claude-sonnet-4-5-20250929"),
         ("anthropic", "claude-haiku-4-5-20251001"),
     ]

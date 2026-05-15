@@ -241,13 +241,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
-  const handleRunPrediction = async () => {
-    setError(null);
-    await loadPrediction(fuel, true);
-    // refresh accuracy after running
-    await loadAccuracy(fuel);
-  };
-
   const handleRefreshAll = async () => {
     setError(null);
     await Promise.all([
@@ -255,25 +248,34 @@ export default function App() {
       loadHistory(fuel, range),
       loadFactors(),
       loadRegional(fuel),
+      loadTracking(fuel),
+      loadNews(),
     ]);
   };
 
   // hero metrics
-  const todayAvg = current?.official_avg ?? current?.cheap_sample_avg;
-  const officialMonth = current?.official_month;
   const todayMin = current?.national_min;
   const cheapAvg = current?.cheap_sample_avg;
+  // huomisen halvin ennuste tulee trackerista
+  const tomorrowCheapest = tracking?.summary?.tomorrow_prediction;
+  const cheapestDelta = useMemo(() => {
+    if (todayMin == null) return null;
+    // edellisen päivän halvin tracker-historiasta
+    const rows = tracking?.rows || [];
+    if (rows.length < 2) return null;
+    const prev = rows[rows.length - 2];
+    if (prev?.actual_cheapest == null) return null;
+    return todayMin - prev.actual_cheapest;
+  }, [todayMin, tracking]);
   const yesterdayPrice = useMemo(() => {
     if (!history || history.length < 2) return null;
-    // viim. ennen tämän päivän arvoa
     const today = new Date().toISOString().slice(0, 10);
     const filtered = history.filter((h) => h.date < today);
     return filtered.length ? filtered[filtered.length - 1].price : null;
   }, [history]);
-  const dayDelta = todayAvg != null && yesterdayPrice != null ? todayAvg - yesterdayPrice : null;
 
-  const tomorrowVal = prediction?.ensemble?.value;
-  const tomorrowDelta = tomorrowVal != null && todayAvg != null ? tomorrowVal - todayAvg : null;
+  const tomorrowVal = tomorrowCheapest;
+  const tomorrowDelta = tomorrowVal != null && todayMin != null ? tomorrowVal - todayMin : null;
 
   const isLoading = Object.values(loading).some(Boolean);
 
@@ -338,15 +340,13 @@ export default function App() {
 
             <div className="mt-7 flex flex-wrap items-center gap-4">
               <FuelToggle value={fuel} onChange={setFuel} />
-              <button
-                data-testid="run-prediction-btn"
-                onClick={handleRunPrediction}
-                disabled={loading.prediction}
-                className="inline-flex items-center gap-2 px-5 h-10 bg-nordDark text-white hover:bg-black font-semibold text-sm transition-colors disabled:opacity-60"
+              <div
+                data-testid="auto-schedule-info"
+                className="inline-flex items-center gap-2 px-3 h-10 bg-slate-100 text-secondary font-mono text-xs font-semibold"
               >
-                <Sparkles size={16} className={loading.prediction ? "animate-pulse" : ""} />
-                {loading.prediction ? "Ennustetaan…" : "Aja ennustus"}
-              </button>
+                <Clock size={14} />
+                Auto: 06:00 + 20:00 (Helsinki)
+              </div>
               {error && (
                 <span data-testid="error-banner" className="text-signalUp font-mono text-xs">
                   {error}
@@ -357,25 +357,26 @@ export default function App() {
 
           <div className="col-span-12 lg:col-span-5">
             <Card testId="hero-today-card" className="p-7 h-full" >
-              <CardLabel className="mb-2">
-                {officialMonth
-                  ? `Virallinen kuukausiarvo · ${officialMonth.replace("-", "/")}`
-                  : "Tänään · valtakunnan keskiarvo"}
-              </CardLabel>
+              <CardLabel className="mb-2">Tänään · halvin asema Suomessa</CardLabel>
               <div className="flex items-end justify-between">
-                <StatNumber value={todayAvg} testId="today-avg-price" />
-                <DeltaBadge delta={dayDelta} />
+                <StatNumber value={todayMin} testId="today-cheapest-price" />
+                <DeltaBadge delta={cheapestDelta} />
+              </div>
+              <div className="mt-1 text-[11px] font-mono text-secondary line-clamp-1">
+                {current?.by_city && Object.entries(current.by_city).sort((a,b)=>a[1].min-b[1].min)[0]?.[0]
+                  ? `Halvin kaupunki: ${Object.entries(current.by_city).sort((a,b)=>a[1].min-b[1].min)[0][0]}`
+                  : "—"}
               </div>
               <div className="mt-6 grid grid-cols-2 gap-4 tick-row border-t border-line pt-5">
                 <div>
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                    Halvin asema (live)
+                    Huominen · halvin ennuste
                   </div>
                   <div
-                    className="hero-num tnum text-2xl mt-1"
-                    data-testid="today-min-price"
+                    className="hero-num tnum text-2xl mt-1 text-brand"
+                    data-testid="tomorrow-cheapest-price-hero"
                   >
-                    {todayMin != null ? todayMin.toFixed(3) : "—"}
+                    {tomorrowCheapest != null ? tomorrowCheapest.toFixed(3) : "—"}
                     <span className="text-secondary text-xs ml-1">€/L</span>
                   </div>
                 </div>
@@ -390,7 +391,7 @@ export default function App() {
                 </div>
               </div>
               <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
-                Lähteet: Tilastokeskus 12ge (virallinen kk-ka.) · polttoaine.net + tankille.fi (live, ≤24h)
+                Lähteet: polttoaine.net + tankille.fi (live, ≤24h) · automaattipäivitys klo 06:00 ja 20:00
               </div>
             </Card>
           </div>
@@ -452,13 +453,12 @@ export default function App() {
                 </li>
               </ul>
               <button
-                data-testid="run-prediction-btn-hero"
-                onClick={handleRunPrediction}
-                disabled={loading.prediction}
-                className="mt-6 inline-flex items-center gap-2 px-5 h-10 bg-accent text-ink hover:bg-yellow-300 font-semibold text-sm transition-colors disabled:opacity-60"
+                data-testid="auto-info-pill"
+                disabled
+                className="mt-6 inline-flex items-center gap-2 px-5 h-10 bg-accent/20 text-accent border border-accent/40 font-semibold text-sm cursor-default"
               >
-                <Sparkles size={16} className={loading.prediction ? "animate-pulse" : ""} />
-                {loading.prediction ? "Lasketaan…" : "Aja ennustus uudelleen"}
+                <Clock size={16} />
+                Päivittyy automaattisesti 06:00 ja 20:00 Helsinki-aikaa
               </button>
             </div>
           </div>
@@ -473,21 +473,21 @@ export default function App() {
               <div>
                 <CardLabel>Ennuste vs. toteutunut · halvin asema</CardLabel>
                 <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                  {fuel} · päivittäinen otanta 18:00 (Helsinki)
+                  {fuel} · automaattinen otanta klo 06:00 ja 20:00 (Helsinki)
                 </h3>
                 <p className="text-[11px] text-muted font-mono mt-1">
                   Vain todellisia havaintoja. Sininen viiva = päivän halvin asema, harmaa risti = edellisen päivän ennuste tästä päivästä, keltainen pisteviiva = huomisen ennuste.
                 </p>
               </div>
-              <button
-                data-testid="capture-now-btn"
-                onClick={captureToday}
-                disabled={loading.capture}
-                className="inline-flex items-center gap-2 px-4 h-9 bg-nordDark text-white hover:bg-black font-mono text-xs font-semibold transition-colors disabled:opacity-60"
+              <div
+                data-testid="schedule-pill"
+                className="inline-flex items-center gap-2 px-3 h-8 bg-slate-100 text-secondary font-mono text-[11px] font-semibold"
               >
-                <RefreshCw size={12} className={loading.capture ? "animate-spin" : ""} />
-                {loading.capture ? "Tallennetaan…" : "Tallenna nyt"}
-              </button>
+                <Clock size={11} />
+                {tracking?.summary?.today_date
+                  ? `viim. capture: ${tracking.summary.today_date}`
+                  : "odottaa ensimmäistä captureeen"}
+              </div>
             </div>
             <TrackingChart
               rows={tracking?.rows || []}

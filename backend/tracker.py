@@ -27,19 +27,37 @@ logger = logging.getLogger("bensavahti.tracker")
 
 HELSINKI = ZoneInfo("Europe/Helsinki")
 
+# Päivittäiset ajastetut captureajat (Helsinki-aika)
+SCHEDULED_HOURS = (6, 20)
+
 
 def helsinki_today() -> date:
     return datetime.now(HELSINKI).date()
 
 
-def next_18_helsinki(now_utc: datetime | None = None) -> datetime:
-    """Return UTC datetime of the next 18:00 Helsinki time."""
+def next_scheduled_run(now_utc: datetime | None = None) -> datetime:
+    """Return UTC datetime of the next scheduled capture (06:00 or 20:00 Helsinki)."""
     now_utc = now_utc or datetime.now(timezone.utc)
     now_hel = now_utc.astimezone(HELSINKI)
-    target = now_hel.replace(hour=18, minute=0, second=0, microsecond=0)
-    if target <= now_hel:
-        target += timedelta(days=1)
-    return target.astimezone(timezone.utc)
+    candidates = []
+    for offset in range(2):  # tänään + huomenna
+        day = (now_hel + timedelta(days=offset)).date()
+        for hour in SCHEDULED_HOURS:
+            t = datetime.combine(day, datetime.min.time(), tzinfo=HELSINKI).replace(hour=hour)
+            if t > now_hel:
+                candidates.append(t)
+    if not candidates:
+        # fallback: huomenna 06:00
+        d = (now_hel + timedelta(days=1)).date()
+        candidates.append(datetime.combine(
+            d, datetime.min.time(), tzinfo=HELSINKI
+        ).replace(hour=SCHEDULED_HOURS[0]))
+    return min(candidates).astimezone(timezone.utc)
+
+
+def next_18_helsinki(now_utc: datetime | None = None) -> datetime:
+    """Compat alias - now returns next_scheduled_run."""
+    return next_scheduled_run(now_utc)
 
 
 async def _scrape_cheapest(fuel: str, executor) -> dict:
@@ -174,21 +192,28 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi") -> dict:
 
 
 async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
-    """Background task: sleep until next 18:00 Helsinki, capture, repeat."""
-    logger.info("tracker scheduler started")
+    """Background task: sleep until next scheduled run (06:00 / 20:00 Helsinki),
+    capture, repeat."""
+    logger.info("tracker scheduler started (06:00 + 20:00 Helsinki)")
     while True:
         try:
             now = datetime.now(timezone.utc)
-            target = next_18_helsinki(now)
+            target = next_scheduled_run(now)
             wait = (target - now).total_seconds()
-            logger.info("tracker: sleeping %.0fs until %s UTC", wait, target.isoformat())
+            target_hel = target.astimezone(HELSINKI)
+            logger.info(
+                "tracker: sleeping %.0fs until %s Helsinki",
+                wait, target_hel.strftime("%Y-%m-%d %H:%M")
+            )
             await asyncio.sleep(wait)
             for fuel in fuels:
                 try:
                     doc = await capture_daily(db, executor, fuel)
-                    logger.info("tracker captured %s: actual=%s predicted_tomorrow=%s",
-                                fuel, doc.get("actual_cheapest"),
-                                doc.get("prediction_for_tomorrow_cheapest"))
+                    logger.info(
+                        "tracker captured %s: actual=%s predicted_tomorrow=%s",
+                        fuel, doc.get("actual_cheapest"),
+                        doc.get("prediction_for_tomorrow_cheapest")
+                    )
                 except Exception as e:
                     logger.exception("tracker capture failed for %s: %s", fuel, e)
         except asyncio.CancelledError:
