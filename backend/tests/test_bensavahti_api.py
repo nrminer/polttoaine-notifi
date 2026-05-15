@@ -12,7 +12,7 @@ import time
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://aeaa5d00-090d-435b-ad24-c78ef197972d.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://serverless-app-2.preview.emergentagent.com").rstrip("/")
 
 EXPECTED_FUELS = {"95E10", "diesel"}
 EXPECTED_REGIONS = {"Helsinki", "Espoo", "Vantaa", "Tampere", "Turku",
