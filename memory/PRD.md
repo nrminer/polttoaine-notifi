@@ -46,12 +46,20 @@ Full-stack dashboard, in Finnish, that predicts tomorrow's 95E10 and diesel pric
 - ✅ 4 prediction algorithms + weighted ensemble
 - ✅ AI/LLM prediction (Claude Sonnet 4.5 with Haiku fallback, 3 retries each)
 - ✅ Yahoo Finance Brent + EUR/USD live fetcher
-- ✅ Simulated 180-day history seeder (auto-calibrates to current scrape)
+- ✅ Simulated 365-day history seeder (auto-calibrates to current scrape)
 - ✅ Frontend dashboard with: hero today's price, large tomorrow's prediction card, history chart with recharts, method comparison table, AI analysis panel (dark with grain overlay), regional grid (9 cities), influencing factors card, accuracy tracker
 - ✅ Finnish-language UI throughout
 - ✅ Cohesive "Nordic Industrial Tech" design (Cabinet Grotesk + IBM Plex Sans + JetBrains Mono, sharp corners, no purple gradients)
 - ✅ data-testid on every interactive/data element
 - ✅ 100% pass rate on backend + frontend tests (testing_agent_v3 iteration 1)
+
+## Iteration 2 · 2026-05-15 (refinements)
+- ✅ Reseeded **365 days** of simulated history (chart's 1V toggle now works)
+- ✅ Rewrote `/api/regional` to **live-scrape polttoaine.net + tankille.fi in parallel** (90s cache)
+- ✅ Regional grid filters to `≤ max_age_hours` (default 24h) — stale/missing entries shown as "ei tuoretta dataa"
+- ✅ Each regional cell shows **station name + freshness badge (juuri nyt / X h sitten) + source attribution**
+- ✅ Fixed polttoaine.net date parsing (was using wrong "DD.M.YYYY" format vs actual "DD.MM.")
+- ✅ Fixed seed endpoint to tolerate existing scraped entries (was crashing with E11000 on re-seed)
 
 ## Backlog / Future Enhancements
 ### P1

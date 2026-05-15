@@ -39,6 +39,42 @@ def _parse_price(text: str):
     return float(m.group(1).replace(",", "."))
 
 
+def _freshness_hours(date_text: str) -> float:
+    """Arvioi tankille.fi:n päivitystekstistä iän tunteina.
+
+    Esimerkkejä:
+      "juuri nyt"     -> 0.0
+      "5 minuuttia sitten" -> 0.08
+      "tunti sitten"  -> 1.0
+      "3 tuntia sitten" -> 3.0
+      "eilen"         -> 24.0
+      "2 päivää sitten" -> 48.0
+      tuntematon      -> 999.0
+    """
+    t = (date_text or "").lower().strip()
+    if not t:
+        return 999.0
+    if "juuri nyt" in t or "äsken" in t:
+        return 0.0
+    m = re.search(r"(\d+)\s*minuut", t)
+    if m:
+        return int(m.group(1)) / 60.0
+    if re.search(r"\btunti(?:\b|\s|sitten)", t) and not re.search(r"\d+\s*tuntia", t):
+        return 1.0
+    m = re.search(r"(\d+)\s*tunti", t)
+    if m:
+        return float(m.group(1))
+    if "eilen" in t:
+        return 24.0
+    m = re.search(r"(\d+)\s*p[äa]iv", t)
+    if m:
+        return int(m.group(1)) * 24.0
+    m = re.search(r"(\d+)\s*viikko", t)
+    if m:
+        return int(m.group(1)) * 24.0 * 7
+    return 999.0
+
+
 def _scrape_city(city: str, fuel: str) -> list:
     slug = city.lower()
     url = f"{BASE_URL}/{slug}/"
@@ -71,6 +107,7 @@ def _scrape_city(city: str, fuel: str) -> list:
             "address": "",
             "price": price,
             "date": cells[3],
+            "age_hours": _freshness_hours(cells[3]),
             "fuel": fuel,
             "source": "tankille.fi",
         })

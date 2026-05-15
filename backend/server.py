@@ -46,7 +46,10 @@ SUPPORTED_REGIONS = [
     "Oulu", "Jyväskylä", "Kuopio", "Lahti", "Suomi",
 ]
 
-executor = ThreadPoolExecutor(max_workers=6)
+executor = ThreadPoolExecutor(max_workers=12)
+
+# in-memory cache for the /api/regional endpoint (90s TTL)
+_regional_cache: dict = {}
 
 app = FastAPI(title="BensaVahti API", version="2.0.0")
 app.add_middleware(
@@ -147,7 +150,7 @@ async def meta():
 
 
 @app.post("/api/seed")
-async def seed_history(days: int = 180, force: bool = False):
+async def seed_history(days: int = 365, force: bool = False):
     """Generoi simuloitu historia (käytä jos kanta on tyhjä).
 
     Käyttää viim. scrapatun hintatason kalibrointiin jos saatavilla.
@@ -172,9 +175,20 @@ async def seed_history(days: int = 180, force: bool = False):
         for region in SUPPORTED_REGIONS:
             series = simulate_history(fuel, region=region, days=days,
                                       end_price=end_price, seed=42 + len(region))
-            if series:
-                await coll.insert_many(series)
-                inserted += len(series)
+            if not series:
+                continue
+            # älä korvaa scrapattuja päiväkohtaisia merkintöjä — käytä upsertia
+            # joka asettaa "simulated" vain jos riviä ei jo ole
+            try:
+                # nopeampi: insert_many ordered=False, sallii duplikaatit
+                from pymongo.errors import BulkWriteError
+                try:
+                    res = await coll.insert_many(series, ordered=False)
+                    inserted += len(res.inserted_ids)
+                except BulkWriteError as bwe:
+                    inserted += bwe.details.get("nInserted", 0)
+            except Exception:
+                pass
 
     return {"seeded": True, "rows": inserted, "days": days}
 
@@ -380,38 +394,140 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
 
 
 @app.get("/api/regional")
-async def regional(fuel: str = Query("95E10")):
-    """Viimeisimmät hinnat jokaiselle alueelle (todelliset jos saatavilla,
-    muuten viimeisin simuloitu)."""
+async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0)):
+    """Live-scrape both polttoaine.net (top 20 cheapest nationally) and
+    tankille.fi (per-city pages) for ALL supported regions.
+
+    Returns ONLY entries that are ≤ `max_age_hours` old (default 24h).
+    For each region we return the cheapest fresh station.
+    Cached for 90 seconds.
+    """
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
-    out = []
+
+    cache_key = f"regional:{fuel}:{int(max_age_hours)}"
+    now_ts = datetime.now(timezone.utc)
+    today_str = now_ts.date().isoformat()
+    today_d = now_ts.date()
+    # polttoaine.net käyttää muotoa "16.05." (DD.MM.) — vertaillaan tähän
+    today_short = f"{today_d.day}.{today_d.month:02d}."
+    yesterday_short = f"{(today_d - timedelta(days=1)).day}.{(today_d - timedelta(days=1)).month:02d}."
+    cached = _regional_cache.get(cache_key)
+    if cached and (now_ts - cached["ts"]).total_seconds() < 90:
+        return cached["payload"]
+
+    # tankille.fi tarjoaa per-kaupunki sivut vain näille
+    tankille_cities = ["Helsinki", "Espoo", "Vantaa", "Tampere", "Oulu"]
+
+    loop = asyncio.get_event_loop()
+    # rinnakkaiset skrapaukset
+    poltt_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
+    tank_tasks = [
+        loop.run_in_executor(executor, tankille._scrape_city, c, fuel)
+        for c in tankille_cities
+    ]
+    poltt_rows, *tank_results = await asyncio.gather(
+        poltt_task, *tank_tasks, return_exceptions=True
+    )
+
+    # kerää kaikki "tuoreet" havainnot
+    all_obs: list[dict] = []
+
+    # polttoaine.net: date-kenttä = "16.05." → tämä päivä = 0h, eilen = 24h
+    if isinstance(poltt_rows, list):
+        for r in poltt_rows:
+            date_text = (r.get("date") or "").strip()
+            if date_text == today_short:
+                age = 2.0  # arvio: päivityksiä tehdään pitkin päivää
+            elif date_text == yesterday_short:
+                age = 26.0
+            else:
+                age = 999.0
+            if age <= max_age_hours:
+                all_obs.append({
+                    "region": r["city"],
+                    "price": r["price"],
+                    "station": r["station"],
+                    "address": r.get("address", ""),
+                    "date_text": date_text,
+                    "age_hours": age,
+                    "source": "polttoaine.net",
+                })
+
+    # tankille.fi
+    for city, res in zip(tankille_cities, tank_results):
+        if isinstance(res, Exception) or not res:
+            continue
+        for r in res:
+            age = r.get("age_hours", 999)
+            if age <= max_age_hours:
+                all_obs.append({
+                    "region": tankille.CITY_DISPLAY.get(city, city),
+                    "price": r["price"],
+                    "station": r["station"],
+                    "address": "",
+                    "date_text": r.get("date", ""),
+                    "age_hours": age,
+                    "source": "tankille.fi",
+                })
+
+    # ryhmittele kaupungittain, valitse halvin
+    by_region: dict[str, dict] = {}
+    for obs in all_obs:
+        key = obs["region"]
+        if key not in by_region or obs["price"] < by_region[key]["price"]:
+            by_region[key] = obs
+
+    # rakenna tulos kaikille SUPPORTED_REGIONS-listan kaupungeille
+    rows = []
     for region in SUPPORTED_REGIONS:
         if region == "Suomi":
             continue
-        doc = await db.history.find_one(
-            {"fuel": fuel, "region": region},
-            {"_id": 0},
-            sort=[("date", -1)],
-        )
-        if doc:
-            # päivän muutos
-            prev = await db.history.find_one(
-                {"fuel": fuel, "region": region, "date": {"$lt": doc["date"]}},
-                {"_id": 0},
-                sort=[("date", -1)],
-            )
-            delta = round(doc["price"] - prev["price"], 4) if prev else 0.0
-            out.append({
+        cheap = by_region.get(region)
+        if cheap:
+            rows.append({
                 "region": region,
-                "price": doc["price"],
-                "date": doc["date"],
-                "delta": delta,
-                "source": doc.get("source", "unknown"),
+                "price": round(cheap["price"], 3),
+                "station": cheap["station"],
+                "address": cheap.get("address", ""),
+                "date_text": cheap["date_text"],
+                "age_hours": round(cheap["age_hours"], 1),
+                "fresh": True,
+                "source": cheap["source"],
             })
-    # järjestä halvimmasta kalleimpaan
-    out.sort(key=lambda x: x["price"])
-    return {"fuel": fuel, "fetched_at": datetime.now(timezone.utc).isoformat(), "rows": out}
+
+            # päivitä history
+            await db.history.update_one(
+                {"date": today_str, "fuel": fuel, "region": region},
+                {"$set": {
+                    "date": today_str, "fuel": fuel, "region": region,
+                    "price": round(cheap["price"], 3), "source": "scraped",
+                }},
+                upsert=True,
+            )
+        else:
+            rows.append({
+                "region": region,
+                "price": None,
+                "station": None,
+                "address": "",
+                "date_text": None,
+                "age_hours": None,
+                "fresh": False,
+                "source": None,
+            })
+
+    # järjestä halvimmasta kalleimpaan; "ei dataa" -rivit loppuun
+    rows.sort(key=lambda r: (r["price"] is None, r["price"] or 999))
+
+    payload = {
+        "fuel": fuel,
+        "fetched_at": now_ts.isoformat(),
+        "max_age_hours": max_age_hours,
+        "rows": rows,
+    }
+    _regional_cache[cache_key] = {"ts": now_ts, "payload": payload}
+    return payload
 
 
 @app.get("/api/accuracy")
