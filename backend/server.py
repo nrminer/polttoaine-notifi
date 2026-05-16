@@ -28,6 +28,7 @@ import factors as factors_mod
 import statfin
 import news as news_mod
 import tracker as tracker_mod
+import notify as notify_mod
 from simulate import simulate_history, BASELINE, CITY_FACTORS
 from real_history import build_history
 from predict import predict_tomorrow
@@ -747,13 +748,40 @@ async def track_run(fuel: str = Query("95E10")):
 
 
 @app.post("/api/track/run-all")
-async def track_run_all():
+async def track_run_all(notify: bool = Query(False)):
     out = []
     for fuel in FUELS:
         doc = await tracker_mod.capture_daily(db, executor, fuel)
-        doc.pop("prediction_full", None)
         out.append(doc)
-    return {"captured": out}
+    pushed = False
+    if notify:
+        pushed = notify_mod.send_daily_summary(out)
+    # strip large field from response
+    for d in out:
+        d.pop("prediction_full", None)
+    return {"captured": out, "ntfy_sent": pushed}
+
+
+@app.post("/api/notify/test")
+async def notify_test():
+    """Send a test ntfy notification using the latest captures from the DB
+    (no scraping). Useful for verifying the notification format end-to-end."""
+    cur = db.daily_tracker.find(
+        {"region": "Suomi"},
+        {"_id": 0, "prediction_full": 0},
+    ).sort("date", -1).limit(10)
+    rows = await cur.to_list(length=10)
+    # take latest doc per fuel
+    latest_by_fuel: dict[str, dict] = {}
+    for r in rows:
+        f = r.get("fuel")
+        if f and f not in latest_by_fuel:
+            latest_by_fuel[f] = r
+    captures = [latest_by_fuel[f] for f in FUELS if f in latest_by_fuel]
+    if not captures:
+        raise HTTPException(404, "no captures in db yet; run /api/track/run-all first")
+    ok = notify_mod.send_daily_summary(captures)
+    return {"sent": ok, "fuels": [c["fuel"] for c in captures]}
 
 
 class TrackBackfillPoint(BaseModel):

@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import predict as predict_mod
 import factors as factors_mod
 import news as news_mod
+import notify as notify_mod
 from scrapers import polttoaine, tankille
 
 logger = logging.getLogger("bensavahti.tracker")
@@ -206,9 +207,11 @@ async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
                 wait, target_hel.strftime("%Y-%m-%d %H:%M")
             )
             await asyncio.sleep(wait)
+            captured_docs: list[dict] = []
             for fuel in fuels:
                 try:
                     doc = await capture_daily(db, executor, fuel)
+                    captured_docs.append(doc)
                     logger.info(
                         "tracker captured %s: actual=%s predicted_tomorrow=%s",
                         fuel, doc.get("actual_cheapest"),
@@ -216,6 +219,11 @@ async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
                     )
                 except Exception as e:
                     logger.exception("tracker capture failed for %s: %s", fuel, e)
+            # send one consolidated push notification per scheduled run
+            try:
+                notify_mod.send_daily_summary(captured_docs)
+            except Exception as e:
+                logger.exception("ntfy send failed: %s", e)
         except asyncio.CancelledError:
             logger.info("tracker scheduler stopped")
             return
