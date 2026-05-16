@@ -465,6 +465,28 @@ export default function App() {
         </Card>
       </section>
 
+      {/* HISTORIA-KUVAAJA + huominen-ennuste */}
+      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
+        <Card testId="history-chart-card" className="p-6">
+          <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
+            <div>
+              <CardLabel>Hintahistoria · ennuste piikkinä lopussa</CardLabel>
+              <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
+                {fuel} · {range === 30 ? "30 päivän" : range === 90 ? "90 päivän" : "12 kuukauden"} trendi
+              </h3>
+              <p className="text-[11px] text-muted font-mono mt-1">
+                Sininen täyttö = toteutunut päiväkohtainen hintaestimaatti. Keltainen pallo = ensemble-ennuste huomiselle.
+              </p>
+            </div>
+            <RangeToggle value={range} onChange={setRange} options={RANGE_OPTIONS} />
+          </div>
+          <HistoryChart data={history} prediction={prediction ? {
+            target_date: prediction.target_date,
+            ensemble: prediction.ensemble?.value ?? prediction.ensemble,
+          } : null} />
+        </Card>
+      </section>
+
       {/* CHART + METHOD COMPARE */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <div className="grid grid-cols-12 gap-6">
