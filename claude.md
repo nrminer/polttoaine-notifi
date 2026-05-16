@@ -1,4 +1,4 @@
-# README.ai.md — BensaVahti for AI Agents
+# claude.md — BensaVahti for AI Agents
 
 > **Audience**: This file is written for an AI coding agent picking up this repo
 > with little context. It's deliberately dense, explicit, and skips marketing
@@ -12,9 +12,13 @@
   · MongoDB Atlas (free M0).
 - **AI**: Claude Opus 4.7 via `emergentintegrations` SDK (Anthropic) — invoked
   from `backend/predict.py` for the AI-prediction method.
-- **Data inputs**: Live scrapes of `polttoaine.net` + `tankille.fi`; Statistics
-  Finland (Tilastokeskus) PxWeb API for the long-term real history; Yahoo
-  Finance for Brent + EUR/USD; RSS news from a handful of Finnish sources.
+- **Data inputs**: **LIVE-GATHERED ONLY** — scrapes of `polttoaine.net` +
+  `tankille.fi` captured into `daily_tracker` from today onward; Yahoo Finance
+  for Brent + EUR/USD; RSS news from Finnish sources. **Tilastokeskus (Statfin)
+  was REMOVED — data too old; `statfin.py`, `simulate.py`, `real_history.py`
+  are deleted. No synthetic / interpolated / extrapolated data anywhere.**
+- **UI theme**: light + dark, **dark is the default** (toggle in header,
+  persisted to `localStorage`, no-FOUC script in `index.html`).
 - **Current production URLs**
   - Frontend: `https://polttoaine-notifi.vercel.app`
   - Backend: `https://polttoaine-notifi-production.up.railway.app`
@@ -25,13 +29,20 @@
 Finnish drivers care about pump prices because diesel/95E10 swings ±5 ¢/L per
 week. The app:
 
-1. Shows today's cheapest station nationally + per-city (Helsinki, Vantaa, Espoo, Tampere, Turku, …).
-2. Predicts **tomorrow's** cheapest using 4 parallel methods (MA, LR, Holt
-   exp.smoothing, Claude Opus 4.7) and a weighted ensemble.
-3. Captures actuals at 06:00 and 20:00 Helsinki time and tracks
-   prediction-vs-actual accuracy over time.
-4. Sends a push notification (ntfy.sh) at each capture with a multi-fuel
-   summary, formatted to match the user's previous-version messages.
+1. Shows today's cheapest station nationally + per-city (Helsinki, Espoo,
+   Vantaa, Tampere, Turku, Lahti) with cheapest **and average** per city.
+2. Predicts **tomorrow's** cheapest using **5 parallel methods** (MA, LR, Holt
+   exp.smoothing, **fundamental_anchor** = live + Brent-EUR pass-through +
+   weekday + momentum, and Claude Opus 4.7 with geopolitical-risk handling) →
+   a **data-quality-aware ensemble clamped to ±0.06 €/L of the live price**.
+3. Captures actuals at **14:00 and 21:00 Helsinki** (`SCHEDULED_HOURS` in
+   `tracker.py`) and tracks prediction-vs-actual accuracy against **real
+   captures only**.
+4. Sends a push notification (ntfy.sh) at each capture.
+5. Re-runs the AI analysis automatically when new fuel-relevant news appears
+   (backend `news_watch_loop`, rate-limited).
+6. All-cities-average chart with a market-move projection, below the
+   cheapest-station chart.
 
 ## 2. Architecture (3-service split-stack)
 
@@ -43,7 +54,7 @@ week. The app:
 │  .vercel.app             │            │  .up.railway.app              │            │                     │
 └──────────────────────────┘            └─────────────┬─────────────────┘            └────────────────────┘
                                                      │
-                                                     │ scheduled (06:00 / 20:00 Helsinki)
+                                                     │ scheduled (14:00 / 21:00 Helsinki) + news-watcher
                                                      ▼
                                           ┌──────────────────────┐         ┌──────────────────────┐
                                           │  ntfy.sh             │         │  Anthropic Claude     │
@@ -60,20 +71,19 @@ The backend has NO frontend assets — pure API.
 ```
 /app/
 ├── README.md              … original README (sparse)
-├── README.ai.md           … THIS file
+├── claude.md               … THIS file (was README.ai.md, now deleted)
 ├── VERCEL_DEPLOYMENT.md   … step-by-step Vercel setup
 ├── RAILWAY_DEPLOYMENT.md  … step-by-step Railway setup
 ├── memory/PRD.md          … living product requirements (single source of truth for backlog)
 ├── backend/               … FastAPI app (Railway root directory = backend)
-│   ├── server.py          … ALL routes; ~990 lines, single file
-│   ├── predict.py         … 4 prediction methods incl. Claude Opus 4.7
-│   ├── tracker.py         … 06:00 / 20:00 capture loop + capture_daily()
+│   ├── server.py          … ALL routes incl. /api/admin/run; single file
+│   ├── predict.py         … 5 methods (MA/LR/ES/fundamental_anchor/AI) + ensemble
+│   ├── tracker.py         … 14:00/21:00 capture loop + capture_daily() + news_watch_loop()
 │   ├── notify.py          … ntfy.sh publisher (multi-fuel summary)
-│   ├── factors.py         … Brent + EUR/USD via Yahoo Finance
-│   ├── news.py            … RSS aggregator (Talouselämä, Iltalehti, etc.)
-│   ├── statfin.py         … Statistics Finland PxWeb client (REAL monthly data)
-│   ├── simulate.py        … LEGACY synthetic history (do not use, kept for /api/seed compat)
-│   ├── real_history.py    … (legacy stub, mostly unused)
+│   ├── factors.py         … Brent + EUR/USD via Yahoo Finance (+ change_frac)
+│   ├── news.py            … RSS aggregator (Iltalehti, HS, IS, MTV)
+│   ├── capture_now.py     … standalone: manual capture NOW → daily_tracker
+│   ├── purge_captures.py  … standalone: delete daily_tracker rows (dry-run unless --yes)
 │   ├── scrapers/
 │   │   ├── polttoaine.py  … polttoaine.net scraper (top-N cheapest)
 │   │   └── tankille.py    … tankille.fi scraper (per-city pages) — PRIMARY source
@@ -101,9 +111,10 @@ The backend has NO frontend assets — pure API.
             ├── Card.jsx        … design-system primitives (Card, CardLabel, StatNumber, DeltaBadge)
             ├── FuelToggle.jsx  … 95E10 / Diesel toggle
             ├── RangeToggle.jsx … 30/90/365 day toggle (currently UNUSED — chart removed)
-            ├── TrackingChart.jsx … prediction-vs-actual line chart (REAL DATA ONLY)
+            ├── TrackingChart.jsx … prediction-vs-actual line chart; city mode (cheapest+avg), filters
+            ├── CityAverageChart.jsx … all-cities average + market-move projection
             ├── HistoryChart.jsx  … LEGACY long-history area chart (NOT rendered in App.js)
-            ├── MethodTable.jsx  … 4-method comparison + ensemble
+            ├── MethodTable.jsx  … 5-method comparison + ensemble (incl. fundamenttiankkuri)
             ├── AiAnalysis.jsx   … Claude analysis card
             ├── FactorsCard.jsx  … Brent + EUR/USD sparklines
             ├── NewsCard.jsx     … RSS news list
@@ -115,11 +126,10 @@ The backend has NO frontend assets — pure API.
 
 | Collection         | Schema (key fields)                                                | Purpose                                        |
 | ------------------ | ------------------------------------------------------------------ | ---------------------------------------------- |
-| `snapshots`        | `fuel, ts, national_min, by_city, cheap_sample_avg, rows[]`        | Cached scrape result, ~5min TTL via app cache  |
-| `history`          | `fuel, region, date, price, source`                                | **Synthetic seed** — LEGACY, do not rely on    |
-| `history_snapshots`| same                                                               | LEGACY simulate output                         |
-| `daily_tracker`    | `fuel, region, date, hour, actual_cheapest, prediction_for_*, …`   | **The truth**: real captures at 06h + 20h      |
-| `predictions`      | `target_date, fuel, region, methods_full, ensemble_full, data_sources` | Latest /api/predict/run output, one per fuel+region+target_date |
+| `snapshots`        | `fuel, ts, national_min, by_city, cheap_sample_avg`               | Latest live scrape (live anchor source)        |
+| `history`          | `fuel, region, date, price, source`                                | **REAL only** now: only `source:"scraped"` (live daily). No synthetic/statfin/interp rows (purged) |
+| `daily_tracker`    | `fuel, region, date, hour, actual_cheapest, by_city, prediction_for_*, prediction_full` | **The truth**: real captures at 14h + 21h; `by_city` = {cheapest, average, count, station, source} |
+| `predictions`      | `target_date, fuel, region, methods_full, ensemble_full, data_sources` | Last /api/predict/run output (what UI shows via /predict/latest) |
 
 **Unique index** on `daily_tracker` is `(fuel, region, date, hour)` — was `(fuel, region, date)` before. Migration in `server.py` startup drops the legacy index.
 
@@ -131,8 +141,8 @@ Grouped logically. All routes are prefixed `/api`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/api/prices/current?fuel=95E10` | Scrape + aggregate; cached 5 min |
-| GET  | `/api/prices/history?fuel=95E10&days=90` | Read `history_snapshots` — **synthetic, LEGACY** |
-| GET  | `/api/regional?fuel=95E10&max_age_hours=24` | Live per-city cheapest, cached 90s |
+| GET  | `/api/prices/history?fuel=95E10&days=90` | Read `history` — **real live `scraped` points only** |
+| GET  | `/api/regional?fuel=95E10&max_age_hours=24` | Live per-city cheapest, cached 90s; polttoaine.net age = real elapsed since report-date Helsinki midnight (no fabricated hour) |
 
 ### Factors
 | GET | `/api/factors` | Brent + EUR/USD time series (Yahoo Finance, cached 15 min) |
@@ -141,8 +151,8 @@ Grouped logically. All routes are prefixed `/api`.
 | GET | `/api/news?max_age_days=14&limit=8` | RSS-aggregated Finnish fuel news |
 
 ### Predictions
-| POST | `/api/predict/run` | **Runs all 4 methods** using Statfin real monthly + daily_tracker captures (NO synthetic). Persists into `predictions` collection. |
-| GET  | `/api/predict/latest?fuel=95E10` | Returns last stored prediction |
+| POST | `/api/predict/run` | Runs **all 5 methods** from **daily_tracker captures ONLY** + live anchor (NO Statfin). Cold-start tolerant: 400 only if there is literally no live data. Persists into `predictions`. |
+| GET  | `/api/predict/latest?fuel=95E10` | Returns last stored prediction (this is what the UI renders — never triggers a fresh run itself) |
 
 ### Tracking (real captures)
 | POST | `/api/track/run`     | Capture one fuel manually |
@@ -153,8 +163,12 @@ Grouped logically. All routes are prefixed `/api`.
 ### Notifications
 | POST | `/api/notify/test` | Build summary from latest captures + publish to ntfy. Smoke-test endpoint. |
 
-### Seed (DO NOT USE)
-| POST | `/api/seed?days=180&force=true` | Generates SYNTHETIC history via `simulate.py`. **Deprecated** — user explicitly rejected synthetic data. Kept only for backward compat. |
+### Admin (password-protected — Postman/curl)
+| POST | `/api/admin/run` | Body `{password, action, fuel, region, hour, notify}` (or `X-Admin-Token` header). Auth = env `ADMIN_TOKEN` (constant-time; 503 if unset, 401 on mismatch). `action`: `ping`/`capture`/`predict`/`all`/`notify`. `predict`/`all` write `predictions` → fixes a stale UI. |
+
+### Seed (DISABLED — no-op)
+| POST | `/api/seed` | Historical/synthetic seeding **disabled** (Tilastokeskus removed: too old). Now only **purges** legacy modeled rows from `history`; never writes data. `days`/`force` are no-ops. |
+| GET  | `/api/accuracy` | Scores predictions **only against real `daily_tracker` captures** (never modeled history). |
 
 ## 6. Data flow — how a prediction happens
 
@@ -163,57 +177,60 @@ Grouped logically. All routes are prefixed `/api`.
 │  /api/predict/run      │  ← called either by user "Päivitä" button OR by tracker.capture_daily()
 └──────────┬─────────────┘
            │
-           ▼ build real data series (NO synthetic)
+           ▼ build LIVE-ONLY series (NO Statfin, NO synthetic)
    ┌────────────────────────────────────────────────────────┐
-   │ statfin.fetch_monthly(fuel, since_year=2023)            │  REAL monthly EUR/L from Tilastokeskus
-   │  → 36 points, one per month at YYYY-MM-15               │
-   │ + db.daily_tracker.find({fuel, region}).sort(date,hour) │  REAL daily captures
-   │  → ~N points (3 backfilled + 2/day going forward)       │
-   │ de-dup by date, sort                                    │
+   │ db.daily_tracker.find({fuel,region}).sort(date,hour)    │  REAL captures only
+   │  → one point/day (latest hour wins)                     │
+   │ live_anchor = latest snapshots.cheap_sample_avg         │
+   │  → 400 only if NO series AND no live anchor              │
    └──────────────────────┬─────────────────────────────────┘
-                          │ ≥7 points required
+                          │ (cold-start tolerant: works at 0–N points)
                           ▼
    ┌─────────────────────────────────────────┐    parallel I/O
-   │  predict_tomorrow(fuel, dates, prices,  │ ◀───────────────┐
-   │      brent, eur_usd,                    │  factors.fetch_*  │
-   │      live_today_price=cheap_sample_avg, │                  │
-   │      news_headlines=[...])              │  news.fetch_news  │
-   └────────────────┬────────────────────────┘                  │
-                    │                                            │
-                    ├─▶ moving_average(7)                        │
-                    ├─▶ linear_regression(30)                    │
-                    ├─▶ exp_smoothing(α=0.4, β=0.2)              │
-                    └─▶ ai_llm_predict()                         │
-                          │                                      │
-                          ▼                                      │
-                  LlmChat (emergentintegrations)                 │
-                  models_to_try = [                              │
-                    ("anthropic","claude-opus-4-7"),             │
-                    ("anthropic","claude-opus-4-6"),             │
-                    ("anthropic","claude-sonnet-4-5-20250929"),  │
-                    ("anthropic","claude-haiku-4-5-20251001"),   │
-                  ]
-                  → JSON {predicted_price, confidence_*, direction,
-                          explanation, key_drivers}
+   │  predict_tomorrow(dates, prices,        │ ◀───────────────┐
+   │     brent, eur_usd, brent_chg, fx_chg,  │  factors.fetch_* │
+   │     live_today_price, news_headlines)   │  + change_frac   │
+   └────────────────┬────────────────────────┘  news.fetch_news │
+                    │ (all date-aware: +1 calendar day)         │
+                    ├─▶ moving_average(7)        date-aware tail │
+                    ├─▶ linear_regression(30)    date-aware      │
+                    ├─▶ exp_smoothing(α0.4,β0.2) date-aware tail │
+                    ├─▶ fundamental_anchor()  live + Brent-EUR    │
+                    │      pass-through + weekday + momentum,     │
+                    │      clamped ±0.06 €/L                      │
+                    └─▶ ai_llm_predict()  Mikko + geo-risk        │
+                          │  (emergentintegrations, Opus 4.7 →    │
+                          │   4.6 → Sonnet 4.5 → Haiku 4.5)       │
+                          ▼
+   ensemble = data-quality-aware weights (thin daily data → lean on
+   fundamental_anchor 0.48 + AI 0.30); result CLAMPED ±0.06 €/L of live
+   persist into db.predictions (target_date = today+1)
 
-         ensemble = weighted avg (MA 0.20 / LR 0.25 / Holt 0.30 / AI 0.25)
-
-         persist into db.predictions with target_date = today+1
+   Re-runs also fire from tracker.news_watch_loop when the filtered
+   fuel-news headline set changes (rate-limited, ≥15 min gap).
 ```
 
 ## 7. The Claude prompt (`predict.py` → `ai_llm_predict`)
 
 The system message is the **"Mikko" persona** — a Finnish fuel-pricing analyst
-with 6 numbered principles (anchor / tax constant / Brent lag / EUR-USD beta /
-weekday effect / momentum). The user message has 5 labeled sections:
+with **7 numbered principles** (anchor=live-only / tax constant / Brent lag /
+EUR-USD beta / weekday effect / momentum / **geopolitics: wars, OPEC+, blockades,
+sanctions — don't double-count what Brent already prices**). The user message
+sections:
 
 ```
-=== HINTA-ANKKURI ===      live pump price as the anchor
-=== MOMENTUMSIGNAALI ===   explicit 7-day slope in m€/L/day
-=== 21 PÄIVÄN HISTORIA === recent prices day-by-day
-=== MAKROINPUTTEJA ===     Brent + EUR/USD + 6 latest news headlines
-=== TEHTÄVÄSI ===          numbered 4-step recipe
+=== HINTA-ANKKURI ===                 live pump price as the anchor
+=== MOMENTUMSIGNAALI ===              real daily-tail slope (m€/L/day)
+=== LIVE-SKRAPATTU PÄIVÄHISTORIA ===  recent live captures day-by-day
+=== DATALAATU ===                     n real daily points; flags THIN data
+=== MAKROINPUTTEJA ===                Brent + EUR/USD (+ ~5d % change) + news
+=== GEOPOLIITTINEN RISKI ===          conflict headlines (keyword-scanned)
+=== TEHTÄVÄSI ===                     numbered recipe (geo premium only if escalating)
 ```
+
+Brent/EUR-USD ~5-day % change is threaded in via `factors.change_frac`.
+Geopolitical/conflict risk is split: *already-priced* risk flows through
+Brent → `fundamental_anchor`; *forward* risk is Mikko's job (no double-count).
 
 Model returns strict JSON; the function strips markdown fences, finds the first
 `{` and last `}`, parses, and returns a `dict` with `value`, `confidence_low/high`,
@@ -264,8 +281,9 @@ Title is **ASCII-only** (HTTP header constraint — em-dashes etc. fail with
 `UnicodeEncodeError: latin-1`). Body is UTF-8.
 
 Triggered from:
-- `tracker.scheduler_loop` at each 06:00 / 20:00 Helsinki tick
+- `tracker.scheduler_loop` at each 14:00 / 21:00 Helsinki tick
 - `POST /api/track/run-all?notify=true` (manual)
+- `POST /api/admin/run` with `notify:true` (password-protected)
 - `POST /api/notify/test` (smoke-test using latest DB captures, no fresh scrape)
 
 ## 10. Environment variables
@@ -285,6 +303,8 @@ CRA bakes env vars at build time → changing this requires a redeploy.
 | `EMERGENT_LLM_KEY`   | yes      | Universal LLM key (`sk-emergent-…`) for Claude via emergentintegrations |
 | `PIP_EXTRA_INDEX_URL`| yes      | `https://d33sy5i8bnduwe.cloudfront.net/simple/` — emergentintegrations lives on Emergent's private PyPI, not on public PyPI |
 | `CORS_ORIGINS`       | no       | defaults to `*` |
+| `ADMIN_TOKEN`        | optional | enables `POST /api/admin/run` (unset → 503). Constant-time compared to body `password` / `X-Admin-Token` header |
+| `NEWS_WATCH_SECONDS` | optional | news-watcher poll interval, default `1800`; `0` disables auto AI re-run on new news |
 | `NTFY_TOPIC`         | optional | `polttoaine` (without it, notifications silently no-op) |
 | `NTFY_TOKEN`         | optional | bearer token from ntfy.sh paid account |
 | `NTFY_SERVER`        | optional | default `https://ntfy.sh` |
@@ -322,7 +342,7 @@ Critical contract details:
 - All routes prefixed `/api`
 - Numeric fields are JSON floats (e.g. `1.857`), NOT strings
 - Timestamps are ISO-8601 with timezone
-- `data_sources` field is `null | {statfin_monthly_points, tracker_captures, combined_points}`
+- `data_sources` field is `null | {tracker_captures, combined_points, source:"live_scrape_only"}`
 - `methods.ai_llm.model` is the actual model id string (`claude-opus-4-7`) — `lib/modelName.js` converts it to display label
 
 ## 13. UI conventions
@@ -343,10 +363,11 @@ Critical contract details:
 | `pydantic_core` version mismatch with `pydantic`      | requirements.txt pins both (`pydantic==2.6.4`, `pydantic_core==2.16.3`) |
 | Non-ASCII chars in `Title:` HTTP header               | ntfy publish would 500 with UnicodeEncodeError; use ASCII-only title  |
 | CRA bakes env vars at **build** time                  | Changing REACT_APP_BACKEND_URL needs a Vercel redeploy, not a refresh |
-| `simulate.py` produces synthetic data                 | User rejected this; `/api/predict/run` now uses Statfin instead       |
+| **NO synthetic/Statfin data** — all removed            | Use only live `daily_tracker` captures + live snapshot; never reintroduce interpolation/extrapolation/factor-scaling |
 | `_id` field is `ObjectId` — not JSON serializable     | Always `.find(..., {"_id": 0})` or strip it                           |
 | `datetime.utcnow()`                                   | Use `datetime.now(timezone.utc)` instead                              |
-| Synthetic data still in `history_snapshots`           | Predict path no longer reads it; chart no longer plots it             |
+| UI shows stale prediction / `fundamenttiankkuri —`    | UI only reads `/predict/latest`; force a fresh run (`/api/admin/run` action `all`, or a 14:00/21:00 capture) |
+| Cold start: <few daily points                          | `predict_tomorrow` degrades gracefully (fundamental_anchor off live anchor); do NOT add a points-gate that hides methods |
 | `daily_tracker` legacy unique index `(fuel,region,date)` | startup explicitly drops it before adding the hour-aware one        |
 | Vercel framework auto-detected as "services"          | Override to "Create React App" in Project Settings; root = `frontend` |
 
@@ -355,26 +376,35 @@ Critical contract details:
 ### Add a new fuel
 1. `server.py` — add to `FUELS` tuple
 2. `scrapers/polttoaine.py` + `scrapers/tankille.py` — add mapping
-3. `simulate.py:BASELINE` — only if you keep synthetic path alive (not needed)
-4. `statfin.py:FUEL_CODE` — add Tilastokeskus item code
-5. `frontend/src/components/FuelToggle.jsx` — add button
-6. `frontend/src/App.js` — adjust hero & fuel-list rendering
+3. `frontend/src/components/FuelToggle.jsx` — add button
+4. `frontend/src/App.js` — adjust hero & fuel-list rendering
+   (no statfin/simulate steps — those modules are gone)
 
 ### Add a new region/city
 1. `server.py:SUPPORTED_REGIONS` — add
-2. `scrapers/tankille.py` — add per-city URL slug
-3. `simulate.py:CITY_FACTORS` — add factor (only if synthetic kept)
+2. `scrapers/tankille.py:CITIES` — add per-city URL slug
+3. `tracker.py:TRACKED_CITIES` + `CityAverageChart.jsx:CITIES` — add for
+   per-city capture (`by_city`) and the all-cities chart line
 4. `frontend/src/components/RegionalGrid.jsx` — auto-renders from API
 
 ### Tune the prediction
-1. `predict.py:ensemble.weights` — change MA/LR/Holt/AI weights
-2. `predict.py:moving_average(window=…)` — change MA window
-3. `predict.py:ai_llm_predict.system_message` — change Mikko principles
-4. `predict.py:ai_llm_predict.models_to_try` — reorder fallback chain
+1. `predict.py:ensemble()` weights (two regimes: ≥14 daily pts vs thin)
+2. `predict.py:fundamental_anchor()` — pass-through frac (0.25), weekday
+   ±0.004, momentum/crude clamps, `_MAX_DAILY_MOVE` (0.06 €/L)
+3. `predict.py:moving_average(window=…)` / `linear_regression(lookback=…)`
+4. `predict.py:ai_llm_predict.system_message` — Mikko's 7 principles
+5. `predict.py:ai_llm_predict.models_to_try` — fallback chain
+6. `tracker.py:SCHEDULED_HOURS` — capture times; `NEWS_WATCH_SECONDS` env
 
-### Trigger a capture manually
+### Trigger a capture / fresh prediction manually
 ```bash
+# scheduled-style capture (both fuels) + ntfy
 curl -X POST "$BACKEND_URL/api/track/run-all?notify=true"
+# password-protected admin trigger (capture + fresh predict + notify)
+curl -X POST "$BACKEND_URL/api/admin/run" -H "Content-Type: application/json" \
+  -d '{"password":"<ADMIN_TOKEN>","action":"all","fuel":"all","notify":true}'
+# standalone script (from backend/, needs .env)
+python capture_now.py            # or: python purge_captures.py --yes
 ```
 
 ### Backfill historical data
@@ -401,25 +431,46 @@ curl https://polttoaine-notifi-production.up.railway.app/api/factors
 # Frontend (Vercel) — open the URL, check DevTools Network for 200s
 ```
 
-## 16. Current state (2026-05-16)
+## 16. Current state (updated 2026-05-16, post-overhaul)
 
-**Working in production**:
-- ✅ End-to-end Vercel + Railway + Atlas
-- ✅ Claude Opus 4.7 verified live in `methods.ai_llm.model`
-- ✅ Tankille-primary + sanity filter merged
-- ✅ Backfill endpoint deployed
-- ✅ 6 real historical points in `daily_tracker`
-- ✅ Notification topic + token configured (token in user's hands)
+**Architecture / data**:
+- ✅ Tilastokeskus (Statfin) **removed**; `statfin.py`, `simulate.py`,
+  `real_history.py` **deleted**. No synthetic/interpolated/extrapolated data.
+- ✅ All data live-gathered from today onward (`daily_tracker` captures + live
+  snapshots). `history` purged of modeled rows. `/api/seed` is a no-op purge.
+- ✅ `/api/accuracy` scores only vs real `daily_tracker` captures.
+- ✅ Per-city cheapest **+ average** persisted in `daily_tracker.by_city`.
 
-**Latest commits NOT yet deployed** (user needs to push):
-- ⏳ Mikko prompt in `predict.py`
-- ⏳ Statfin real-data path in `/api/predict/run`
-- ⏳ Hour-aware capture in `tracker.py` (06:00 / 20:00 as separate rows)
-- ⏳ Updated tankille-primary picker in `notify.py`
+**Prediction**:
+- ✅ Date-aware MA/LR/ES (project +1 calendar day, daily-tail), new
+  `fundamental_anchor` (live + Brent-EUR pass-through + weekday + momentum),
+  data-quality-aware ensemble clamped ±0.06 €/L, Brent/FX `change_frac`.
+- ✅ Mikko 7th principle = geopolitics; conflict keyword scan; AI handles
+  forward risk, Brent handles already-priced risk.
+- ✅ `tracker.capture_daily` always runs full `predict_tomorrow` (the old
+  `<7 pts → AI-only` cold-start branch that hid `fundamental_anchor` is gone).
+- ✅ News-watcher (`news_watch_loop`) auto-reruns AI/prediction on new
+  fuel-news (rate-limited; `NEWS_WATCH_SECONDS`, needs `EMERGENT_LLM_KEY`).
 
-**Pending user action**:
-1. Click "Save to GitHub" to push the queued commits
-2. Add 4 `NTFY_*` env vars on Railway
+**Ops / UI**:
+- ✅ Capture times **14:00 + 21:00 Helsinki** (`SCHEDULED_HOURS`).
+- ✅ `POST /api/admin/run` password-protected manual trigger (`ADMIN_TOKEN`).
+- ✅ Standalone `capture_now.py` (manual capture) + `purge_captures.py`
+  (delete rows, dry-run unless `--yes`).
+- ✅ Dark theme, **default dark**, header toggle, no-FOUC; `CityAverageChart`
+  (all-cities avg + market-move projection) below the cheapest chart.
+
+**Pending user action** (agent cannot push):
+1. "Save to GitHub" → Vercel + Railway redeploy (all above is code-complete
+   locally; production still runs the old code until then).
+2. Set Railway env: `ADMIN_TOKEN` (+ optional `NEWS_WATCH_SECONDS`); confirm
+   `EMERGENT_LLM_KEY`, `PIP_EXTRA_INDEX_URL`, `NTFY_*` still set.
+3. After deploy, trigger one fresh prediction (`/api/admin/run` action
+   `all`, or wait for 14:00/21:00) so the UI shows `fundamental_anchor`.
+
+**Known cold-start note**: per-city `by_city` and the all-cities chart only
+populate from captures taken AFTER deploy; there is NO real backed source for
+historical per-city data and none is fabricated.
 
 ## 17. Useful one-liners for debugging
 
