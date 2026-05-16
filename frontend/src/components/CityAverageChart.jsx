@@ -167,8 +167,8 @@ export default function CityAverageChart({
               stroke={CITY_COLOR[c]}
               strokeWidth={1.25}
               strokeOpacity={0.55}
-              dot={false}
-              activeDot={{ r: 3 }}
+              dot={{ r: 2.5, fill: CITY_COLOR[c], stroke: "#fff", strokeWidth: 0.75 }}
+              activeDot={{ r: 4 }}
               connectNulls
               isAnimationActive={false}
             />

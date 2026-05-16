@@ -309,7 +309,7 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     recent_sample = list(zip(dates[-21:], p[-21:]))
     sample_lines = "\n".join(f"  {d}: {pr:.3f} €/L" for d, pr in recent_sample)
 
-    # päivätason 7 pv kaltevuus aidosta päivähännästä
+    # päivätaso
     slope_str = "ei laskettavissa"
     dt = _daily_tail(dates, prices, max_gap=3, min_len=4)
     if len(dt) >= 4:
@@ -482,7 +482,7 @@ async def ai_llm_predict(fuel: str, prices: list[float],
             "explanation": f"AI ei vastannut: {last_err}"}
 
 
-# ---------------- Ensemble ----------------
+# ---------------- ensemble ----------------
 
 def ensemble(predictions: dict, live_anchor: float | None = None,
              n_daily: int = 0) -> dict:
