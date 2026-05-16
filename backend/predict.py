@@ -5,7 +5,7 @@ Antaa 4 rinnakkaista ennustetta huomisen hinnalle:
     - moving_average   : 7 päivän liukuva keskiarvo
     - linear_regression: pienimmän neliösumman trendi viim. 30 päivältä
     - exp_smoothing    : Holt-tyylinen taso + trendi (yksinkertaistettu)
-    - ai_llm           : Claude Sonnet 4.5 -mallin tuottama ennuste + selitys
+    - ai_llm           : Claude Opus 4.7 -mallin tuottama ennuste + selitys
 
 Sekä ensemble-keskiarvo painoilla.
 """
@@ -14,7 +14,6 @@ import asyncio
 import json
 import math
 import os
-from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 
 import numpy as np
@@ -102,9 +101,9 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                          live_today_price: float | None = None,
                          news_headlines: list[dict] | None = None,
                          region: str = "Suomi") -> dict:
-    """Kysytään Claude Sonnet 4.5 -mallilta ennuste ja perustelu.
+    """Kysytään Claude Opus 4.7 -mallilta ennuste ja perustelu.
     Käyttää uutisia + tämän hetken skrapattua hintaa kontekstina.
-    Yrittää 3 kertaa, ja jos Sonnet ei vastaa, kokeilee Claude Haikua."""
+    Yrittää 3 kertaa, ja jos malli ei vastaa, kokeilee Sonnet/Haiku-fallbackeja."""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
     except Exception as e:
@@ -124,14 +123,24 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     recent_sample = list(zip(dates[-21:], p[-21:]))
     sample_lines = "\n".join(f"  {d}: {pr:.3f} €/L" for d, pr in recent_sample)
 
+    # 7-day slope in m€/L/day so the model sees the momentum signal explicitly
+    slope_str = "ei laskettavissa"
+    if len(p) >= 7:
+        slope_val = (p[-1] - p[-7]) / 7 * 1000
+        slope_str = f"{slope_val:+.2f} m€/L/pv (viim. 7 pv)"
+
     brent_line = f"{brent:.2f} USD/bbl" if brent is not None else "ei tiedossa"
     fx_line = f"{eur_usd:.4f}" if eur_usd is not None else "ei tiedossa"
-    live_line = (f"{live_today_price:.3f} €/L (skrapatun halvimpien otoksen keskiarvo)"
+    live_line = (f"{live_today_price:.3f} €/L"
                  if live_today_price is not None else "ei tiedossa")
 
     today_iso = datetime.now(timezone.utc).date().isoformat()
+    weekday_fi = ["maanantai", "tiistai", "keskiviikko", "torstai",
+                  "perjantai", "lauantai", "sunnuntai"][datetime.now(timezone.utc).weekday()]
+    tomorrow_weekday_fi = ["maanantai", "tiistai", "keskiviikko", "torstai",
+                           "perjantai", "lauantai", "sunnuntai"][
+        (datetime.now(timezone.utc).weekday() + 1) % 7]
 
-    # uutiskonteksti
     news_block = ""
     if news_headlines:
         items = []
@@ -139,41 +148,57 @@ async def ai_llm_predict(fuel: str, prices: list[float],
             age = it.get("age_hours")
             age_str = f"{int(age)} h sitten" if age and age < 48 else \
                       f"{int(age/24)} pv sitten" if age else "?"
-            items.append(f"  · [{age_str}] {it['title']} ({it.get('source','')})")
-        news_block = "\n\nViimeisimmät polttoaine- ja öljymarkkinauutiset:\n" + "\n".join(items)
+            items.append(f"  · [{age_str}] {it['title']} ({it.get('source', '')})")
+        news_block = "\n\nTuoreimmat polttoaine- ja öljyuutiset:\n" + "\n".join(items)
 
-    prompt = f"""Olet polttoainemarkkina-analyytikko. Ennusta huomisen ({today_iso}) {fuel}-polttoaineen \
-keskihinta {region}ssa. Vastaa AINOASTAAN JSON-objektina ilman muuta tekstiä:
+    system_message = (
+        "Olet Mikko, Suomen vähittäispolttoainemarkkinoiden kvantitatiivinen analyytikko "
+        "— 14 vuotta kokemusta Neste, ABC, Teboil, Shell ja St1 -ketjujen hinnoittelun seuraamisesta. "
+        "Ydinperiaatteesi:\n"
+        "1. ANKKURI: Live-hinta on totuus. Tilastokeskuksen historia on kuukausia vanha — älä koskaan "
+        "ennusta siitä käsin jos live-hinta on saatavilla.\n"
+        "2. VERO VAKIO: ~70 % pump-hinnasta on veroja (valmistevero + huoltovarmuusmaksu + ALV 25,5 %). "
+        "Lyhyen aikavälin liike on puhtaasti tukkuhinnassa ja marginaalissa — yleensä alle ±0,05 €/L/pv.\n"
+        "3. BRENT-VIIVE: Brent-muutos heijastuu Suomen pumppuhintoihin tyypillisesti 3–10 päivän viiveellä. "
+        "Neste on nopein, ABC ja Teboil seuraavat.\n"
+        "4. EUR/USD-BETA: 1 % EUR/USD-heikennys → n. +0,003–0,005 €/L korotuspaine (tuontiöljy kallistuu).\n"
+        "5. VIIKONPÄIVÄEFEKTI: Ti–Ke tyypillisesti +0,5–1,5 ¢/L vs. Su–Ma. Huominen on " + tomorrow_weekday_fi + ".\n"
+        "6. MOMENTUM: 7 päivän hintakäyrän kaltevuus on paras lyhytaikainen signaali — älä taistele trendiä vastaan "
+        "ilman selvää katalyyttiä.\n"
+        "Vastaat AINA pelkkänä JSON-objektina, ei muuta tekstiä."
+    )
 
-{{
-  "predicted_price": <luku desimaalipistein, esim. 1.923>,
-  "confidence_low": <luku>,
-  "confidence_high": <luku>,
-  "direction": "up" | "down" | "flat",
-  "explanation": "<2-3 lyhyttä lausetta suomeksi, perustele uutisilla & datalla>",
-  "key_drivers": ["<ajuri 1>", "<ajuri 2>", "<ajuri 3>"]
-}}
-
-Käytettävissä oleva data:
-- Polttoaine: {fuel}
-- TÄMÄN HETKEN live-hinta (käytä tätä ankkurina, EI vanhempaa Tilastokeskusdataa): {live_line}
-- Viimeisten 21 päivän hintaestimaatit Tilastokeskus + ekstrapolointi:
-{sample_lines}
-- Brent-raakaöljy: {brent_line}
-- EUR/USD: {fx_line}
-- Alue: {region}{news_block}
-
-Huomioi:
-- Suomessa polttoaineverotus on stabiili (n. 70 % hinnasta verot), joten muutokset ovat \
-maltillisia (yleensä alle ±0.05 €/L päivässä).
-- Viikonpäivätrendi: hinnat tyypillisesti hieman korkeammat tiistaisin ja keskiviikkoisin, \
-matalammat sunnuntaina/maanantaina.
-- ANKKUROI ennuste live-hintaan, älä historialliseen Tilastokeskuksen lukuun (joka on usein \
-useita kuukausia vanha)."""
+    prompt = (
+        f"Ennusta {fuel}-polttoaineen pump-hinta huomiselle ({today_iso}, {tomorrow_weekday_fi}) "
+        f"alueella {region}. Tänään on {weekday_fi}.\n\n"
+        f"=== HINTA-ANKKURI (käytä tätä pääankkurina) ===\n"
+        f"Live pump-hinta nyt: {live_line}\n\n"
+        f"=== MOMENTUMSIGNAALI ===\n"
+        f"7 pv trendi: {slope_str}\n\n"
+        f"=== 21 PÄIVÄN HISTORIA (Tilastokeskus + ekstrapolointi) ===\n"
+        f"{sample_lines}\n\n"
+        f"=== MAKROINPUTTEJA ===\n"
+        f"Brent-raakaöljy: {brent_line}\n"
+        f"EUR/USD: {fx_line}\n"
+        f"{news_block}\n\n"
+        f"=== TEHTÄVÄSI ===\n"
+        f"1. Laske 7 pv trendi + Brent/FX-paine → arvioi pre-tax muutos vs. eilen.\n"
+        f"2. Lisää viikonpäiväefekti ({tomorrow_weekday_fi}).\n"
+        f"3. Ankkuroi lopputulos live-hintaan (ei historiaan).\n"
+        f"4. Aseta confidence-väli: normaali päivä ±0,008–0,015 €/L, korkea volatiliteetti ±0,02–0,04 €/L.\n\n"
+        f"Palauta VAIN tämä JSON:\n"
+        f'{{\n'
+        f'  "predicted_price": <€/L, 3 desimaalia>,\n'
+        f'  "confidence_low": <€/L>,\n'
+        f'  "confidence_high": <€/L>,\n'
+        f'  "direction": "up" | "down" | "flat",\n'
+        f'  "explanation": "<2–3 lausetta suomeksi: mikä ajaa muutoksen, mihin suuntaan ja miksi>",\n'
+        f'  "key_drivers": ["<tärkein ajuri>", "<toiseksi tärkein>", "<kolmas>"]\n'
+        f'}}'
+    )
 
     models_to_try = [
         ("anthropic", "claude-opus-4-7"),
-        ("anthropic", "claude-opus-4-7-20260416"),
         ("anthropic", "claude-opus-4-6"),
         ("anthropic", "claude-sonnet-4-5-20250929"),
         ("anthropic", "claude-haiku-4-5-20251001"),
@@ -186,8 +211,7 @@ useita kuukausia vanha)."""
                 chat = LlmChat(
                     api_key=key,
                     session_id=f"fuel-predict-{fuel}-{today_iso}-{provider}-{model}-{attempt}",
-                    system_message="Olet kvantitatiivinen polttoainemarkkina-analyytikko. "
-                                  "Vastaat aina pelkkänä JSON-objektina."
+                    system_message=system_message,
                 ).with_model(provider, model)
 
                 msg = UserMessage(text=prompt)
