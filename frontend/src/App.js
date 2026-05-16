@@ -127,6 +127,7 @@ export default function App() {
             methods: data.methods,
             brent: data.brent,
             eur_usd: data.eur_usd,
+            data_sources: data.data_sources,
           });
         } else {
           setPrediction(null);

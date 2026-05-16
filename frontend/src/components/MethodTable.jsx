@@ -26,10 +26,15 @@ export default function MethodTable({ result }) {
   const current = result?.current_price;
   return (
     <Card span="" testId="method-comparison-card" className="p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <CardLabel>Menetelmävertailu — huominen</CardLabel>
         <Calculator size={14} strokeWidth={2.4} className="text-secondary" />
       </div>
+      {result?.data_sources && (
+        <p className="text-[10px] text-muted font-mono mb-4" data-testid="method-data-sources">
+          Data: Tilastokeskus {result.data_sources.statfin_monthly_points} kk + tracker {result.data_sources.tracker_captures} havaintoa · {result.data_sources.combined_points} pistettä yhteensä
+        </p>
+      )}
 
       <div className="space-y-3">
         {Object.entries(META).map(([key, m]) => {

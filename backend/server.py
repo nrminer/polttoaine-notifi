@@ -472,19 +472,52 @@ async def run_prediction(req: PredictionRequest):
     if region not in SUPPORTED_REGIONS:
         raise HTTPException(400, f"unknown region {region}")
 
-    # historia
-    cur = db.history.find(
-        {"fuel": fuel, "region": region},
-        {"_id": 0},
-    ).sort("date", 1)
-    hist = await cur.to_list(length=400)
-    if len(hist) < 7:
-        raise HTTPException(400, "ei riittävästi historiaa, kutsu /api/seed ensin")
-    dates = [r["date"] for r in hist]
-    prices = [r["price"] for r in hist]
+    # --- Build a REAL-data price series for the statistical methods ---
+    # Source 1: Statistics Finland (Tilastokeskus) — real monthly consumer
+    #           prices since 2023, expanded to one daily point at mid-month.
+    # Source 2: daily_tracker — real 06:00 / 20:00 captures (current snapshot).
+    # Both are official / measured — NO synthetic data.
+    loop = asyncio.get_event_loop()
+    try:
+        statfin_rows = await loop.run_in_executor(
+            executor, statfin.fetch_monthly, fuel, 2023
+        )
+    except Exception as e:
+        logger.warning("statfin fetch failed: %s", e)
+        statfin_rows = []
+
+    series_pairs: list[tuple[str, float]] = []
+    for r in statfin_rows:
+        # mid-month date — keeps the series strictly chronological
+        d = f"{r['year']:04d}-{r['month']:02d}-15"
+        series_pairs.append((d, r["price"]))
+
+    tracker_rows = await db.daily_tracker.find(
+        {"fuel": fuel, "region": "Suomi"},
+        {"_id": 0, "date": 1, "hour": 1, "actual_cheapest": 1},
+    ).sort([("date", 1), ("hour", 1)]).to_list(length=400)
+    for r in tracker_rows:
+        if r.get("actual_cheapest") is None:
+            continue
+        # collapse 06h+20h into one daily point (use latest); the series is
+        # used for trend/regression where higher granularity doesn't help.
+        series_pairs.append((r["date"], r["actual_cheapest"]))
+
+    # de-dup by date (later entry wins -> tracker overwrites statfin for current month)
+    by_date: dict[str, float] = {}
+    for d, p in series_pairs:
+        by_date[d] = p
+    series_pairs = sorted(by_date.items())
+
+    if len(series_pairs) < 7:
+        raise HTTPException(
+            400, f"reaaliaikaista historiaa ei riittävästi ({len(series_pairs)} "
+                 f"pistettä) - tarvitaan vähintään 7. Statfin tai daily_tracker tyhjä."
+        )
+    dates = [d for d, _ in series_pairs]
+    prices = [p for _, p in series_pairs]
 
     # rinnakkain: Brent + FX + uusin live-skrapaus + uutiset
-    loop = asyncio.get_event_loop()
     brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
     fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
     news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
@@ -494,8 +527,6 @@ async def run_prediction(req: PredictionRequest):
         {"fuel": fuel, "region": "Suomi"},
         sort=[("ts", -1)],
     )
-    # ankkurina käytetään halvimpien otoksen keskiarvoa (top-80) - tämä on lähinnä
-    # sitä mitä käyttäjä voi todella maksaa tankatessaan halvalla
     live_anchor = None
     if latest_snap:
         live_anchor = (latest_snap.get("cheap_sample_avg")
@@ -514,6 +545,13 @@ async def run_prediction(req: PredictionRequest):
         region=region,
     )
 
+    # data source provenance — surface this so the UI can show it's real
+    result["data_sources"] = {
+        "statfin_monthly_points": len(statfin_rows),
+        "tracker_captures": len(tracker_rows),
+        "combined_points": len(series_pairs),
+    }
+
     # tallenna ennuste tulevan päivän accuracy-trackausta varten
     target_date = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
     doc = {
@@ -530,6 +568,7 @@ async def run_prediction(req: PredictionRequest):
         "brent": brent_val,
         "eur_usd": fx_val,
         "news_headlines": headlines,
+        "data_sources": result.get("data_sources"),
     }
     await db.predictions.update_one(
         {"target_date": target_date, "fuel": fuel, "region": region},
@@ -582,6 +621,7 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         "brent": doc.get("brent"),
         "eur_usd": doc.get("eur_usd"),
         "news_headlines": doc.get("news_headlines", []),
+        "data_sources": doc.get("data_sources"),
     }
 
 
