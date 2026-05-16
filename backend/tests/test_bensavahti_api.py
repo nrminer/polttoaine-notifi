@@ -42,8 +42,10 @@ def test_meta(s):
     data = r.json()
     assert set(data["fuels"]) == EXPECTED_FUELS
     assert EXPECTED_REGIONS.issubset(set(data["regions"]))
-    assert "city_factors" in data
-    assert "baseline" in data
+    # city_factors / baseline were FABRICATED constants — removed. The API
+    # must no longer expose synthetic data.
+    assert "city_factors" not in data
+    assert "baseline" not in data
 
 
 # ----------- seed -----------
@@ -173,7 +175,10 @@ def test_current_prices_95E10(s):
     assert r.status_code == 200, f"current returned {r.status_code}: {r.text[:300]}"
     data = r.json()
     assert data["fuel"] == "95E10"
-    assert "national_avg" in data
+    # Tilastokeskus 'national_avg'/'official_*' removed — live-scraped only
+    assert "national_avg" not in data
+    assert "official_avg" not in data
+    assert "cheap_sample_avg" in data
     assert "national_min" in data
     assert "stations_count" in data
     assert "by_city" in data
@@ -181,7 +186,7 @@ def test_current_prices_95E10(s):
     if not data.get("stale"):
         # Live scrape should have >0 stations
         assert data["stations_count"] > 0
-        assert isinstance(data["national_avg"], (int, float))
+        assert isinstance(data["cheap_sample_avg"], (int, float))
 
 
 # ----------- predict/run (slow - includes LLM) -----------

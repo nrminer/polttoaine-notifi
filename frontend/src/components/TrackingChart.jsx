@@ -14,7 +14,6 @@ import { fmtDateFi } from "../lib/utils";
 
 function TooltipBody({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
-  // label is the composite slot "YYYY-MM-DD HH"
   const human = (() => {
     if (!label) return "";
     const [d, h] = String(label).split(" ");
@@ -23,24 +22,40 @@ function TooltipBody({ active, payload, label }) {
   return (
     <div className="bg-white border border-line shadow-lg px-3 py-2 font-mono text-xs">
       <div className="text-secondary mb-1">{human}</div>
-      {payload.map((p) => (
-        p.value != null && (
-          <div key={p.dataKey} className="flex justify-between gap-4 text-ink">
-            <span style={{ color: p.color }}>{p.name}</span>
-            <span className="tnum">{p.value.toFixed(3)} €/L</span>
-          </div>
-        )
-      ))}
+      {payload.map(
+        (p) =>
+          p.value != null && (
+            <div key={p.dataKey} className="flex justify-between gap-4 text-ink">
+              <span style={{ color: p.color }}>{p.name}</span>
+              <span className="tnum">{p.value.toFixed(3)} €/L</span>
+            </div>
+          )
+      )}
     </div>
   );
 }
 
-export default function TrackingChart({ rows = [], tomorrow, height = 320 }) {
-  // Build composite x-axis label: "2026-05-16 06" / "2026-05-16 20" so morning
-  // and evening captures appear as separate points.
+export default function TrackingChart({
+  rows = [],
+  tomorrow,
+  city = "Suomi",
+  height = 320,
+}) {
+  const isCity = city && city !== "Suomi";
+
   const data = rows.map((r) => {
     const hour = r.hour ?? 20;
     const slot = `${r.date} ${String(hour).padStart(2, "0")}`;
+    if (isCity) {
+      const c = (r.by_city && r.by_city[city]) || {};
+      return {
+        slot,
+        date: r.date,
+        hour,
+        cheapest: c.cheapest ?? null,
+        average: c.average ?? null,
+      };
+    }
     return {
       slot,
       date: r.date,
@@ -50,19 +65,22 @@ export default function TrackingChart({ rows = [], tomorrow, height = 320 }) {
     };
   });
 
-  // huomisen ennustepiste yhdistetään lineaarisesti viimeisestä pisteestä
-  if (rows.length && tomorrow?.date && tomorrow?.value != null) {
+  // huomisen ennuste vain kansallisessa näkymässä (ei kaupunkikohtaista ennustetta)
+  if (!isCity && rows.length && tomorrow?.date && tomorrow?.value != null) {
     data.push({
-      slot: `${tomorrow.date} 06`,
+      slot: `${tomorrow.date} 14`,
       date: tomorrow.date,
-      hour: 6,
+      hour: 14,
       tomorrow: tomorrow.value,
     });
   }
 
   const prices = data
-    .flatMap((d) => [d.actual, d.predicted, d.tomorrow])
+    .flatMap((d) =>
+      isCity ? [d.cheapest, d.average] : [d.actual, d.predicted, d.tomorrow]
+    )
     .filter((v) => v !== null && v !== undefined);
+
   if (prices.length === 0) {
     return (
       <div
@@ -70,8 +88,9 @@ export default function TrackingChart({ rows = [], tomorrow, height = 320 }) {
         style={{ height }}
         data-testid="tracking-chart-empty"
       >
-        Ei vielä dataa. Päivittäinen otanta käynnistyy klo 18:00 (Helsinki).
-        Aja "Tallenna nyt" pakottaaksesi ensimmäisen pisteen.
+        {isCity
+          ? `Ei vielä ${city}-dataa. Kaupunkikohtainen historia kertyy klo 14:00 ja 21:00 captureista.`
+          : 'Ei vielä dataa. Päivittäinen otanta käynnistyy klo 14:00 (Helsinki). Aja "Tallenna nyt" pakottaaksesi ensimmäisen pisteen.'}
       </div>
     );
   }
@@ -107,36 +126,70 @@ export default function TrackingChart({ rows = [], tomorrow, height = 320 }) {
           <Tooltip content={<TooltipBody />} />
           <Legend
             verticalAlign="top"
-            wrapperStyle={{ fontSize: "11px", fontFamily: "JetBrains Mono", paddingBottom: 8 }}
+            wrapperStyle={{
+              fontSize: "11px",
+              fontFamily: "JetBrains Mono",
+              paddingBottom: 8,
+            }}
           />
-          <Line
-            type="monotone"
-            dataKey="actual"
-            name="Toteutunut halvin"
-            stroke="#002FA7"
-            strokeWidth={3}
-            dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1 }}
-            activeDot={{ r: 6 }}
-            connectNulls
-            isAnimationActive
-          />
-          <Scatter
-            name="Edellisen päivän ennuste"
-            dataKey="predicted"
-            fill="#94A3B8"
-            shape="cross"
-          />
-          <Line
-            type="monotone"
-            dataKey="tomorrow"
-            name="Huomisen ennuste"
-            stroke="#FDE047"
-            strokeWidth={2.5}
-            strokeDasharray="6 4"
-            dot={{ r: 6, fill: "#FDE047", stroke: "#0F172A", strokeWidth: 2 }}
-            connectNulls
-            isAnimationActive
-          />
+
+          {isCity ? (
+            <>
+              <Line
+                type="monotone"
+                dataKey="cheapest"
+                name={`${city} · halvin`}
+                stroke="#002FA7"
+                strokeWidth={3}
+                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1 }}
+                activeDot={{ r: 6 }}
+                connectNulls
+                isAnimationActive
+              />
+              <Line
+                type="monotone"
+                dataKey="average"
+                name={`${city} · keskihinta`}
+                stroke="#F59E0B"
+                strokeWidth={2.5}
+                strokeDasharray="5 4"
+                dot={{ r: 3, fill: "#F59E0B", stroke: "#fff", strokeWidth: 1 }}
+                connectNulls
+                isAnimationActive
+              />
+            </>
+          ) : (
+            <>
+              <Line
+                type="monotone"
+                dataKey="actual"
+                name="Toteutunut halvin"
+                stroke="#002FA7"
+                strokeWidth={3}
+                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1 }}
+                activeDot={{ r: 6 }}
+                connectNulls
+                isAnimationActive
+              />
+              <Scatter
+                name="Edellisen päivän ennuste"
+                dataKey="predicted"
+                fill="#94A3B8"
+                shape="cross"
+              />
+              <Line
+                type="monotone"
+                dataKey="tomorrow"
+                name="Huomisen ennuste"
+                stroke="#FDE047"
+                strokeWidth={2.5}
+                strokeDasharray="6 4"
+                dot={{ r: 6, fill: "#FDE047", stroke: "#0F172A", strokeWidth: 2 }}
+                connectNulls
+                isAnimationActive
+              />
+            </>
+          )}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

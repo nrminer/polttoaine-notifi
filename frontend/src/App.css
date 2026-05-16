@@ -7,6 +7,13 @@
     #FFFFFF;
 }
 
+html.dark .app-shell {
+  background:
+    radial-gradient(60rem 35rem at 110% -10%, rgba(2,47,167,0.18), transparent 60%),
+    radial-gradient(45rem 25rem at -10% 110%, rgba(253,224,71,0.07), transparent 60%),
+    #0A0F1C;
+}
+
 .hero-num {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-feature-settings: "tnum" 1;

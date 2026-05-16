@@ -1,14 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        ink: "#0A0A0A",
-        muted: "#94A3B8",
-        secondary: "#475569",
-        surface: "#F8F9FA",
-        line: "#E2E8F0",
+        // Semantic tokens are CSS-variable driven so they flip with the
+        // .dark class on <html>. The `<alpha-value>` form keeps Tailwind
+        // opacity modifiers (e.g. text-secondary/60) working.
+        ink: "rgb(var(--c-ink) / <alpha-value>)",
+        muted: "rgb(var(--c-muted) / <alpha-value>)",
+        secondary: "rgb(var(--c-secondary) / <alpha-value>)",
+        surface: "rgb(var(--c-surface) / <alpha-value>)",
+        line: "rgb(var(--c-line) / <alpha-value>)",
         signalUp: "#EF4444",
         signalUpBg: "#FEE2E2",
         signalDown: "#10B981",

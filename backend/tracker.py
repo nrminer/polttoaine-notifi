@@ -1,7 +1,7 @@
 """
 Daily prediction-vs-actual tracker.
 
-Every day at 18:00 Helsinki time we:
+Every day at 14:00 and 21:00 Helsinki time we:
   1. Scrape today's CHEAPEST gas station price across Finland (95E10 + diesel)
   2. Read yesterday's prediction (if any) for today's cheapest
   3. Run a fresh prediction for tomorrow's cheapest
@@ -29,7 +29,14 @@ logger = logging.getLogger("bensavahti.tracker")
 HELSINKI = ZoneInfo("Europe/Helsinki")
 
 # Päivittäiset ajastetut captureajat (Helsinki-aika)
-SCHEDULED_HOURS = (6, 20)
+SCHEDULED_HOURS = (14, 21)
+
+# Kaupungit joista kerätään halvin + keskihinta jokaisessa capturessa
+TRACKED_CITIES = ("Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti")
+
+# Järkevät rajat Suomen polttoainehinnoille (€/L) — pudota parsintavirheet
+_PRICE_MIN = 1.10
+_PRICE_MAX = 3.50
 
 
 def helsinki_today() -> date:
@@ -37,7 +44,7 @@ def helsinki_today() -> date:
 
 
 def next_scheduled_run(now_utc: datetime | None = None) -> datetime:
-    """Return UTC datetime of the next scheduled capture (06:00 or 20:00 Helsinki)."""
+    """Return UTC datetime of the next scheduled capture (14:00 or 21:00 Helsinki)."""
     now_utc = now_utc or datetime.now(timezone.utc)
     now_hel = now_utc.astimezone(HELSINKI)
     candidates = []
@@ -48,7 +55,7 @@ def next_scheduled_run(now_utc: datetime | None = None) -> datetime:
             if t > now_hel:
                 candidates.append(t)
     if not candidates:
-        # fallback: huomenna 06:00
+        # fallback: huomenna ensimmäinen ajastettu tunti (SCHEDULED_HOURS[0])
         d = (now_hel + timedelta(days=1)).date()
         candidates.append(datetime.combine(
             d, datetime.min.time(), tzinfo=HELSINKI
@@ -61,13 +68,49 @@ def next_18_helsinki(now_utc: datetime | None = None) -> datetime:
     return next_scheduled_run(now_utc)
 
 
+def _sane(rows: list) -> list:
+    """Pudota selvät parsintavirheet (hinta rajojen ulkopuolella)."""
+    return [
+        r for r in rows
+        if isinstance(r.get("price"), (int, float))
+        and _PRICE_MIN <= r["price"] <= _PRICE_MAX
+    ]
+
+
+def _city_breakdown(rows: list) -> dict:
+    """{ city: { cheapest, average, count, station, source } } TRACKED_CITIES:lle."""
+    by_city: dict[str, list] = {}
+    for r in rows:
+        c = r.get("city") or ""
+        if c in TRACKED_CITIES:
+            by_city.setdefault(c, []).append(r)
+    out: dict[str, dict] = {}
+    for city in TRACKED_CITIES:
+        lst = by_city.get(city)
+        if not lst:
+            out[city] = {"cheapest": None, "average": None, "count": 0,
+                         "station": None, "source": None}
+            continue
+        prices = [x["price"] for x in lst]
+        cheapest = min(lst, key=lambda x: x["price"])
+        out[city] = {
+            "cheapest": round(min(prices), 3),
+            "average": round(sum(prices) / len(prices), 3),
+            "count": len(lst),
+            "station": cheapest.get("station"),
+            "source": cheapest.get("source"),
+        }
+    return out
+
+
 async def _scrape_cheapest(fuel: str, executor) -> dict:
-    """Run both scrapers in parallel and return cheapest station info."""
+    """Run both scrapers in parallel. Returns national cheapest station info
+    plus a per-city breakdown (cheapest + average) for TRACKED_CITIES."""
     loop = asyncio.get_event_loop()
     poltt_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
     tank_tasks = [
         loop.run_in_executor(executor, tankille._scrape_city, c, fuel)
-        for c in ["Helsinki", "Espoo", "Vantaa", "Tampere", "Oulu"]
+        for c in TRACKED_CITIES
     ]
     poltt, *tanks = await asyncio.gather(
         poltt_task, *tank_tasks, return_exceptions=True
@@ -78,9 +121,10 @@ async def _scrape_cheapest(fuel: str, executor) -> dict:
     for t in tanks:
         if isinstance(t, list):
             all_stations.extend(t)
+    all_stations = _sane(all_stations)
     if not all_stations:
         return {"price": None, "station": None, "city": None,
-                "source": None, "count": 0}
+                "source": None, "count": 0, "by_city": _city_breakdown([])}
     cheapest = min(all_stations, key=lambda r: r["price"])
     return {
         "price": round(cheapest["price"], 3),
@@ -89,12 +133,13 @@ async def _scrape_cheapest(fuel: str, executor) -> dict:
         "address": cheapest.get("address", ""),
         "source": cheapest.get("source"),
         "count": len(all_stations),
+        "by_city": _city_breakdown(all_stations),
     }
 
 
 async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
                         hour: int | None = None) -> dict:
-    """One scheduled capture (06:00 or 20:00 Helsinki). Idempotent on
+    """One scheduled capture (14:00 or 21:00 Helsinki). Idempotent on
     (date, fuel, region, hour) — re-running the same slot overwrites it."""
     now_hel = datetime.now(HELSINKI)
     today = now_hel.date()
@@ -145,29 +190,25 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         )
         brent_val = factors_mod.latest_value(brent_series)
         fx_val = factors_mod.latest_value(fx_series)
+        brent_chg = factors_mod.change_frac(brent_series, 5)
+        fx_chg = factors_mod.change_frac(fx_series, 5)
 
-        if len(prices) >= 7:
-            full = await predict_mod.predict_tomorrow(
-                fuel, dates, prices, brent_val, fx_val,
-                live_today_price=cheapest["price"],
-                news_headlines=headlines,
-                region=region,
-            )
-            prediction_tomorrow = full["ensemble"].get("value")
-            prediction_full = full
-        else:
-            ai = await predict_mod.ai_llm_predict(
-                fuel, prices, dates, brent_val, fx_val,
-                live_today_price=cheapest["price"],
-                news_headlines=headlines,
-                region=region,
-            )
-            prediction_tomorrow = ai.get("value") or cheapest["price"]
-            prediction_full = {
-                "methods": {"ai_llm": ai},
-                "ensemble": {"value": prediction_tomorrow,
-                             "explanation": "Vähän historiaa - vain AI"},
-            }
+        # Aja AINA koko ennusteputki (predict_tomorrow). Se degradoituu
+        # hallitusti vähäisellä datalla: fundamental_anchor toimii live-
+        # ankkurista, MA/LR/ES palauttavat None siististi, ja ensemble
+        # yhdistää saatavilla olevat. Vanha "<7 pistettä → vain AI" -haara
+        # jätti fundamental_anchorin (ja MA/LR/ES:n) kokonaan pois juuri
+        # cold-startissa, jolloin niitä eniten tarvitaan.
+        full = await predict_mod.predict_tomorrow(
+            fuel, dates, prices, brent_val, fx_val,
+            live_today_price=cheapest["price"],
+            news_headlines=headlines,
+            region=region,
+            brent_chg=brent_chg,
+            eur_usd_chg=fx_chg,
+        )
+        prediction_tomorrow = full["ensemble"].get("value") or cheapest["price"]
+        prediction_full = full
 
     doc = {
         "date": today_iso,
@@ -180,6 +221,7 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         "actual_cheapest_city": cheapest.get("city"),
         "actual_cheapest_source": cheapest.get("source"),
         "stations_scanned": cheapest.get("count", 0),
+        "by_city": cheapest.get("by_city", {}),
         "predicted_cheapest_for_today": predicted_for_now,
         "prediction_for_tomorrow_cheapest": (
             round(prediction_tomorrow, 3) if prediction_tomorrow else None
@@ -195,9 +237,10 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
 
 
 async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
-    """Background task: sleep until next scheduled run (06:00 / 20:00 Helsinki),
+    """Background task: sleep until next scheduled run (14:00 / 21:00 Helsinki),
     capture, repeat."""
-    logger.info("tracker scheduler started (06:00 + 20:00 Helsinki)")
+    logger.info("tracker scheduler started (%s Helsinki)",
+                " + ".join(f"{h:02d}:00" for h in SCHEDULED_HOURS))
     while True:
         try:
             now = datetime.now(timezone.utc)

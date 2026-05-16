@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, Activity, TrendingUp, Brain, Calculator } from "lucide-react";
+import { Sparkles, Activity, TrendingUp, Brain, Calculator, Anchor } from "lucide-react";
 import { Card, CardLabel, DeltaBadge } from "./Card";
 import { fmtPrice, fmtDelta } from "../lib/utils";
 import { formatModelName } from "../lib/modelName";
@@ -8,6 +8,7 @@ const META = {
   moving_average: { label: "Liukuva keskiarvo", Icon: Activity, sub: "7 pv" },
   linear_regression: { label: "Lineaarinen regressio", Icon: TrendingUp, sub: "30 pv" },
   exp_smoothing: { label: "Eksp. tasoitus", Icon: Sparkles, sub: "Holt α=0.4" },
+  fundamental_anchor: { label: "Fundamenttiankkuri", Icon: Anchor, sub: "Brent+FX" },
   ai_llm: { Icon: Brain },  // label/sub built dynamically from model id
 };
 
@@ -32,7 +33,7 @@ export default function MethodTable({ result }) {
       </div>
       {result?.data_sources && (
         <p className="text-[10px] text-muted font-mono mb-4" data-testid="method-data-sources">
-          Data: Tilastokeskus {result.data_sources.statfin_monthly_points} kk + tracker {result.data_sources.tracker_captures} havaintoa · {result.data_sources.combined_points} pistettä yhteensä
+          Data: vain live-skrapatut capturet — {result.data_sources.tracker_captures} havaintoa · {result.data_sources.combined_points} päiväpistettä (kerätty tästä päivästä alkaen)
         </p>
       )}
 

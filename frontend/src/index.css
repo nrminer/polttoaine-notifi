@@ -5,6 +5,34 @@
 :root {
   color-scheme: light;
   --grain-opacity: 0.04;
+
+  /* Semantic colour tokens (R G B triplets — consumed by tailwind.config) */
+  --c-ink: 10 10 10;
+  --c-secondary: 71 85 105;
+  --c-muted: 148 163 184;
+  --c-surface: 248 249 250;
+  --c-line: 226 232 240;
+
+  /* Page chrome */
+  --page-bg: #ffffff;
+  --page-fg: #0a0a0a;
+  --card-bg: #ffffff;
+  --neutral-pill: #f1f5f9; /* slate-100 */
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --c-ink: 226 232 240;       /* near-white text */
+  --c-secondary: 148 163 184; /* slate-400 */
+  --c-muted: 100 116 139;     /* slate-500 */
+  --c-surface: 14 23 38;      /* deep panel */
+  --c-line: 30 41 59;         /* slate-800 border */
+
+  --page-bg: #0a0f1c;
+  --page-fg: #e5e9f0;
+  --card-bg: #131b2d;       /* lifted off the page, distinct from nordDark hero */
+  --neutral-pill: #1e293b;
 }
 
 html, body, #root {
@@ -13,8 +41,8 @@ html, body, #root {
 
 body {
   font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  background: #FFFFFF;
-  color: #0A0A0A;
+  background: var(--page-bg);
+  color: var(--page-fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -25,6 +53,22 @@ body {
   background: #FDE047;
   color: #0A0A0A;
 }
+
+/* ---- Dark theme: retarget literal light-surface utilities ---- */
+html.dark .bg-white { background-color: var(--card-bg) !important; }
+html.dark .bg-white\/70 { background-color: rgb(15 23 42 / 0.82) !important; }
+html.dark .bg-white\/10 { background-color: rgb(255 255 255 / 0.06) !important; }
+html.dark .bg-slate-100 { background-color: var(--neutral-pill) !important; }
+html.dark .tick-row > * + * { border-left-color: rgb(var(--c-line)); }
+html.dark ::-webkit-scrollbar-thumb { background: #334155; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Recharts passes light hex stroke props inline — retarget for dark so
+   gridlines/axes don't glare on the dark panels. */
+html.dark .recharts-cartesian-grid line { stroke: #1f2a3d !important; }
+html.dark .recharts-cartesian-axis-line,
+html.dark .recharts-cartesian-axis-tick-line { stroke: #334155 !important; }
+html.dark .recharts-text { fill: #94a3b8 !important; }
 
 /* number animation */
 .tnum {

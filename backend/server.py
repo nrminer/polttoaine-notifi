@@ -11,26 +11,25 @@ FastAPI-palvelin, joka:
 """
 from __future__ import annotations
 import asyncio
+import hmac
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
 from scrapers import polttoaine, tankille
 import factors as factors_mod
-import statfin
 import news as news_mod
 import tracker as tracker_mod
 import notify as notify_mod
-from simulate import simulate_history, BASELINE, CITY_FACTORS
-from real_history import build_history
 from predict import predict_tomorrow
 
 # ---------------- konfiguraatio ----------------
@@ -206,143 +205,51 @@ async def meta():
     return {
         "fuels": list(FUELS),
         "regions": SUPPORTED_REGIONS,
-        "city_factors": CITY_FACTORS,
-        "baseline": BASELINE,
     }
 
 
 @app.post("/api/seed")
 async def seed_history(days: int = 365, force: bool = False):
-    """Rakenna historia kannan history-kokoelmaan.
+    """Historiallinen seedaus on POISTETTU KÄYTÖSTÄ.
 
-    Käyttää AINOASTAAN oikeaa dataa:
-      - Tilastokeskuksen (Statfin) kuukausiarvot 2020 → uusin julkaistu
-        kuukausi (interpoloidaan päivätasolle ainoastaan PERÄKKÄISTEN
-        kuukausi-ankkureiden välillä — ei satunnaista kohinaa)
-      - Statfin-datan ja tämän päivän välinen aukko ekstrapoloidaan
-        Brent-raakaöljyn liukuvalla muutoksella tai live-skrapatulla
-        nykyhinnalla.
-      - Tämän päivän piste = live-skrapaus (jos saatavilla).
+    Tilastokeskuksen (Statfin) data on vanhaa eikä sitä enää käytetä.
+    Kaikki hintahistoria kerätään live-skrapauksista tästä päivästä alkaen
+    (/api/prices/current ja /api/regional kirjoittavat "scraped"-rivit;
+    daily_tracker tallentaa 14:00/21:00 capturet).
 
-    Tämä on rehellinen ja tarkistettavissa.
+    Endpoint säilytetään yhteensopivuuden vuoksi. Se EI tuota mitään dataa,
+    mutta siivoaa kannasta kaikki vanhat MALLINNETUT/TILASTO-rivit niin että
+    jäljelle jää vain aito live-skrapattu data.
+
+    `days` ja `force` ovat no-op.
     """
-    coll = db.history
-    if not force:
-        n = await coll.count_documents({})
-        if n > 0:
-            return {"seeded": False,
-                    "reason": f"history not empty ({n} docs); use force=true"}
-    else:
-        await coll.delete_many({"source": {
-            "$in": ["simulated", "statfin+interp", "statfin", "statfin+extrap"]
-        }})
-
-    inserted = 0
-    summaries: dict = {}
-
-    # rinnakkain: hae Brent series 90 päivää
-    loop = asyncio.get_event_loop()
-    brent_series = await loop.run_in_executor(executor, factors_mod.fetch_brent, 90)
-
-    for fuel in FUELS:
-        # live-anchor: katso uusin snapshot
-        latest_doc = await db.snapshots.find_one(
-            {"fuel": fuel, "region": "Suomi"},
-            sort=[("ts", -1)],
-        )
-        # käytä halvimpien otoksen keskiarvoa tämän päivän ankkurina
-        live_today = None
-        if latest_doc:
-            live_today = (latest_doc.get("cheap_sample_avg")
-                          or latest_doc.get("national_avg"))
-
-        # hae Statfin kuukausi-ankkurit
-        try:
-            anchors = await loop.run_in_executor(
-                executor, statfin.fetch_monthly, fuel, 2020
-            )
-            logger.info("statfin anchors for %s: %d months", fuel, len(anchors))
-        except Exception as e:
-            logger.warning("statfin fetch failed for %s: %s", fuel, e)
-            anchors = []
-
-        if not anchors:
-            continue
-
-        # rakenna pää-historia ("Suomi" alue)
-        suomi_series = build_history(anchors, brent_series,
-                                     live_today_price=live_today,
-                                     days=days)
-        for r in suomi_series:
-            r["fuel"] = fuel
-            r["region"] = "Suomi"
-
-        # alue-vähennys: skaalataan kaupunkikertoimella
-        all_rows = list(suomi_series)
-        for region, factor in CITY_FACTORS.items():
-            if region == "Suomi":
-                continue
-            for r in suomi_series:
-                all_rows.append({
-                    "date": r["date"],
-                    "price": round(r["price"] * factor, 4),
-                    "fuel": fuel,
-                    "region": region,
-                    "source": r["source"],
-                })
-
-        if not all_rows:
-            continue
-        try:
-            from pymongo.errors import BulkWriteError
-            try:
-                res = await coll.insert_many(all_rows, ordered=False)
-                inserted += len(res.inserted_ids)
-            except BulkWriteError as bwe:
-                inserted += bwe.details.get("nInserted", 0)
-        except Exception:
-            pass
-
-        summaries[fuel] = {
-            "anchors": len(anchors),
-            "first_month": anchors[0]["month_iso"],
-            "last_month": anchors[-1]["month_iso"],
-            "live_anchor": live_today,
-        }
-
-    return {"seeded": True, "rows": inserted, "days": days,
-            "source": "statfin+extrap+live",
-            "details": summaries}
+    purged = await db.history.delete_many({"source": {
+        "$in": ["simulated", "statfin+interp", "statfin",
+                "statfin+extrap", "statfin_monthly"]
+    }})
+    return {
+        "seeded": False,
+        "reason": "historical seeding disabled — live-gathered data only "
+                  "(Tilastokeskus removed: data too old)",
+        "purged_legacy_rows": purged.deleted_count,
+    }
 
 
 @app.get("/api/prices/current")
 async def current_prices(fuel: str = Query("95E10")):
-    """Skrapaa nykyhinnat (live, halvimmat asemat) + hae Tilastokeskuksen
-    viimeisin virallinen kuukausiarvo.
+    """Skrapaa nykyhinnat (live, halvimmat asemat). KAIKKI data on live-
+    skrapattua — ei Tilastokeskus-kuukausihistoriaa.
 
     Palauttaa:
-      official_avg     - Tilastokeskuksen viimeisin kuukausiarvo (€/L)
-      official_month   - "2025-12" jne.
       cheap_sample_avg - skrapatun otoksen (~80 halvinta) keskiarvo
       national_min     - skrapatun otoksen halvin
     """
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
 
-    # rinnakkaiset: scrape + statfin
-    loop = asyncio.get_event_loop()
-    scrape_task = _scrape_all(fuel)
-    statfin_task = loop.run_in_executor(executor, statfin.fetch_monthly, fuel, 2024)
-    rows, statfin_rows = await asyncio.gather(scrape_task, statfin_task,
-                                              return_exceptions=True)
+    rows = await _scrape_all(fuel)
     if isinstance(rows, Exception):
         rows = []
-    official_month = None
-    official_avg = None
-    if isinstance(statfin_rows, list) and statfin_rows:
-        latest = statfin_rows[-1]
-        official_month = latest["month_iso"]
-        official_avg = latest["price"]
 
     if not rows:
         last = await db.snapshots.find_one({"fuel": fuel, "region": "Suomi"},
@@ -352,11 +259,8 @@ async def current_prices(fuel: str = Query("95E10")):
                 "fuel": fuel,
                 "fetched_at": last.get("ts"),
                 "stations_count": last.get("stations_count", 0),
-                "cheap_sample_avg": last.get("cheap_sample_avg")
-                                    or last.get("national_avg"),
+                "cheap_sample_avg": last.get("cheap_sample_avg"),
                 "national_min": last.get("national_min"),
-                "official_avg": official_avg,
-                "official_month": official_month,
                 "by_city": last.get("by_city", {}),
                 "stations": [],
                 "stale": True,
@@ -373,27 +277,25 @@ async def current_prices(fuel: str = Query("95E10")):
         "fuel": fuel,
         "region": "Suomi",
         "cheap_sample_avg": cheap_avg,
-        "national_avg": official_avg,   # virallinen, jos saatavilla
         "national_min": nat_min,
-        "official_month": official_month,
         "by_city": by_city,
         "stations_count": len(rows),
     }
     await db.snapshots.insert_one(snap.copy())
 
-    # päivitä history-piste tämän päivän osalta käyttäen *virallista* arvoa
-    # jos saatavilla, muuten halvinta keskiarvoa
-    history_price = official_avg if official_avg is not None else cheap_avg
+    # Päivän history-piste = AITO live-skrapattu otoskeskiarvo (source
+    # "scraped"). Kaikki hintahistoria on live-kerättyä tästä päivästä
+    # alkaen — ei Tilastokeskus-dataa.
     today = datetime.now(timezone.utc).date().isoformat()
-    await db.history.update_one(
-        {"date": today, "fuel": fuel, "region": "Suomi"},
-        {"$set": {
-            "date": today, "fuel": fuel, "region": "Suomi",
-            "price": history_price,
-            "source": "statfin" if official_avg is not None else "scraped",
-        }},
-        upsert=True,
-    )
+    if cheap_avg is not None:
+        await db.history.update_one(
+            {"date": today, "fuel": fuel, "region": "Suomi"},
+            {"$set": {
+                "date": today, "fuel": fuel, "region": "Suomi",
+                "price": cheap_avg, "source": "scraped",
+            }},
+            upsert=True,
+        )
     for city, agg in by_city.items():
         if city in SUPPORTED_REGIONS:
             await db.history.update_one(
@@ -410,8 +312,6 @@ async def current_prices(fuel: str = Query("95E10")):
         "fetched_at": ts,
         "stations_count": len(rows),
         "cheap_sample_avg": cheap_avg,
-        "official_avg": official_avg,
-        "official_month": official_month,
         "national_min": nat_min,
         "by_city": by_city,
         "stations": [
@@ -472,84 +372,71 @@ async def run_prediction(req: PredictionRequest):
     if region not in SUPPORTED_REGIONS:
         raise HTTPException(400, f"unknown region {region}")
 
-    # --- Build a REAL-data price series for the statistical methods ---
-    # Source 1: Statistics Finland (Tilastokeskus) — real monthly consumer
-    #           prices since 2023, expanded to one daily point at mid-month.
-    # Source 2: daily_tracker — real 06:00 / 20:00 captures (current snapshot).
-    # Both are official / measured — NO synthetic data.
+    # --- Build the price series from LIVE-GATHERED data ONLY ---
+    # Ainoa lähde: daily_tracker — aidot 14:00 / 21:00 live-capturet.
+    # EI Tilastokeskusta (vanhaa) eikä mitään synteettistä. Historia
+    # karttuu vasta tästä päivästä eteenpäin.
     loop = asyncio.get_event_loop()
-    try:
-        statfin_rows = await loop.run_in_executor(
-            executor, statfin.fetch_monthly, fuel, 2023
-        )
-    except Exception as e:
-        logger.warning("statfin fetch failed: %s", e)
-        statfin_rows = []
-
-    series_pairs: list[tuple[str, float]] = []
-    for r in statfin_rows:
-        # mid-month date — keeps the series strictly chronological
-        d = f"{r['year']:04d}-{r['month']:02d}-15"
-        series_pairs.append((d, r["price"]))
 
     tracker_rows = await db.daily_tracker.find(
         {"fuel": fuel, "region": "Suomi"},
         {"_id": 0, "date": 1, "hour": 1, "actual_cheapest": 1},
     ).sort([("date", 1), ("hour", 1)]).to_list(length=400)
+    by_date: dict[str, float] = {}
     for r in tracker_rows:
         if r.get("actual_cheapest") is None:
             continue
-        # collapse 06h+20h into one daily point (use latest); the series is
-        # used for trend/regression where higher granularity doesn't help.
-        series_pairs.append((r["date"], r["actual_cheapest"]))
-
-    # de-dup by date (later entry wins -> tracker overwrites statfin for current month)
-    by_date: dict[str, float] = {}
-    for d, p in series_pairs:
-        by_date[d] = p
+        # yksi piste per päivä — myöhäisin capture (10h/20h) voittaa
+        by_date[r["date"]] = r["actual_cheapest"]
     series_pairs = sorted(by_date.items())
 
-    if len(series_pairs) < 7:
-        raise HTTPException(
-            400, f"reaaliaikaista historiaa ei riittävästi ({len(series_pairs)} "
-                 f"pistettä) - tarvitaan vähintään 7. Statfin tai daily_tracker tyhjä."
-        )
-    dates = [d for d, _ in series_pairs]
-    prices = [p for _, p in series_pairs]
-
-    # rinnakkain: Brent + FX + uusin live-skrapaus + uutiset
-    brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
-    fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
-    news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
-
-    # live-ankkuri: uusin snapshot (jos olemassa)
+    # live-ankkuri: uusin skrapaus-snapshot (jos olemassa)
     latest_snap = await db.snapshots.find_one(
         {"fuel": fuel, "region": "Suomi"},
         sort=[("ts", -1)],
     )
-    live_anchor = None
-    if latest_snap:
-        live_anchor = (latest_snap.get("cheap_sample_avg")
-                       or latest_snap.get("national_avg"))
+    live_anchor = latest_snap.get("cheap_sample_avg") if latest_snap else None
+
+    # Tarvitsemme vähintään YHDEN live-pisteen (capture tai snapshot).
+    # Vähäiselläkin datalla predict_tomorrow ankkuroi fundamental_anchoriin
+    # + AI:hin; MA/LR/ES degradoituvat hallitusti.
+    if not series_pairs and live_anchor is None:
+        raise HTTPException(
+            400,
+            "ei vielä live-dataa - ennuste tarvitsee vähintään yhden "
+            "skrapauksen tai daily_tracker-capturen. Aja "
+            "POST /api/track/run-all.",
+        )
+    dates = [d for d, _ in series_pairs]
+    prices = [p for _, p in series_pairs]
+
+    # rinnakkain: Brent + FX + uutiset
+    brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
+    fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
+    news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
 
     brent_series, fx_series, headlines = await asyncio.gather(
         brent_task, fx_task, news_task
     )
     brent_val = factors_mod.latest_value(brent_series)
     fx_val = factors_mod.latest_value(fx_series)
+    brent_chg = factors_mod.change_frac(brent_series, 5)
+    fx_chg = factors_mod.change_frac(fx_series, 5)
 
     result = await predict_tomorrow(
         fuel, dates, prices, brent_val, fx_val,
         live_today_price=live_anchor,
         news_headlines=headlines,
         region=region,
+        brent_chg=brent_chg,
+        eur_usd_chg=fx_chg,
     )
 
-    # data source provenance — surface this so the UI can show it's real
+    # data source provenance — vain live-kerätty data
     result["data_sources"] = {
-        "statfin_monthly_points": len(statfin_rows),
         "tracker_captures": len(tracker_rows),
         "combined_points": len(series_pairs),
+        "source": "live_scrape_only",
     }
 
     # tallenna ennuste tulevan päivän accuracy-trackausta varten
@@ -665,16 +552,37 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     # kerää kaikki "tuoreet" havainnot
     all_obs: list[dict] = []
 
-    # polttoaine.net: date-kenttä = "16.05." → tämä päivä = 0h, eilen = 24h
+    # polttoaine.net antaa vain päivämäärän "16.05." (ei kellonaikaa). Emme
+    # KEKSI tuntilukemaa: ikä = todellinen aika, joka on kulunut kyseisen
+    # raportointipäivän Helsinki-keskiyöstä (konservatiivinen yläraja, ei
+    # fabrikoitu arvo). Tuntiresoluutiota ei väitetä olevan.
+    now_hel = now_ts.astimezone(tracker_mod.HELSINKI)
+
+    def _poltt_age_hours(date_text: str) -> float:
+        m = re.match(r"^\s*(\d{1,2})\.(\d{1,2})\.?\s*$", date_text or "")
+        if not m:
+            return 999.0
+        day, month = int(m.group(1)), int(m.group(2))
+        year = now_hel.year
+        try:
+            report_mid = datetime(year, month, day,
+                                  tzinfo=tracker_mod.HELSINKI)
+        except ValueError:
+            return 999.0
+        # vuodenvaihteen kierto: jos päivä on tulevaisuudessa, edellinen vuosi
+        if report_mid.date() > now_hel.date() + timedelta(days=2):
+            try:
+                report_mid = datetime(year - 1, month, day,
+                                      tzinfo=tracker_mod.HELSINKI)
+            except ValueError:
+                return 999.0
+        delta_h = (now_hel - report_mid).total_seconds() / 3600.0
+        return delta_h if delta_h >= 0 else 999.0
+
     if isinstance(poltt_rows, list):
         for r in poltt_rows:
             date_text = (r.get("date") or "").strip()
-            if date_text == today_short:
-                age = 2.0  # arvio: päivityksiä tehdään pitkin päivää
-            elif date_text == yesterday_short:
-                age = 26.0
-            else:
-                age = 999.0
+            age = round(_poltt_age_hours(date_text), 1)
             if age <= max_age_hours:
                 all_obs.append({
                     "region": r["city"],
@@ -778,15 +686,20 @@ async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
     # hae toteutuneet
     method_errors: dict[str, list[float]] = {
         "moving_average": [], "linear_regression": [], "exp_smoothing": [],
-        "ai_llm": [], "ensemble": [],
+        "fundamental_anchor": [], "ai_llm": [], "ensemble": [],
     }
     rows = []
     for p in preds:
-        actual_doc = await db.history.find_one(
-            {"fuel": fuel, "region": region, "date": p["target_date"]},
-            {"_id": 0},
+        # "Toteutunut" = AITO skrapattu halvin kyseiseltä päivältä
+        # (daily_tracker), EI mallinnettu/kuukausi-Statfin-arvo. Jos päivältä
+        # on useampi capture (14:00/21:00), käytetään myöhäisintä.
+        actual_doc = await db.daily_tracker.find_one(
+            {"fuel": fuel, "region": region, "date": p["target_date"],
+             "actual_cheapest": {"$ne": None}},
+            {"_id": 0, "actual_cheapest": 1},
+            sort=[("hour", -1)],
         )
-        actual = actual_doc.get("price") if actual_doc else None
+        actual = actual_doc.get("actual_cheapest") if actual_doc else None
         row = {
             "target_date": p["target_date"],
             "actual": actual,
@@ -822,21 +735,31 @@ async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
 
 # ---------------- daily prediction-vs-actual tracker ----------------
 
+async def _notify_async(captures: list[dict]) -> None:
+    """Send ntfy notification in a thread so it doesn't block the response."""
+    loop = asyncio.get_event_loop()
+    try:
+        await loop.run_in_executor(executor, notify_mod.send_daily_summary, captures)
+    except Exception as e:
+        logger.warning("background ntfy failed: %s", e)
+
+
 @app.post("/api/track/run")
 async def track_run(fuel: str = Query("95E10")):
     """Aja päivän capture nyt (skraapaa halvin + ennusta huominen).
     Idempotentti: saman päivän uusinta-ajo korvaa rivin.
-    Vain support fuels.
+    Lähettää ntfy-ilmoituksen jokaisen capturen jälkeen.
     """
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
     doc = await tracker_mod.capture_daily(db, executor, fuel)
-    doc.pop("prediction_full", None)  # iso, jätetään pois yhdestä endpointista
+    doc.pop("prediction_full", None)
+    asyncio.create_task(_notify_async([doc]))
     return doc
 
 
 @app.post("/api/track/run-all")
-async def track_run_all(notify: bool = Query(False)):
+async def track_run_all(notify: bool = Query(True)):
     out = []
     for fuel in FUELS:
         doc = await tracker_mod.capture_daily(db, executor, fuel)
@@ -844,7 +767,6 @@ async def track_run_all(notify: bool = Query(False)):
     pushed = False
     if notify:
         pushed = notify_mod.send_daily_summary(out)
-    # strip large field from response
     for d in out:
         d.pop("prediction_full", None)
     return {"captured": out, "ntfy_sent": pushed}
@@ -870,6 +792,125 @@ async def notify_test():
         raise HTTPException(404, "no captures in db yet; run /api/track/run-all first")
     ok = notify_mod.send_daily_summary(captures)
     return {"sent": ok, "fuels": [c["fuel"] for c in captures]}
+
+
+# ---------------- password-protected manual trigger (Postman) ----------------
+
+class AdminRequest(BaseModel):
+    password: str = ""           # tai lähetä X-Admin-Token -header
+    action: str = "all"          # ping | capture | predict | all | notify
+    fuel: str = "all"            # all | 95E10 | diesel
+    region: str = "Suomi"
+    hour: Optional[int] = None   # pakota capture-slot; oletus nykyhetki
+    notify: bool = False
+
+
+def _check_admin(password: str) -> None:
+    token = os.environ.get("ADMIN_TOKEN")
+    if not token:
+        raise HTTPException(503, "admin endpoint disabled (set ADMIN_TOKEN)")
+    if not hmac.compare_digest(str(password or ""), str(token)):
+        raise HTTPException(401, "invalid admin password")
+
+
+@app.post("/api/admin/run")
+async def admin_run(req: AdminRequest,
+                    x_admin_token: Optional[str] = Header(default=None)):
+    """Salasanasuojattu manuaalinen liipaisin (Postman/curl).
+
+    Auth: body-kenttä `password` TAI header `X-Admin-Token`. Vertaa
+    ympäristömuuttujaan `ADMIN_TOKEN` (vakioaikainen vertailu). Jos
+    `ADMIN_TOKEN` puuttuu → 503 (endpoint pois käytöstä).
+
+    Esimerkki (Postman → POST {BACKEND}/api/admin/run, Body=raw JSON):
+        {
+          "password": "<ADMIN_TOKEN>",
+          "action": "all",
+          "fuel": "all",
+          "notify": true
+        }
+
+    action:
+      "ping"    - vain auth-testi (ei sivuvaikutuksia)
+      "capture" - skrapaa + tallenna daily_tracker (per fuel) NYT
+      "predict" - tuore ennuste → kirjoittaa `predictions`-kokoelman
+                  (tämä on se mitä UI näyttää /predict/latest -kautta)
+      "all"     - capture + predict (+ ntfy jos notify=true)
+      "notify"  - lähetä ntfy uusimmista captureista
+    """
+    _check_admin(req.password or x_admin_token or "")
+
+    action = (req.action or "all").lower()
+    if action not in ("ping", "capture", "predict", "all", "notify"):
+        raise HTTPException(400, f"unknown action {action!r}")
+    if req.fuel != "all" and req.fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {req.fuel}")
+    if req.region not in SUPPORTED_REGIONS:
+        raise HTTPException(400, f"unknown region {req.region}")
+
+    fuels = list(FUELS) if req.fuel == "all" else [req.fuel]
+    out: dict = {
+        "action": action,
+        "fuels": fuels,
+        "region": req.region,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if action == "ping":
+        out["ok"] = True
+        return out
+
+    captured: list[dict] = []
+    if action in ("capture", "all"):
+        results = []
+        for f in fuels:
+            try:
+                doc = await tracker_mod.capture_daily(
+                    db, executor, f, region=req.region, hour=req.hour)
+                captured.append(doc)
+                results.append({
+                    "fuel": f, "date": doc["date"], "hour": doc["hour"],
+                    "actual_cheapest": doc.get("actual_cheapest"),
+                    "actual_cheapest_city": doc.get("actual_cheapest_city"),
+                    "prediction_for_tomorrow_cheapest":
+                        doc.get("prediction_for_tomorrow_cheapest"),
+                })
+            except Exception as e:
+                results.append({"fuel": f, "error":
+                                f"{type(e).__name__}: {str(e)[:200]}"})
+        out["captured"] = results
+
+    if action in ("predict", "all"):
+        preds = []
+        for f in fuels:
+            try:
+                res = await run_prediction(
+                    PredictionRequest(fuel=f, region=req.region))
+                preds.append({
+                    "fuel": f,
+                    "target_date": res.get("target_date"),
+                    "ensemble": (res.get("ensemble") or {}).get("value"),
+                    "methods": {k: v.get("value")
+                                for k, v in (res.get("methods") or {}).items()},
+                    "data_sources": res.get("data_sources"),
+                })
+            except HTTPException as he:
+                preds.append({"fuel": f, "error": he.detail})
+            except Exception as e:
+                preds.append({"fuel": f, "error":
+                              f"{type(e).__name__}: {str(e)[:200]}"})
+        out["predicted"] = preds
+
+    if action == "notify" or (req.notify and action in ("capture", "all",
+                                                        "predict")):
+        try:
+            ok = notify_mod.send_daily_summary(captured or None)
+            out["ntfy_sent"] = ok
+        except Exception as e:
+            out["ntfy_sent"] = False
+            out["ntfy_error"] = f"{type(e).__name__}: {str(e)[:200]}"
+
+    return out
 
 
 class TrackBackfillPoint(BaseModel):
@@ -954,6 +995,7 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
         "today_date": rows[-1].get("date") if rows else None,
         "today_hour": rows[-1].get("hour") if rows else None,
         "today_captured_at": rows[-1].get("captured_at") if rows else None,
+        "today_by_city": rows[-1].get("by_city") if rows else None,
     }
     return {"fuel": fuel, "days": days, "rows": rows, "summary": summary}
 

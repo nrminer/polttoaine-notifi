@@ -10,6 +10,8 @@ import {
   Minus,
   Clock,
   Globe,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 import "./App.css";
@@ -44,6 +46,26 @@ const RANGE_OPTIONS = [
   { value: 365, label: "1 V" },
 ];
 
+const CHART_CITIES = [
+  "Suomi",
+  "Helsinki",
+  "Espoo",
+  "Vantaa",
+  "Tampere",
+  "Turku",
+  "Lahti",
+];
+const CHART_RANGES = [
+  { value: 14, label: "14 PV" },
+  { value: 30, label: "30 PV" },
+  { value: 90, label: "Kaikki" },
+];
+const CHART_SLOTS = [
+  { value: "all", label: "Molemmat" },
+  { value: 14, label: "14:00" },
+  { value: 21, label: "21:00" },
+];
+
 export default function App() {
   const [fuel, setFuel] = useState("95E10");
   const [range, setRange] = useState(90);
@@ -55,9 +77,34 @@ export default function App() {
   const [accuracy, setAccuracy] = useState(null);
   const [news, setNews] = useState([]);
   const [tracking, setTracking] = useState(null);
+  const [chartCity, setChartCity] = useState("Suomi");
+  const [chartRange, setChartRange] = useState(90);
+  const [chartSlot, setChartSlot] = useState("all");
   const [loading, setLoading] = useState({});
   const [seeded, setSeeded] = useState(false);
   const [error, setError] = useState(null);
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "dark";
+    const t = window.localStorage.getItem("theme");
+    return t === "light" || t === "dark" ? t : "dark"; // default: dark
+  });
+
+  useEffect(() => {
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    try {
+      window.localStorage.setItem("theme", theme);
+    } catch (e) {
+      /* ignore quota / privacy-mode errors */
+    }
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", isDark ? "#0A0F1C" : "#FFFFFF");
+  }, [theme]);
+
+  const toggleTheme = useCallback(
+    () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+    []
+  );
 
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
 
@@ -180,7 +227,7 @@ export default function App() {
   const loadTracking = useCallback(async (f) => {
     setLoad("tracking", true);
     try {
-      const { data } = await fetchTrackHistory(f, 60);
+      const { data } = await fetchTrackHistory(f, 90);
       setTracking(data);
     } catch (e) {
       console.warn("tracking failed", e);
@@ -277,6 +324,18 @@ export default function App() {
   const tomorrowVal = tomorrowCheapest;
   const tomorrowDelta = tomorrowVal != null && todayMin != null ? tomorrowVal - todayMin : null;
 
+  const filteredTrackingRows = useMemo(() => {
+    const rows = tracking?.rows || [];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - chartRange);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return rows.filter((r) => {
+      if (r.date < cutoffStr) return false;
+      if (chartSlot !== "all" && (r.hour ?? 20) !== chartSlot) return false;
+      return true;
+    });
+  }, [tracking, chartRange, chartSlot]);
+
   const isLoading = Object.values(loading).some(Boolean);
 
   return (
@@ -308,6 +367,15 @@ export default function App() {
                 </span>
               )}
             </div>
+            <button
+              data-testid="theme-toggle-btn"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
+              title={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
+              className="inline-flex items-center justify-center w-9 h-9 border border-line hover:bg-surface transition-colors"
+            >
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
             <button
               data-testid="refresh-prices-btn"
               onClick={handleRefreshAll}
@@ -345,7 +413,7 @@ export default function App() {
                 className="inline-flex items-center gap-2 px-3 h-10 bg-slate-100 text-secondary font-mono text-xs font-semibold"
               >
                 <Clock size={14} />
-                Auto: 06:00 + 20:00 (Helsinki)
+                Auto: 14:00 + 21:00 (Helsinki)
               </div>
               {error && (
                 <span data-testid="error-banner" className="text-signalUp font-mono text-xs">
@@ -391,7 +459,7 @@ export default function App() {
                 </div>
               </div>
               <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
-                Lähteet: polttoaine.net + tankille.fi (live, ≤24h) · automaattipäivitys klo 06:00 ja 20:00
+                Lähteet: polttoaine.net + tankille.fi (live, ≤24h) · automaattipäivitys klo 14:00 ja 21:00
               </div>
             </Card>
           </div>
@@ -449,6 +517,9 @@ export default function App() {
                   • <span className="font-mono text-accent">{prediction?.methods?.exp_smoothing?.value?.toFixed(3) ?? "—"}</span> · Holt-tasoitus
                 </li>
                 <li>
+                  • <span className="font-mono text-accent">{prediction?.methods?.fundamental_anchor?.value?.toFixed(3) ?? "—"}</span> · fundamenttiankkuri (Brent+FX)
+                </li>
+                <li>
                   • <span className="font-mono text-accent">{prediction?.methods?.ai_llm?.value?.toFixed(3) ?? "—"}</span> · AI / {formatModelName(prediction?.methods?.ai_llm?.model)}
                 </li>
               </ul>
@@ -458,7 +529,7 @@ export default function App() {
                 className="mt-6 inline-flex items-center gap-2 px-5 h-10 bg-accent/20 text-accent border border-accent/40 font-semibold text-sm cursor-default"
               >
                 <Clock size={16} />
-                Päivittyy automaattisesti 06:00 ja 20:00 Helsinki-aikaa
+                Päivittyy automaattisesti 14:00 ja 21:00 Helsinki-aikaa
               </button>
             </div>
           </div>
@@ -473,10 +544,12 @@ export default function App() {
               <div>
                 <CardLabel>Ennuste vs. toteutunut · halvin asema</CardLabel>
                 <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                  {fuel} · automaattinen otanta klo 06:00 ja 20:00 (Helsinki)
+                  {fuel} · automaattinen otanta klo 14:00 ja 21:00 (Helsinki)
                 </h3>
                 <p className="text-[11px] text-muted font-mono mt-1">
-                  Vain todellisia havaintoja. Sininen viiva = päivän halvin asema, harmaa risti = edellisen päivän ennuste tästä päivästä, keltainen pisteviiva = huomisen ennuste.
+                  {chartCity === "Suomi"
+                    ? "Vain todellisia havaintoja. Sininen = päivän halvin asema, harmaa risti = edellisen päivän ennuste, keltainen = huomisen ennuste."
+                    : `${chartCity}: sininen = kaupungin halvin asema, oranssi katkoviiva = kaupungin keskihinta. Kertyy klo 14:00 ja 21:00 captureista.`}
                 </p>
               </div>
               <div
@@ -485,16 +558,86 @@ export default function App() {
               >
                 <Clock size={11} />
                 {tracking?.summary?.today_date
-                  ? `viim. capture: ${tracking.summary.today_date}${
-                      tracking.summary.today_hour != null
-                        ? ` klo ${String(tracking.summary.today_hour).padStart(2, "0")}:00`
-                        : ""
+                  ? `viim. capture: ${tracking.summary.today_date} klo ${
+                      tracking.summary.today_captured_at
+                        ? (() => {
+                            const dt = new Date(tracking.summary.today_captured_at);
+                            return `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+                          })()
+                        : tracking.summary.today_hour != null
+                        ? `${String(tracking.summary.today_hour).padStart(2, "0")}:00`
+                        : "—"
                     }`
                   : "odottaa ensimmäistä captureeen"}
               </div>
             </div>
+            {/* CHART FILTERS */}
+            <div
+              data-testid="chart-filters"
+              className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 pb-4 border-b border-line"
+            >
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted mr-1">
+                  Alue
+                </span>
+                {CHART_CITIES.map((c) => (
+                  <button
+                    key={c}
+                    data-testid={`chart-city-${c}`}
+                    onClick={() => setChartCity(c)}
+                    className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
+                      chartCity === c
+                        ? "bg-nordDark text-white border-nordDark"
+                        : "bg-white text-secondary border-line hover:border-ink"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted mr-1">
+                  Jakso
+                </span>
+                {CHART_RANGES.map((r) => (
+                  <button
+                    key={r.value}
+                    onClick={() => setChartRange(r.value)}
+                    className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
+                      chartRange === r.value
+                        ? "bg-nordDark text-white border-nordDark"
+                        : "bg-white text-secondary border-line hover:border-ink"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted mr-1">
+                  Capture
+                </span>
+                {CHART_SLOTS.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => setChartSlot(s.value)}
+                    className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
+                      chartSlot === s.value
+                        ? "bg-nordDark text-white border-nordDark"
+                        : "bg-white text-secondary border-line hover:border-ink"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <TrackingChart
-              rows={tracking?.rows || []}
+              rows={filteredTrackingRows}
+              city={chartCity}
               tomorrow={
                 tracking?.summary?.tomorrow_prediction != null && tracking?.summary?.today_date
                   ? {
@@ -533,7 +676,7 @@ export default function App() {
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12">
-            <RegionalGrid data={regional} fuel={fuel} />
+            <RegionalGrid data={regional} fuel={fuel} cityData={current?.by_city} />
           </div>
         </div>
       </section>

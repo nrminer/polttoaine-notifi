@@ -57,3 +57,18 @@ def delta_pct(series):
     if not series or len(series) < 2:
         return None
     return (series[-1]["value"] - series[-2]["value"]) / series[-2]["value"] * 100.0
+
+
+def change_frac(series, lookback: int = 5):
+    """Fractional change over the last `lookback` samples (≈ trading days).
+
+    Returns e.g. 0.03 for a +3 % move. Robust to short series and Nones.
+    Used by the prediction model for Brent / EUR-USD pass-through."""
+    if not series or len(series) < 2:
+        return None
+    ref_idx = max(0, len(series) - 1 - lookback)
+    ref = series[ref_idx].get("value")
+    cur = series[-1].get("value")
+    if not ref:
+        return None
+    return (cur - ref) / ref
