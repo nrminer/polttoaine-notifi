@@ -14,9 +14,15 @@ import { fmtDateFi } from "../lib/utils";
 
 function TooltipBody({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
+  // label is the composite slot "YYYY-MM-DD HH"
+  const human = (() => {
+    if (!label) return "";
+    const [d, h] = String(label).split(" ");
+    return fmtDateFi(d) + (h ? ` · klo ${h}:00` : "");
+  })();
   return (
     <div className="bg-white border border-line shadow-lg px-3 py-2 font-mono text-xs">
-      <div className="text-secondary mb-1">{fmtDateFi(label)}</div>
+      <div className="text-secondary mb-1">{human}</div>
       {payload.map((p) => (
         p.value != null && (
           <div key={p.dataKey} className="flex justify-between gap-4 text-ink">
@@ -30,17 +36,26 @@ function TooltipBody({ active, payload, label }) {
 }
 
 export default function TrackingChart({ rows = [], tomorrow, height = 320 }) {
-  // Yhdistä actual + predicted + tomorrow-piste
-  const data = rows.map((r) => ({
-    date: r.date,
-    actual: r.actual_cheapest,
-    predicted: r.predicted_cheapest_for_today,
-  }));
+  // Build composite x-axis label: "2026-05-16 06" / "2026-05-16 20" so morning
+  // and evening captures appear as separate points.
+  const data = rows.map((r) => {
+    const hour = r.hour ?? 20;
+    const slot = `${r.date} ${String(hour).padStart(2, "0")}`;
+    return {
+      slot,
+      date: r.date,
+      hour,
+      actual: r.actual_cheapest,
+      predicted: r.predicted_cheapest_for_today,
+    };
+  });
 
   // huomisen ennustepiste yhdistetään lineaarisesti viimeisestä pisteestä
   if (rows.length && tomorrow?.date && tomorrow?.value != null) {
     data.push({
+      slot: `${tomorrow.date} 06`,
       date: tomorrow.date,
+      hour: 6,
       tomorrow: tomorrow.value,
     });
   }
@@ -69,11 +84,12 @@ export default function TrackingChart({ rows = [], tomorrow, height = 320 }) {
         <ComposedChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
           <CartesianGrid stroke="#E2E8F0" strokeDasharray="2 3" vertical={false} />
           <XAxis
-            dataKey="date"
-            tickFormatter={(d) => {
-              if (!d) return "";
+            dataKey="slot"
+            tickFormatter={(s) => {
+              if (!s) return "";
+              const [d, h] = s.split(" ");
               const [, m, day] = d.split("-");
-              return `${parseInt(day)}.${parseInt(m)}`;
+              return `${parseInt(day)}.${parseInt(m)} ${h}:00`;
             }}
             tick={{ fontSize: 11, fill: "#64748B" }}
             tickLine={false}

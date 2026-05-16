@@ -2,13 +2,24 @@ import React from "react";
 import { Sparkles, Activity, TrendingUp, Brain, Calculator } from "lucide-react";
 import { Card, CardLabel, DeltaBadge } from "./Card";
 import { fmtPrice, fmtDelta } from "../lib/utils";
+import { formatModelName } from "../lib/modelName";
 
 const META = {
   moving_average: { label: "Liukuva keskiarvo", Icon: Activity, sub: "7 pv" },
   linear_regression: { label: "Lineaarinen regressio", Icon: TrendingUp, sub: "30 pv" },
   exp_smoothing: { label: "Eksp. tasoitus", Icon: Sparkles, sub: "Holt α=0.4" },
-  ai_llm: { label: "AI / Claude 4.5", Icon: Brain, sub: "Sonnet" },
+  ai_llm: { Icon: Brain },  // label/sub built dynamically from model id
 };
+
+function aiLabelFor(model) {
+  // "Claude Opus 4.7" → label "AI / Claude Opus", sub "4.7"
+  const full = formatModelName(model); // "Claude Opus 4.7"
+  const parts = full.split(" ");
+  if (parts.length >= 3) {
+    return { label: `AI / ${parts[0]} ${parts[1]}`, sub: parts.slice(2).join(" ") };
+  }
+  return { label: `AI / ${full}`, sub: "" };
+}
 
 export default function MethodTable({ result }) {
   const methods = result?.methods || {};
@@ -27,6 +38,10 @@ export default function MethodTable({ result }) {
           const delta = v != null && current != null ? v - current : null;
           const lo = row.confidence_low;
           const hi = row.confidence_high;
+          // resolve label/sub dynamically for ai_llm
+          const dyn = key === "ai_llm" ? aiLabelFor(row.model) : null;
+          const label = dyn?.label ?? m.label;
+          const sub = dyn?.sub ?? m.sub;
           return (
             <div
               key={key}
@@ -36,9 +51,9 @@ export default function MethodTable({ result }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <m.Icon size={14} strokeWidth={2.4} className="text-brand" />
-                  <span className="font-semibold text-sm">{m.label}</span>
+                  <span className="font-semibold text-sm">{label}</span>
                   <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
-                    {m.sub}
+                    {sub}
                   </span>
                 </div>
                 <p className="text-xs text-secondary mt-1 leading-relaxed line-clamp-2">

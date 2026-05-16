@@ -840,12 +840,19 @@ class TrackBackfillPoint(BaseModel):
     actual_cheapest_city: Optional[str] = None
     actual_cheapest_source: Optional[str] = None
     region: str = "Suomi"
+    hour: int = 20  # default to evening slot for historical archive entries
 
 
 @app.post("/api/track/backfill")
-async def track_backfill(points: list[TrackBackfillPoint]):
+async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(False)):
     """Bulk-upsert historical daily_tracker rows from external sources
-    (e.g. previous version's notification archive). Idempotent."""
+    (e.g. previous version's notification archive). Idempotent on
+    (date, hour, fuel, region).
+    If clear=true, wipe daily_tracker first (use to reset bad / fake data)."""
+    cleared = 0
+    if clear:
+        res = await db.daily_tracker.delete_many({})
+        cleared = res.deleted_count
     inserted = 0
     updated = 0
     skipped = []
@@ -855,6 +862,7 @@ async def track_backfill(points: list[TrackBackfillPoint]):
             continue
         doc = {
             "date": p.date,
+            "hour": p.hour,
             "fuel": p.fuel,
             "region": p.region,
             "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -867,7 +875,7 @@ async def track_backfill(points: list[TrackBackfillPoint]):
             "prediction_for_tomorrow_cheapest": None,
         }
         res = await db.daily_tracker.update_one(
-            {"date": p.date, "fuel": p.fuel, "region": p.region},
+            {"date": p.date, "hour": p.hour, "fuel": p.fuel, "region": p.region},
             {"$set": doc},
             upsert=True,
         )
@@ -875,8 +883,8 @@ async def track_backfill(points: list[TrackBackfillPoint]):
             inserted += 1
         else:
             updated += 1
-    return {"inserted": inserted, "updated": updated, "skipped": skipped,
-            "total": len(points)}
+    return {"cleared": cleared, "inserted": inserted, "updated": updated,
+            "skipped": skipped, "total": len(points)}
 
 
 @app.get("/api/track/history")
@@ -887,8 +895,8 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
     cur = db.daily_tracker.find(
         {"fuel": fuel, "date": {"$gte": cutoff}},
         {"_id": 0, "prediction_full": 0},
-    ).sort("date", 1)
-    rows = await cur.to_list(length=days + 5)
+    ).sort([("date", 1), ("hour", 1)])
+    rows = await cur.to_list(length=days * 2 + 5)
     # tarkkuusyhteenveto
     errs = [
         abs(r["predicted_cheapest_for_today"] - r["actual_cheapest"])
@@ -916,7 +924,12 @@ async def on_startup():
         [("fuel", 1), ("region", 1), ("target_date", 1)], unique=True)
     await db.snapshots.create_index([("fuel", 1), ("ts", -1)])
     await db.daily_tracker.create_index(
-        [("fuel", 1), ("region", 1), ("date", 1)], unique=True)
+        [("fuel", 1), ("region", 1), ("date", 1), ("hour", 1)], unique=True)
+    # legacy index cleanup: old unique (fuel,region,date) blocks the new schema
+    try:
+        await db.daily_tracker.drop_index("fuel_1_region_1_date_1")
+    except Exception:
+        pass
     # taustaprosessi: 18:00 Helsinki-aika
     app.state.tracker_task = asyncio.create_task(
         tracker_mod.scheduler_loop(db, executor, FUELS)

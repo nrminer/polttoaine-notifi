@@ -92,51 +92,54 @@ async def _scrape_cheapest(fuel: str, executor) -> dict:
     }
 
 
-async def capture_daily(db, executor, fuel: str, region: str = "Suomi") -> dict:
-    """One day's capture. Idempotent: re-running same day overwrites the row."""
-    today = helsinki_today()
-    yesterday = today - timedelta(days=1)
+async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
+                        hour: int | None = None) -> dict:
+    """One scheduled capture (06:00 or 20:00 Helsinki). Idempotent on
+    (date, fuel, region, hour) — re-running the same slot overwrites it."""
+    now_hel = datetime.now(HELSINKI)
+    today = now_hel.date()
+    if hour is None:
+        # Snap current Helsinki hour to nearest scheduled slot
+        cur_h = now_hel.hour
+        hour = min(SCHEDULED_HOURS, key=lambda h: abs(h - cur_h))
     today_iso = today.isoformat()
-    yesterday_iso = yesterday.isoformat()
 
-    # 1) skraapaa tämän päivän halvin asema
+    # 1) skraapaa
     cheapest = await _scrape_cheapest(fuel, executor)
 
-    # 2) eilisen ennuste tälle päivälle (jos olemassa)
-    yesterday_doc = await db.daily_tracker.find_one(
-        {"date": yesterday_iso, "fuel": fuel, "region": region},
-        {"_id": 0},
-    )
-    predicted_for_today = (yesterday_doc or {}).get("prediction_for_tomorrow_cheapest")
-
-    # 3) aja ennustus huomiselle: käytä historiaa + tämän päivän halvinta ankkurina
-    # Hae kuluvan kuukauden snapshotit + tracker-historia
+    # 2) load chronological tracker history (one row per slot)
     tracker_hist = await db.daily_tracker.find(
         {"fuel": fuel, "region": region},
         {"_id": 0},
-    ).sort("date", 1).to_list(length=400)
+    ).sort([("date", 1), ("hour", 1)]).to_list(length=600)
 
-    # rakenna sarja: aiemmat actual_cheapest -arvot + nykyhetki
+    # the "predicted_cheapest_for_today" line on the chart compares the latest
+    # prior prediction to this slot's actual. We pick the most recent doc whose
+    # (date, hour) is strictly before this one and that has a tomorrow_prediction.
+    predicted_for_now = None
+    for r in reversed(tracker_hist):
+        r_date = r.get("date")
+        r_hour = r.get("hour", 20)  # legacy rows treated as evening
+        if (r_date, r_hour) < (today_iso, hour):
+            predicted_for_now = r.get("prediction_for_tomorrow_cheapest")
+            if predicted_for_now is not None:
+                break
+
+    # 3) build series for prediction
     series = [(r["date"], r["actual_cheapest"]) for r in tracker_hist
               if r.get("actual_cheapest") is not None]
-    # lisää tämä päivä viimeisenä
     if cheapest["price"] is not None:
         series.append((today_iso, cheapest["price"]))
 
     prediction_tomorrow = None
     prediction_full = None
     if cheapest["price"] is not None and len(series) >= 1:
-        # tarvitaan vähintään 7 pistettä aritmetiikkaan; muuten ennuste = tämä päivä
         dates = [d for d, _ in series]
         prices = [p for _, p in series]
-
-        # Brent + uutiset + FX
         loop = asyncio.get_event_loop()
         brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
         fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
-        news_task = loop.run_in_executor(
-            executor, news_mod.fetch_news, None, 14, 6
-        )
+        news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
         brent_series, fx_series, headlines = await asyncio.gather(
             brent_task, fx_task, news_task
         )
@@ -153,7 +156,6 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi") -> dict:
             prediction_tomorrow = full["ensemble"].get("value")
             prediction_full = full
         else:
-            # liian vähän dataa - käytä AI:ta yksinään
             ai = await predict_mod.ai_llm_predict(
                 fuel, prices, dates, brent_val, fx_val,
                 live_today_price=cheapest["price"],
@@ -167,9 +169,9 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi") -> dict:
                              "explanation": "Vähän historiaa - vain AI"},
             }
 
-    # 4) tallenna
     doc = {
         "date": today_iso,
+        "hour": hour,
         "fuel": fuel,
         "region": region,
         "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -178,14 +180,14 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi") -> dict:
         "actual_cheapest_city": cheapest.get("city"),
         "actual_cheapest_source": cheapest.get("source"),
         "stations_scanned": cheapest.get("count", 0),
-        "predicted_cheapest_for_today": predicted_for_today,
+        "predicted_cheapest_for_today": predicted_for_now,
         "prediction_for_tomorrow_cheapest": (
             round(prediction_tomorrow, 3) if prediction_tomorrow else None
         ),
         "prediction_full": prediction_full,
     }
     await db.daily_tracker.update_one(
-        {"date": today_iso, "fuel": fuel, "region": region},
+        {"date": today_iso, "hour": hour, "fuel": fuel, "region": region},
         {"$set": doc},
         upsert=True,
     )
@@ -207,14 +209,15 @@ async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
                 wait, target_hel.strftime("%Y-%m-%d %H:%M")
             )
             await asyncio.sleep(wait)
+            run_hour = target_hel.hour  # 6 or 20
             captured_docs: list[dict] = []
             for fuel in fuels:
                 try:
-                    doc = await capture_daily(db, executor, fuel)
+                    doc = await capture_daily(db, executor, fuel, hour=run_hour)
                     captured_docs.append(doc)
                     logger.info(
-                        "tracker captured %s: actual=%s predicted_tomorrow=%s",
-                        fuel, doc.get("actual_cheapest"),
+                        "tracker captured %s @%02dh: actual=%s predicted_tomorrow=%s",
+                        fuel, run_hour, doc.get("actual_cheapest"),
                         doc.get("prediction_for_tomorrow_cheapest")
                     )
                 except Exception as e:
