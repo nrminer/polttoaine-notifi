@@ -18,6 +18,7 @@ import "./App.css";
 import { Card, CardLabel, StatNumber, DeltaBadge } from "./components/Card";
 import FuelToggle from "./components/FuelToggle";
 import TrackingChart from "./components/TrackingChart";
+import CityAverageChart from "./components/CityAverageChart";
 import MethodTable from "./components/MethodTable";
 import AiAnalysis from "./components/AiAnalysis";
 import RegionalGrid from "./components/RegionalGrid";
@@ -654,6 +655,41 @@ export default function App() {
             <MethodTable result={prediction} />
           </div>
         </div>
+      </section>
+
+      {/* ALL-CITIES AVERAGE + PREDICTION (below cheapest-station section) */}
+      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
+        <Card testId="city-average-card" className="p-6">
+          <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
+            <div>
+              <CardLabel>Kaikkien kaupunkien keskihinta</CardLabel>
+              <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
+                {fuel} · kaupunkien keskihinta + huomisen arvio
+              </h3>
+              <p className="text-[11px] text-muted font-mono mt-1">
+                Ohuet viivat = kaupungin keskihinta (by_city, klo 14:00/21:00
+                capture). Paksu sininen = kaikkien kaupunkien keskiarvo. Keltainen
+                katkoviiva = huomisen arvio (kaikkien ka. + ennustettu
+                markkinaliike). Käyttää samaa Jakso/Capture-suodatusta yllä.
+              </p>
+            </div>
+          </div>
+          <CityAverageChart
+            rows={filteredTrackingRows}
+            marketDelta={
+              tracking?.summary?.tomorrow_prediction != null &&
+              tracking?.summary?.today_actual != null
+                ? tracking.summary.tomorrow_prediction -
+                  tracking.summary.today_actual
+                : null
+            }
+            tomorrowDate={
+              tracking?.summary?.today_date
+                ? getNextDay(tracking.summary.today_date)
+                : null
+            }
+          />
+        </Card>
       </section>
 
       {/* AI + NEWS */}

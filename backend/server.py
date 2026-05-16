@@ -1014,21 +1014,30 @@ async def on_startup():
         await db.daily_tracker.drop_index("fuel_1_region_1_date_1")
     except Exception:
         pass
-    # taustaprosessi: 18:00 Helsinki-aika
+    # taustaprosessi: ajastettu capture (14:00 / 21:00 Helsinki)
     app.state.tracker_task = asyncio.create_task(
         tracker_mod.scheduler_loop(db, executor, FUELS)
+    )
+
+    # taustaprosessi: aja AI-analyysi uudelleen kun uusia uutisia ilmestyy
+    async def _news_predict(fuel: str):
+        return await run_prediction(PredictionRequest(fuel=fuel, region="Suomi"))
+
+    app.state.news_task = asyncio.create_task(
+        tracker_mod.news_watch_loop(db, executor, FUELS, _news_predict)
     )
     logger.info("BensaVahti up - MONGO_URL=%s DB=%s", MONGO_URL, DB_NAME)
 
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    task = getattr(app.state, "tracker_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except Exception:
-            pass
+    for attr in ("tracker_task", "news_task"):
+        task = getattr(app.state, attr, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except Exception:
+                pass
     client.close()
     executor.shutdown(wait=False)

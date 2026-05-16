@@ -15,6 +15,7 @@ The frontend graph plots these rows over time:
 from __future__ import annotations
 import asyncio
 import logging
+import os
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -275,4 +276,88 @@ async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
             return
         except Exception as e:
             logger.exception("scheduler loop error: %s", e)
+            await asyncio.sleep(300)
+
+
+def _news_signature(items) -> frozenset:
+    """Vakaakuvaus suodatetuista uutisotsikoista (news_mod suodattaa jo
+    polttoaine/öljy-avainsanoilla). Muutos = uutta relevanttia uutista."""
+    return frozenset(
+        (it.get("title") or "").strip().lower()
+        for it in (items or [])
+        if (it.get("title") or "").strip()
+    )
+
+
+async def news_watch_loop(db, executor, fuels, predict_fn,
+                          poll_seconds: int | None = None,
+                          min_rerun_seconds: int = 900):
+    """Tarkkaile polttoaine-/öljyuutisia ja aja AI-analyysi (ennuste)
+    uudelleen kun suodatettu otsikkojoukko MUUTTUU.
+
+    - `predict_fn(fuel)` : async-callable joka ajaa tuoreen ennusteen ja
+      tallentaa sen `predictions`-kokoelmaan (sama mitä /api/predict/run tekee;
+      UI lukee tämän /api/predict/latest -kautta).
+    - Poll-väli `NEWS_WATCH_SECONDS` (oletus 1800 s); 0 = pois käytöstä.
+    - `min_rerun_seconds` rajoittaa LLM-kustannusta: ennustetta ei aja
+      uudelleen useammin kuin tämän välein vaikka uutisia tulisi tiuhaan.
+    - Vaatii EMERGENT_LLM_KEY:n (muuten AI-osa ei päivity → ei mieltä ajaa).
+    """
+    if not os.environ.get("EMERGENT_LLM_KEY"):
+        logger.info("news-watch disabled (EMERGENT_LLM_KEY missing)")
+        return
+    if poll_seconds is None:
+        try:
+            poll_seconds = int(os.environ.get("NEWS_WATCH_SECONDS", "1800"))
+        except ValueError:
+            poll_seconds = 1800
+    if poll_seconds <= 0:
+        logger.info("news-watch disabled (NEWS_WATCH_SECONDS<=0)")
+        return
+
+    logger.info("news-watch started (poll %ds, min rerun gap %ds)",
+                poll_seconds, min_rerun_seconds)
+    loop = asyncio.get_event_loop()
+    applied_sig: frozenset | None = None
+    last_rerun = 0.0
+
+    while True:
+        try:
+            items = await loop.run_in_executor(
+                executor, news_mod.fetch_news, None, 14, 12
+            )
+            sig = _news_signature(items)
+
+            # Ensimmäinen kierros: aseta perustaso, ÄLÄ aja uudelleen
+            # (vältetään rerun-ryöppy joka uudelleenkäynnistyksessä).
+            if applied_sig is None:
+                applied_sig = sig
+                logger.info("news-watch baseline set (%d headlines)", len(sig))
+                await asyncio.sleep(poll_seconds)
+                continue
+
+            now = asyncio.get_event_loop().time()
+            if sig != applied_sig and (now - last_rerun) >= min_rerun_seconds:
+                new_n = len(sig - applied_sig)
+                logger.info("news changed (%d new headlines) → rerun AI/predict",
+                            new_n)
+                for fuel in fuels:
+                    try:
+                        await predict_fn(fuel)
+                        logger.info("news-watch reran prediction for %s", fuel)
+                    except Exception as e:
+                        logger.warning("news-watch predict failed for %s: %s",
+                                        fuel, e)
+                applied_sig = sig
+                last_rerun = now
+            elif sig != applied_sig:
+                logger.info("news changed but throttled (min %ds gap) — "
+                            "will rerun on a later tick", min_rerun_seconds)
+
+            await asyncio.sleep(poll_seconds)
+        except asyncio.CancelledError:
+            logger.info("news-watch stopped")
+            return
+        except Exception as e:
+            logger.exception("news-watch loop error: %s", e)
             await asyncio.sleep(300)
