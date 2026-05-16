@@ -756,6 +756,53 @@ async def track_run_all():
     return {"captured": out}
 
 
+class TrackBackfillPoint(BaseModel):
+    date: str  # ISO date YYYY-MM-DD
+    fuel: str
+    actual_cheapest: float
+    actual_cheapest_station: Optional[str] = None
+    actual_cheapest_city: Optional[str] = None
+    actual_cheapest_source: Optional[str] = None
+    region: str = "Suomi"
+
+
+@app.post("/api/track/backfill")
+async def track_backfill(points: list[TrackBackfillPoint]):
+    """Bulk-upsert historical daily_tracker rows from external sources
+    (e.g. previous version's notification archive). Idempotent."""
+    inserted = 0
+    updated = 0
+    skipped = []
+    for p in points:
+        if p.fuel not in FUELS:
+            skipped.append({"date": p.date, "fuel": p.fuel, "reason": "unknown fuel"})
+            continue
+        doc = {
+            "date": p.date,
+            "fuel": p.fuel,
+            "region": p.region,
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "actual_cheapest": round(p.actual_cheapest, 3),
+            "actual_cheapest_station": p.actual_cheapest_station,
+            "actual_cheapest_city": p.actual_cheapest_city,
+            "actual_cheapest_source": p.actual_cheapest_source or "notification_archive",
+            "stations_scanned": 0,
+            "predicted_cheapest_for_today": None,
+            "prediction_for_tomorrow_cheapest": None,
+        }
+        res = await db.daily_tracker.update_one(
+            {"date": p.date, "fuel": p.fuel, "region": p.region},
+            {"$set": doc},
+            upsert=True,
+        )
+        if res.upserted_id is not None:
+            inserted += 1
+        else:
+            updated += 1
+    return {"inserted": inserted, "updated": updated, "skipped": skipped,
+            "total": len(points)}
+
+
 @app.get("/api/track/history")
 async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, le=365)):
     if fuel not in FUELS:
