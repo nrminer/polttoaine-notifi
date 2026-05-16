@@ -1,11 +1,13 @@
 import React from "react";
 import { Brain, Sparkles } from "lucide-react";
 import { Card, CardLabel } from "./Card";
+import { formatModelName } from "../lib/modelName";
 
 export default function AiAnalysis({ ai, brent, eurUsd }) {
   const explanation = ai?.explanation || "Aja ennustus saadaksesi AI-analyysi.";
   const direction = ai?.direction;
   const value = ai?.value;
+  const modelLabel = formatModelName(ai?.model);
 
   return (
     <Card
@@ -24,7 +26,7 @@ export default function AiAnalysis({ ai, brent, eurUsd }) {
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-4">
           <Brain size={14} className="text-accent" strokeWidth={2.4} />
-          <CardLabel className="text-accent">AI-analyysi · Claude Sonnet 4.5</CardLabel>
+          <CardLabel className="text-accent" data-testid="ai-model-label">AI-analyysi · {modelLabel}</CardLabel>
         </div>
         <p
           className="font-display text-2xl md:text-3xl tracking-tighter leading-tight"

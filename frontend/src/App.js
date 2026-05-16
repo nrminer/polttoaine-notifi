@@ -37,6 +37,7 @@ import {
   seedHistory,
 } from "./lib/api";
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
+import { formatModelName } from "./lib/modelName";
 import NewsCard from "./components/NewsCard";
 
 const RANGE_OPTIONS = [
@@ -332,7 +333,7 @@ export default function App() {
             </h1>
             <p className="text-secondary text-base md:text-lg mt-5 max-w-xl">
               Neljä rinnakkaista algoritmia (liukuva ka., lineaarinen regressio, eksponentiaalinen
-              tasoitus ja Claude Sonnet 4.5) yhdistettynä Brent-raakaöljyyn ja EUR/USD-kurssiin —
+              tasoitus ja {formatModelName(prediction?.methods?.ai_llm?.model)}) yhdistettynä Brent-raakaöljyyn ja EUR/USD-kurssiin —
               ennustaa{" "}
               <span className="font-mono font-semibold text-ink">95E10:n</span> ja{" "}
               <span className="font-mono font-semibold text-ink">dieselin</span> hinnan huomenna.
@@ -449,7 +450,7 @@ export default function App() {
                   • <span className="font-mono text-accent">{prediction?.methods?.exp_smoothing?.value?.toFixed(3) ?? "—"}</span> · Holt-tasoitus
                 </li>
                 <li>
-                  • <span className="font-mono text-accent">{prediction?.methods?.ai_llm?.value?.toFixed(3) ?? "—"}</span> · AI / Claude Sonnet 4.5
+                  • <span className="font-mono text-accent">{prediction?.methods?.ai_llm?.value?.toFixed(3) ?? "—"}</span> · AI / {formatModelName(prediction?.methods?.ai_llm?.model)}
                 </li>
               </ul>
               <button

@@ -34,6 +34,39 @@ logger = logging.getLogger("bensavahti.notify")
 WATCHED_CITIES = ("Helsinki", "Vantaa", "Espoo")
 FUEL_LABELS = {"95E10": "95E10", "diesel": "Diesel"}
 
+# sanity bounds for FI fuel prices (€/L) — drop parsing errors / stale junk
+PRICE_MIN_SANITY = 1.10
+PRICE_MAX_SANITY = 3.50
+PRICE_MEDIAN_DEV = 0.25
+
+
+def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
+    if not rows:
+        return []
+    hard = []
+    for r in rows:
+        p = r.get("price")
+        if not isinstance(p, (int, float)):
+            continue
+        if PRICE_MIN_SANITY <= p <= PRICE_MAX_SANITY:
+            hard.append(r)
+        else:
+            logger.warning("notify sanity[%s] drop %.3f at %s/%s",
+                           label, p, r.get("city"), r.get("station"))
+    if len(hard) < 3:
+        return hard
+    sorted_p = sorted(r["price"] for r in hard)
+    median = sorted_p[len(sorted_p) // 2]
+    out = []
+    for r in hard:
+        dev = abs(r["price"] - median) / median if median else 0
+        if dev > PRICE_MEDIAN_DEV:
+            logger.warning("notify sanity[%s] drop %.3f vs median %.3f at %s",
+                           label, r["price"], median, r.get("station"))
+            continue
+        out.append(r)
+    return out
+
 
 def _config() -> tuple[str, str, str, str] | None:
     server = (os.environ.get("NTFY_SERVER") or "https://ntfy.sh").rstrip("/")
@@ -83,15 +116,24 @@ def _cheapest_by_brand_in_city(rows: list[dict], city: str, brand: str) -> dict 
 
 def _format_city_block(city: str, polttoaine_rows: list[dict],
                       tankille_rows: list[dict]) -> list[str]:
+    """Pick cheapest station for `city`. tankille.fi is PRIMARY: when both
+    sources agree (or tankille is cheaper), we use tankille. Only fall back to
+    polttoaine.net when tankille has no data for that city."""
     out: list[str] = []
-    p_pick = _cheapest_in_city(polttoaine_rows, city)
     t_pick = _cheapest_in_city(tankille_rows, city)
-    # display price = cheapest of the two sources for that city
-    best = None
-    if p_pick and t_pick:
-        best = p_pick if p_pick["price"] <= t_pick["price"] else t_pick
+    p_pick = _cheapest_in_city(polttoaine_rows, city)
+
+    # Choose primary
+    if t_pick and p_pick:
+        # if tankille is suspiciously far above polttoaine (>10% diff) → trust polttoaine
+        diff_pct = (t_pick["price"] - p_pick["price"]) / p_pick["price"]
+        if diff_pct > 0.10:
+            best = p_pick
+        else:
+            best = t_pick  # tankille primary
     else:
-        best = p_pick or t_pick
+        best = t_pick or p_pick
+
     if not best:
         out.append(f"{city}: ei tietoa")
         return out
@@ -104,22 +146,15 @@ def _format_city_block(city: str, polttoaine_rows: list[dict],
     else:
         out.append(name)
 
-    # source comparison row — try to look up same-brand price in the OTHER source
+    # comparison line — show both sources when available for the same brand
     brand = _brand_of(name)
-    if best.get("source") == "polttoaine.net":
-        p_price = best["price"]
-        t_match = _cheapest_by_brand_in_city(tankille_rows, city, brand)
-        t_price = t_match["price"] if t_match else None
-    else:
-        t_price = best["price"]
-        p_match = _cheapest_by_brand_in_city(polttoaine_rows, city, brand)
-        p_price = p_match["price"] if p_match else None
-
+    t_match = _cheapest_by_brand_in_city(tankille_rows, city, brand) if tankille_rows else None
+    p_match = _cheapest_by_brand_in_city(polttoaine_rows, city, brand) if polttoaine_rows else None
     parts = []
-    if p_price is not None:
-        parts.append(f"polttoaine.net {p_price:.3f}")
-    if t_price is not None:
-        parts.append(f"tankille.fi {t_price:.3f}")
+    if p_match:
+        parts.append(f"polttoaine.net {p_match['price']:.3f}")
+    if t_match:
+        parts.append(f"tankille.fi {t_match['price']:.3f}")
     if parts:
         out.append("Lähteet: " + " | ".join(parts))
     return out
@@ -156,26 +191,28 @@ def build_detailed_message() -> tuple[str, str]:
         f_pd = ex.submit(polttoaine.fetch_prices, "diesel")
         f_t95 = ex.submit(tankille.fetch_prices, "95E10")
         f_td = ex.submit(tankille.fetch_prices, "diesel")
-        p95 = _safe(f_p95.result)
-        pd = _safe(f_pd.result)
-        t95 = _safe(f_t95.result)
-        td = _safe(f_td.result)
+        p95 = _sanity_filter(_safe(f_p95.result), "polttoaine-95E10")
+        pd = _sanity_filter(_safe(f_pd.result), "polttoaine-diesel")
+        t95 = _sanity_filter(_safe(f_t95.result), "tankille-95E10")
+        td = _sanity_filter(_safe(f_td.result), "tankille-diesel")
 
-    # Header: cheapest 95E10 among WATCHED_CITIES
+    # Header: cheapest 95E10 among WATCHED_CITIES — tankille primary, polttoaine
+    # used only as backup or when tankille looks far off.
+    def _city_pick(c: str) -> dict | None:
+        t = _cheapest_in_city(t95, c)
+        p = _cheapest_in_city(p95, c)
+        if t and p:
+            diff = (t["price"] - p["price"]) / p["price"]
+            return p if diff > 0.10 else t  # if tankille >10% higher → trust polttoaine
+        return t or p
+
     cheapest_watched = None
     for c in WATCHED_CITIES:
-        cand = []
-        cp = _cheapest_in_city(p95, c)
-        ct = _cheapest_in_city(t95, c)
-        if cp:
-            cand.append(cp)
-        if ct:
-            cand.append(ct)
+        cand = _city_pick(c)
         if not cand:
             continue
-        best = min(cand, key=lambda r: r["price"])
-        if cheapest_watched is None or best["price"] < cheapest_watched["price"]:
-            cheapest_watched = best
+        if cheapest_watched is None or cand["price"] < cheapest_watched["price"]:
+            cheapest_watched = cand
 
     if cheapest_watched:
         header = (f"⛽ 95E10 alkaen {cheapest_watched['price']:.3f} EUR "

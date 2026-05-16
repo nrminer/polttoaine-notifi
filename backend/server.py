@@ -70,23 +70,71 @@ app.add_middleware(
 
 # ---------------- skrapaus-apurit ----------------
 
+# Realistic Finnish fuel price bounds (€/L). Anything outside is almost certainly
+# a parsing error or stale junk from a scraper.
+PRICE_MIN_SANITY = 1.10
+PRICE_MAX_SANITY = 3.50
+# Per-batch outlier threshold: drop rows whose price deviates more than this
+# fraction from the batch median.
+PRICE_MEDIAN_DEV = 0.25
+
+
+def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
+    """Drop obviously-wrong prices.
+    1. Hard bounds (1.10 .. 3.50 EUR/L)
+    2. > 25% deviation from the batch median
+    """
+    if not rows:
+        return rows
+    kept_hard: list[dict] = []
+    for r in rows:
+        p = r.get("price")
+        if not isinstance(p, (int, float)):
+            continue
+        if p < PRICE_MIN_SANITY or p > PRICE_MAX_SANITY:
+            logger.warning("sanity[%s] drop hard %.3f at %s/%s",
+                           label, p, r.get("city"), r.get("station"))
+            continue
+        kept_hard.append(r)
+    if len(kept_hard) < 3:
+        return kept_hard
+    sorted_p = sorted(r["price"] for r in kept_hard)
+    median = sorted_p[len(sorted_p) // 2]
+    kept = []
+    for r in kept_hard:
+        dev = abs(r["price"] - median) / median if median else 0
+        if dev > PRICE_MEDIAN_DEV:
+            logger.warning("sanity[%s] drop median %.3f vs median %.3f at %s",
+                           label, r["price"], median, r.get("station"))
+            continue
+        kept.append(r)
+    return kept
+
+
 async def _scrape_all(fuel: str) -> list[dict]:
-    """Hae nykyhinnat molemmista skrapereista taustasäikeessä."""
+    """Hae nykyhinnat molemmista skrapereista taustasäikeessä.
+
+    tankille.fi on PRIMÄÄRINEN lähde (käyttäjäkokemuksen perusteella tarkempi
+    ja tuoreempi). polttoaine.net toimii vertailu/täydennyslähteenä. Molemmista
+    suodatetaan järjettömät hinnat (out-of-range tai >25% medianista poikkeavat)
+    ennen yhdistämistä."""
     loop = asyncio.get_event_loop()
-    p_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
     t_task = loop.run_in_executor(executor, tankille.fetch_prices, fuel)
+    p_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
     try:
-        p_rows, t_rows = await asyncio.gather(p_task, t_task, return_exceptions=True)
+        t_rows, p_rows = await asyncio.gather(t_task, p_task, return_exceptions=True)
     except Exception as e:
         logger.warning("scrape error: %s", e)
         return []
-    rows = []
-    for r in (p_rows, t_rows):
-        if isinstance(r, list):
-            rows.extend(r)
-        else:
-            logger.warning("scraper failed: %s", r)
-    return rows
+    # filter each source independently against its own median first
+    t_clean = _sanity_filter(t_rows if isinstance(t_rows, list) else [], "tankille")
+    p_clean = _sanity_filter(p_rows if isinstance(p_rows, list) else [], "polttoaine")
+    if not isinstance(t_rows, list):
+        logger.warning("tankille failed: %s", t_rows)
+    if not isinstance(p_rows, list):
+        logger.warning("polttoaine failed: %s", p_rows)
+    # tankille first → its rows are preferred when downstream picks "first match"
+    return t_clean + p_clean
 
 
 def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
