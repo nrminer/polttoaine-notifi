@@ -485,7 +485,11 @@ export default function App() {
               >
                 <Clock size={11} />
                 {tracking?.summary?.today_date
-                  ? `viim. capture: ${tracking.summary.today_date}`
+                  ? `viim. capture: ${tracking.summary.today_date}${
+                      tracking.summary.today_hour != null
+                        ? ` klo ${String(tracking.summary.today_hour).padStart(2, "0")}:00`
+                        : ""
+                    }`
                   : "odottaa ensimmäistä captureeen"}
               </div>
             </div>

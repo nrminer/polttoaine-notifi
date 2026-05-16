@@ -952,6 +952,8 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
         "tomorrow_prediction": rows[-1].get("prediction_for_tomorrow_cheapest") if rows else None,
         "today_actual": rows[-1].get("actual_cheapest") if rows else None,
         "today_date": rows[-1].get("date") if rows else None,
+        "today_hour": rows[-1].get("hour") if rows else None,
+        "today_captured_at": rows[-1].get("captured_at") if rows else None,
     }
     return {"fuel": fuel, "days": days, "rows": rows, "summary": summary}
 
