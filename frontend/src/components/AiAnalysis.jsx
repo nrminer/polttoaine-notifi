@@ -26,7 +26,7 @@ export default function AiAnalysis({ ai, brent, eurUsd }) {
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-4">
           <Brain size={14} className="text-accent" strokeWidth={2.4} />
-          <CardLabel className="text-accent" data-testid="ai-model-label">AI-analyysi · {modelLabel}</CardLabel>
+          <CardLabel className="text-accent" data-testid="ai-model-label">AI-analyysi{modelLabel ? ` · ${modelLabel}` : ""}</CardLabel>
         </div>
         <p
           className="font-display text-2xl md:text-3xl tracking-tighter leading-tight"

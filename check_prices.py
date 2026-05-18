@@ -25,7 +25,7 @@ from pathlib import Path
 
 import requests
 
-from scrapers import polttoaine, tankille, bensahinta
+from scrapers import polttoaine, tankille
 
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 STATE_PATH = Path(os.environ.get("STATE_PATH", "state.json"))
@@ -43,8 +43,7 @@ def load_config() -> dict:
 def gather(fuel: str) -> list[dict]:
     rows: list[dict] = []
     for name, mod in [("polttoaine", polttoaine),
-                      ("tankille", tankille),
-                      ("bensahinta", bensahinta)]:
+                      ("tankille", tankille)]:
         try:
             rows.extend(mod.fetch_prices(fuel))
         except Exception as e:

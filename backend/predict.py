@@ -484,12 +484,61 @@ async def ai_llm_predict(fuel: str, prices: list[float],
 
 # ---------------- ensemble ----------------
 
+# Itsekalibrointi: menetelmää aletaan painottaa sen TOTEUTUNEEN tarkkuuden
+# mukaan vasta kun siitä on tarpeeksi aitoa osumavertailua; siirtymä
+# kiinteistä painoista opittuihin on asteittainen (per menetelmä).
+_CALIB_MIN_N = 5            # vähimmäismäärä toteumavertailuja ennen oppimista
+_CALIB_TARGET_N = 20        # tällä otoksella luotetaan täysin opittuun painoon
+_CALIB_MAE_FLOOR = 0.001    # estää 1/MAE-räjähdyksen kun MAE ≈ 0
+
+
+def _calibrated_weights(fixed: dict, method_mae: dict | None):
+    """Sekoita kiinteät regime-painot menetelmäkohtaiseen 1/MAE-painoon.
+
+    `method_mae` = {menetelmä: {"n": int, "mae": float}} laskettuna AIDOISTA
+    daily_tracker-captureista (ei synteettistä dataa). Menetelmälle joka ei
+    vielä yllä `_CALIB_MIN_N`-otokseen käytetään sellaisenaan kiinteää painoa,
+    joten funktio palautuu nykykäytökseen kunnes oikeaa osumadataa kertyy.
+    Palauttaa (painot, selitysteksti)."""
+    if not method_mae:
+        return fixed, "kiinteät painot"
+
+    inv = {}
+    for m in fixed:
+        rec = method_mae.get(m) or {}
+        n = rec.get("n") or 0
+        mae = rec.get("mae")
+        if n >= _CALIB_MIN_N and mae is not None and mae > 0:
+            inv[m] = (1.0 / max(float(mae), _CALIB_MAE_FLOOR), n)
+
+    inv_sum = sum(w for w, _ in inv.values())
+    if inv_sum <= 0:
+        return fixed, "kiinteät painot (ei vielä tarpeeksi toteumia)"
+
+    out = {}
+    learned_n = 0
+    for m, fw in fixed.items():
+        if m in inv:
+            learned_share = inv[m][0] / inv_sum
+            lam = min(1.0, inv[m][1] / _CALIB_TARGET_N)  # otosluottamus
+            out[m] = lam * learned_share + (1.0 - lam) * fw
+            learned_n = max(learned_n, inv[m][1])
+        else:
+            out[m] = fw
+    total = sum(out.values())
+    if total > 0:
+        out = {k: v / total for k, v in out.items()}
+    return out, f"itsekalibroitu (toteutunut MAE, n={learned_n})"
+
+
 def ensemble(predictions: dict, live_anchor: float | None = None,
-             n_daily: int = 0) -> dict:
+             n_daily: int = 0, method_mae: dict | None = None) -> dict:
     """Datalaatutietoinen painotettu yhdistelmä.
 
     Kun aitoa päivädataa on vähän (kuukausidata hallitsee), tilastomenetelmät
     ylisovittavat → painotetaan ankkuripohjaista fundamental_anchoria ja AI:ta.
+    `method_mae` (valinnainen): menetelmäkohtainen toteutunut MAE aidoista
+    captureista → painot itsekalibroituvat tarkimpien menetelmien suuntaan.
     Lopputulos rajataan ±0.06 €/L live-hinnasta."""
     if n_daily >= 14:
         weights = {
@@ -510,6 +559,9 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
             "linear_regression": 0.04,
         }
         mode = "ohut päivädata → ankkuripainotus"
+
+    weights, calib_note = _calibrated_weights(weights, method_mae)
+    mode = f"{mode}, {calib_note}"
 
     values = []
     total_w = 0.0
@@ -552,13 +604,15 @@ async def predict_tomorrow(fuel: str,
                            news_headlines: list[dict] | None = None,
                            region: str = "Suomi",
                            brent_chg: float | None = None,
-                           eur_usd_chg: float | None = None) -> dict:
+                           eur_usd_chg: float | None = None,
+                           method_mae: dict | None = None) -> dict:
     """Aja kaikki menetelmät ja palauta ennusteet + datalaatutietoinen ensemble.
 
     `brent_chg` / `eur_usd_chg` = murto-osamuutos (esim. 0.03 = +3 %) viim.
     ~5 pörssipäivältä; käytetään Brent-EUR-pass-throughiin. Jos live-hinta on
     annettu, se on ankkuri sekä historian viimeisenä pisteenä että ensemble-
-    rajauksessa."""
+    rajauksessa. `method_mae` = menetelmäkohtainen toteutunut MAE aidoista
+    captureista → ensemble itsekalibroituu (None = kiinteät painot)."""
     if live_today_price is not None and prices:
         prices = list(prices)
         prices[-1] = float(live_today_price)
@@ -588,7 +642,8 @@ async def predict_tomorrow(fuel: str,
         "fundamental_anchor": fa,
         "ai_llm": ai,
     }
-    ens = ensemble(predictions, live_anchor=live_today_price, n_daily=n_daily)
+    ens = ensemble(predictions, live_anchor=live_today_price, n_daily=n_daily,
+                   method_mae=method_mae)
     return {
         "fuel": fuel,
         "region": region,

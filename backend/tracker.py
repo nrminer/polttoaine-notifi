@@ -138,6 +138,44 @@ async def _scrape_cheapest(fuel: str, executor) -> dict:
     }
 
 
+async def realized_method_mae(db, fuel: str, region: str = "Suomi",
+                              days: int = 30) -> dict:
+    """Menetelmäkohtainen TOTEUTUNUT MAE viimeisen `days` päivän ajalta.
+
+    Vertaa tallennettuja `predictions.methods`-pisteitä AITOON toteumaan
+    (`daily_tracker.actual_cheapest`, myöhäisin capture/päivä) — EI synteettistä
+    eikä mallinnettua dataa. Palauttaa {menetelmä: {"n": int, "mae": float|None}}
+    jonka ensemble käyttää itsekalibrointiin. Sama totuuslähde kuin
+    /api/accuracy:lla; tyhjä historia → kaikki n=0 (ensemble palaa kiinteisiin
+    painoihin)."""
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
+    preds = await db.predictions.find(
+        {"fuel": fuel, "region": region, "target_date": {"$gte": cutoff}},
+        {"_id": 0, "target_date": 1, "methods": 1},
+    ).sort("target_date", 1).to_list(length=days + 5)
+
+    methods = ("moving_average", "linear_regression", "exp_smoothing",
+               "fundamental_anchor", "ai_llm")
+    errs: dict[str, list] = {m: [] for m in methods}
+    for p in preds:
+        actual_doc = await db.daily_tracker.find_one(
+            {"fuel": fuel, "region": region, "date": p["target_date"],
+             "actual_cheapest": {"$ne": None}},
+            {"_id": 0, "actual_cheapest": 1},
+            sort=[("hour", -1)],
+        )
+        actual = actual_doc.get("actual_cheapest") if actual_doc else None
+        if actual is None:
+            continue
+        for m, v in (p.get("methods") or {}).items():
+            if m in errs and v is not None:
+                errs[m].append(abs(v - actual))
+    return {
+        m: {"n": len(e), "mae": (sum(e) / len(e)) if e else None}
+        for m, e in errs.items()
+    }
+
+
 async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
                         hour: int | None = None) -> dict:
     """One scheduled capture (14:00 or 21:00 Helsinki). Idempotent on
@@ -200,6 +238,8 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         # yhdistää saatavilla olevat. Vanha "<7 pistettä → vain AI" -haara
         # jätti fundamental_anchorin (ja MA/LR/ES:n) kokonaan pois juuri
         # cold-startissa, jolloin niitä eniten tarvitaan.
+        # itsekalibrointi: menetelmien toteutunut MAE aidoista captureista
+        mae = await realized_method_mae(db, fuel, region)
         full = await predict_mod.predict_tomorrow(
             fuel, dates, prices, brent_val, fx_val,
             live_today_price=cheapest["price"],
@@ -207,8 +247,14 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
             region=region,
             brent_chg=brent_chg,
             eur_usd_chg=fx_chg,
+            method_mae=mae,
         )
-        prediction_tomorrow = full["ensemble"].get("value") or cheapest["price"]
+        # VAIN aito malliennuste talletetaan. Jos ensemble ei tuottanut
+        # arvoa (esim. cold-start, kaikki menetelmät None), EI fabrikoida
+        # "ennustetta" tämän päivän hinnasta — jätetään None, jotta
+        # tarkkuusmittari (track_history MAE / within-1c) ei pisteytä
+        # naiivia carry-forwardia mallin ennusteena.
+        prediction_tomorrow = full["ensemble"].get("value")
         prediction_full = full
 
     doc = {

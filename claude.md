@@ -113,7 +113,6 @@ The backend has NO frontend assets — pure API.
             ├── RangeToggle.jsx … 30/90/365 day toggle (currently UNUSED — chart removed)
             ├── TrackingChart.jsx … prediction-vs-actual line chart; city mode (cheapest+avg), filters
             ├── CityAverageChart.jsx … all-cities average + market-move projection
-            ├── HistoryChart.jsx  … LEGACY long-history area chart (NOT rendered in App.js)
             ├── MethodTable.jsx  … 5-method comparison + ensemble (incl. fundamenttiankkuri)
             ├── AiAnalysis.jsx   … Claude analysis card
             ├── FactorsCard.jsx  … Brent + EUR/USD sparklines

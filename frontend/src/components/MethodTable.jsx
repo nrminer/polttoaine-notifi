@@ -14,7 +14,8 @@ const META = {
 
 function aiLabelFor(model) {
   // "Claude Opus 4.7" → label "AI / Claude Opus", sub "4.7"
-  const full = formatModelName(model); // "Claude Opus 4.7"
+  const full = formatModelName(model); // "Claude Opus 4.7" | null
+  if (!full) return { label: "AI", sub: "ei ajettu" };
   const parts = full.split(" ");
   if (parts.length >= 3) {
     return { label: `AI / ${parts[0]} ${parts[1]}`, sub: parts.slice(2).join(" ") };

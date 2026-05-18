@@ -423,6 +423,10 @@ async def run_prediction(req: PredictionRequest):
     brent_chg = factors_mod.change_frac(brent_series, 5)
     fx_chg = factors_mod.change_frac(fx_series, 5)
 
+    # itsekalibrointi: menetelmien toteutunut MAE aidoista daily_tracker-
+    # captureista (sama totuuslähde kuin /api/accuracy)
+    method_mae = await tracker_mod.realized_method_mae(db, fuel, region)
+
     result = await predict_tomorrow(
         fuel, dates, prices, brent_val, fx_val,
         live_today_price=live_anchor,
@@ -430,6 +434,7 @@ async def run_prediction(req: PredictionRequest):
         region=region,
         brent_chg=brent_chg,
         eur_usd_chg=fx_chg,
+        method_mae=method_mae,
     )
 
     # data source provenance — vain live-kerätty data

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="index,follow" />
+    <title>Tietosuojaseloste — BensaVahti</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+      h1 { font-size: 1.6rem; margin: 0 0 4px; }
+      h2 { font-size: 1.1rem; margin: 36px 0 8px; color: #f8fafc; }
+      .updated { color: #94a3b8; font-size: 0.85rem; margin-bottom: 28px; }
+      p, li { color: #cbd5e1; font-size: 0.95rem; }
+      strong { color: #f1f5f9; }
+      code {
+        background: #1e293b; padding: 2px 6px; border-radius: 4px;
+        font-size: 0.85rem; color: #93c5fd;
+      }
+      a { color: #60a5fa; }
+      .lead {
+        background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+        padding: 16px 18px; margin: 0 0 8px;
+      }
+      .back { display: inline-block; margin-bottom: 24px; color: #60a5fa;
+        text-decoration: none; font-size: 0.9rem; }
+      hr { border: none; border-top: 1px solid #334155; margin: 40px 0; }
+      footer { color: #64748b; font-size: 0.8rem; margin-top: 40px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="/">&larr; Takaisin BensaVahtiin</a>
+      <h1>Tietosuojaseloste — BensaVahti</h1>
+      <div class="updated">Päivitetty: 2026-05-18</div>
+
+      <p class="lead">
+        <strong>Emme kerää sinusta mitään henkilötietoja.</strong> BensaVahti
+        on julkinen polttoaineen hintapalvelu, jossa ei ole käyttäjätilejä,
+        kirjautumista, lomakkeita, evästeitä eikä analytiikka- tai
+        seurantatyökaluja. Ainoat tiedot, joita liikkeellesi voi kertyä, ovat
+        ne tekniset tiedot, joita sovelluksen alustat (Railway ja Vercel)
+        keräävät automaattisesti osana normaalia palvelininfrastruktuuria.
+      </p>
+
+      <h2>1. Rekisterinpitäjä</h2>
+      <p>
+        BensaVahti on harrasteprojekti. Yhteydenotot:
+        <a href="mailto:adamallali4@gmail.com">adamallali4@gmail.com</a>
+      </p>
+
+      <h2>2. Mitä tietoja kerätään</h2>
+      <p><strong>Sovellus itse:</strong></p>
+      <ul>
+        <li>
+          <strong>Ei käyttäjätilejä, ei kirjautumista, ei lomakkeita.</strong>
+          Sovellus ei pyydä eikä tallenna nimeä, sähköpostia, sijaintia eikä
+          muita henkilötietoja.
+        </li>
+        <li><strong>Ei evästeitä.</strong> Sovellus ei aseta evästeitä.</li>
+        <li>
+          <strong>Ei analytiikkaa eikä seurantaa.</strong> Ei Google
+          Analyticsia, ei seurantapikseleitä, ei sormenjälkitunnistusta, ei
+          kolmannen osapuolen mainos- tai seurantaskriptejä.
+        </li>
+        <li>
+          <strong>Selaimen paikallinen muisti (localStorage):</strong>
+          sovellus tallentaa selaimeesi yhden asetuksen — valitsemasi teeman
+          (<code>theme</code>: vaalea/tumma). Tämä tieto pysyy laitteellasi,
+          sitä ei lähetetä palvelimelle eikä sen perusteella voi tunnistaa
+          sinua. Voit poistaa sen tyhjentämällä selaimen sivustodatan.
+        </li>
+      </ul>
+      <p><strong>Alustojen automaattiset lokit:</strong></p>
+      <p>
+        Sovelluksen frontend on Vercelissä ja backend Railwaylla. Nämä alustat
+        voivat normaalin palvelininfrastruktuurin osana kirjata automaattisesti
+        teknisiä pyyntötietoja, kuten IP-osoitteen, selaimen user-agentin ja
+        aikaleimoja (mm. käytön mittaamiseen ja palvelunestohyökkäysten
+        torjuntaan). Emme käytä näitä alustojen lokeja käyttäjien
+        tunnistamiseen tai profilointiin. Näiden tietojen käsittelyyn
+        sovelletaan alustojen omia tietosuojakäytäntöjä:
+      </p>
+      <ul>
+        <li>
+          Vercel:
+          <a href="https://vercel.com/legal/privacy-policy"
+            >vercel.com/legal/privacy-policy</a
+          >
+        </li>
+        <li>
+          Railway:
+          <a href="https://railway.app/legal/privacy"
+            >railway.app/legal/privacy</a
+          >
+        </li>
+      </ul>
+
+      <h2>3. Tietokanta</h2>
+      <p>
+        Backend tallentaa MongoDB Atlas -tietokantaan ainoastaan
+        <strong>julkista polttoaineen hintadataa</strong> (skrapattu
+        polttoaine.net- ja tankille.fi-sivuilta) sekä ennusteita ja niiden
+        osumatarkkuutta. Tietokanta ei sisällä henkilötietoja eikä yksittäisiin
+        käyttäjiin yhdistettävää dataa.
+      </p>
+
+      <h2>4. Push-ilmoitukset (ntfy.sh)</h2>
+      <p>
+        Ilmoitukset julkaistaan ntfy.sh-palvelun julkiseen aiheeseen. Tilaat
+        ilmoitukset itse omalla laitteellasi ntfy-sovelluksella; BensaVahti ei
+        tallenna tilaajien tunnisteita eikä tiedä keitä tilaajat ovat.
+        ntfy.sh:n omaan käsittelyyn sovelletaan
+        <a href="https://ntfy.sh">ntfy.sh:n</a> tietosuojakäytäntöä.
+      </p>
+
+      <h2>5. Kolmansien osapuolten datalähteet</h2>
+      <p>
+        Sovellus hakee taustalla julkista markkinadataa ulkopuolisista
+        lähteistä (Yahoo Finance: Brent ja EUR/USD; suomalaiset
+        RSS-uutissyötteet; polttoaine.net; tankille.fi). Yhteydet näihin ovat
+        lähteviä datahakuja — niiden mukana ei lähetetä sinusta mitään tietoja.
+      </p>
+
+      <h2>6. Tietojen luovutus</h2>
+      <p>
+        Emme myy, vuokraa emmekä luovuta tietoja kolmansille osapuolille —
+        koska emme kerää henkilötietoja.
+      </p>
+
+      <h2>7. Sinun oikeutesi</h2>
+      <p>
+        Koska sovellus ei kerää henkilötietoja, tunnistettavia tietoja sinusta
+        ei ole pyydettävänä, oikaistavana tai poistettavana. Selaimeen
+        tallennetun teema-asetuksen voit poistaa itse tyhjentämällä selaimen
+        sivustodatan.
+      </p>
+
+      <h2>8. Muutokset</h2>
+      <p>
+        Tätä selostetta voidaan päivittää sovelluksen kehittyessä. Muutokset
+        julkaistaan tällä sivulla ja päiväys yllä päivitetään.
+      </p>
+
+      <h2>9. Yhteydenotot</h2>
+      <p>
+        Tietosuojaa koskevat kysymykset:
+        <a href="mailto:adamallali4@gmail.com">adamallali4@gmail.com</a>
+      </p>
+
+      <hr />
+      <footer>BensaVahti · ei takuuta tarkkuudesta</footer>
+    </div>
+  </body>
+</html>
