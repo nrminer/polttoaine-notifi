@@ -67,6 +67,23 @@ const CHART_SLOTS = [
   { value: 21, label: "21:00" },
 ];
 
+/* Reusable filter button used in chart controls */
+function FilterBtn({ active, onClick, children, testId }) {
+  return (
+    <button
+      data-testid={testId}
+      onClick={onClick}
+      className={`px-2.5 h-7 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 ${
+        active
+          ? "bg-brand text-white border-brand shadow-sm"
+          : "bg-transparent text-secondary border-line hover:border-brand/50 hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function App() {
   const [fuel, setFuel] = useState("95E10");
   const [range, setRange] = useState(90);
@@ -87,7 +104,7 @@ export default function App() {
   const [theme, setTheme] = useState(() => {
     if (typeof window === "undefined") return "dark";
     const t = window.localStorage.getItem("theme");
-    return t === "light" || t === "dark" ? t : "dark"; // default: dark
+    return t === "light" || t === "dark" ? t : "dark";
   });
 
   useEffect(() => {
@@ -114,7 +131,6 @@ export default function App() {
       await seedHistory(180, false);
       setSeeded(true);
     } catch (e) {
-      // not fatal
       setSeeded(true);
     }
   }, []);
@@ -164,7 +180,6 @@ export default function App() {
       } else {
         const { data } = await fetchLatestPrediction(f, "Suomi");
         if (data.available) {
-          // backend palauttaa nyt jo "run"-yhteensopivan rakenteen
           setPrediction({
             fuel: data.fuel,
             region: data.region,
@@ -249,7 +264,6 @@ export default function App() {
     }
   }, [fuel, loadTracking]);
 
-  // init
   useEffect(() => {
     (async () => {
       await ensureSeeded();
@@ -267,7 +281,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // fuel change
   useEffect(() => {
     if (!seeded) return;
     (async () => {
@@ -301,14 +314,11 @@ export default function App() {
     ]);
   };
 
-  // hero metrics
   const todayMin = current?.national_min;
   const cheapAvg = current?.cheap_sample_avg;
-  // huomisen halvin ennuste tulee trackerista
   const tomorrowCheapest = tracking?.summary?.tomorrow_prediction;
   const cheapestDelta = useMemo(() => {
     if (todayMin == null) return null;
-    // edellisen päivän halvin tracker-historiasta
     const rows = tracking?.rows || [];
     if (rows.length < 2) return null;
     const prev = rows[rows.length - 2];
@@ -342,28 +352,28 @@ export default function App() {
   return (
     <div className="app-shell relative">
       {/* TOP BAR */}
-      <header className="border-b border-line bg-white/70 backdrop-blur-xl sticky top-0 z-30">
+      <header className="border-b border-line bg-white/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-[1480px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-nordDark text-accent flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-brand text-white flex items-center justify-center shadow-glow-brand/30">
               <Fuel size={16} strokeWidth={2.4} />
             </div>
             <div>
               <div className="font-display font-black tracking-tighter text-xl leading-none">
                 BENSAVAHTI
               </div>
-              <div className="font-mono text-[10px] text-muted uppercase tracking-[0.2em]">
+              <div className="font-mono text-[10px] text-muted uppercase tracking-[0.18em]">
                 Suomi · 95E10 + Diesel · Ennustealgoritmi
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 font-mono text-xs text-secondary">
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2 px-3 h-8 rounded-lg bg-surface font-mono text-xs text-secondary">
               <Clock size={12} />
               {current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "—"}
               {current?.stale && (
-                <span className="ml-1 bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px]">
+                <span className="ml-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] rounded-md">
                   CACHED
                 </span>
               )}
@@ -373,7 +383,7 @@ export default function App() {
               onClick={toggleTheme}
               aria-label={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
               title={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
-              className="inline-flex items-center justify-center w-9 h-9 border border-line hover:bg-surface transition-colors"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line hover:bg-surface transition-colors"
             >
               {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </button>
@@ -381,7 +391,7 @@ export default function App() {
               data-testid="refresh-prices-btn"
               onClick={handleRefreshAll}
               disabled={isLoading}
-              className="inline-flex items-center gap-2 px-3 h-9 border border-line hover:bg-surface text-sm font-mono font-semibold transition-colors"
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-lg border border-line hover:bg-surface text-sm font-mono font-semibold transition-colors disabled:opacity-60"
             >
               <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
               Päivitä
@@ -399,7 +409,7 @@ export default function App() {
               Huomisen<br />
               hinta <span className="deco-underline">tänään.</span>
             </h1>
-            <p className="text-secondary text-base md:text-lg mt-5 max-w-xl">
+            <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
               Neljä rinnakkaista algoritmia (liukuva ka., lineaarinen regressio, eksponentiaalinen
               tasoitus ja {formatModelName(prediction?.methods?.ai_llm?.model) || "tekoäly"}) yhdistettynä Brent-raakaöljyyn ja EUR/USD-kurssiin —
               ennustaa{" "}
@@ -407,17 +417,17 @@ export default function App() {
               <span className="font-mono font-semibold text-ink">dieselin</span> hinnan huomenna.
             </p>
 
-            <div className="mt-7 flex flex-wrap items-center gap-4">
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <FuelToggle value={fuel} onChange={setFuel} />
               <div
                 data-testid="auto-schedule-info"
-                className="inline-flex items-center gap-2 px-3 h-10 bg-slate-100 text-secondary font-mono text-xs font-semibold"
+                className="inline-flex items-center gap-2 px-3 h-10 rounded-lg bg-surface text-secondary font-mono text-xs font-semibold border border-line"
               >
                 <Clock size={14} />
                 Auto: 14:00 + 21:00 (Helsinki)
               </div>
               {error && (
-                <span data-testid="error-banner" className="text-signalUp font-mono text-xs">
+                <span data-testid="error-banner" className="text-signalUp font-mono text-xs bg-signalUpBg px-2.5 py-1 rounded-md">
                   {error}
                 </span>
               )}
@@ -425,7 +435,7 @@ export default function App() {
           </div>
 
           <div className="col-span-12 lg:col-span-5">
-            <Card testId="hero-today-card" className="p-7 h-full" >
+            <Card testId="hero-today-card" className="p-7 h-full">
               <CardLabel className="mb-2">Tänään · halvin asema Suomessa</CardLabel>
               <div className="flex items-end justify-between">
                 <StatNumber value={todayMin} testId="today-cheapest-price" />
@@ -475,7 +485,7 @@ export default function App() {
           className="p-7 md:p-10 relative"
         >
           <div
-            className="absolute inset-0 opacity-[0.13] pointer-events-none"
+            className="absolute inset-0 opacity-[0.12] pointer-events-none rounded-xl"
             style={{
               backgroundImage:
                 "url(https://static.prod-images.emergentagent.com/jobs/fbe4dcec-63a2-4ae5-ab80-570a0bc91b44/images/2f4ce133904abe0795e741e29b1017783b57035191543b365ba039243069fe63.png)",
@@ -505,33 +515,42 @@ export default function App() {
               </div>
             </div>
 
-            <div className="col-span-12 md:col-span-7 md:border-l md:border-slate-700 md:pl-8">
+            <div className="col-span-12 md:col-span-7 md:border-l md:border-slate-700/60 md:pl-8">
               <CardLabel className="text-slate-400">Mistä ennuste rakentuu</CardLabel>
-              <ul className="mt-3 space-y-2 text-slate-200 text-sm leading-relaxed">
-                <li>
-                  • <span className="font-mono text-accent">{prediction?.methods?.moving_average?.value?.toFixed(3) ?? "—"}</span> · liukuva 7 pv keskiarvo
+              <ul className="mt-4 space-y-2.5 text-slate-200 text-sm leading-relaxed">
+                <li className="flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
+                  <span className="font-mono text-accent">{prediction?.methods?.moving_average?.value?.toFixed(3) ?? "—"}</span>
+                  <span className="text-slate-400">liukuva 7 pv keskiarvo</span>
                 </li>
-                <li>
-                  • <span className="font-mono text-accent">{prediction?.methods?.linear_regression?.value?.toFixed(3) ?? "—"}</span> · lineaarinen regressio
+                <li className="flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
+                  <span className="font-mono text-accent">{prediction?.methods?.linear_regression?.value?.toFixed(3) ?? "—"}</span>
+                  <span className="text-slate-400">lineaarinen regressio</span>
                 </li>
-                <li>
-                  • <span className="font-mono text-accent">{prediction?.methods?.exp_smoothing?.value?.toFixed(3) ?? "—"}</span> · Holt-tasoitus
+                <li className="flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
+                  <span className="font-mono text-accent">{prediction?.methods?.exp_smoothing?.value?.toFixed(3) ?? "—"}</span>
+                  <span className="text-slate-400">Holt-tasoitus</span>
                 </li>
-                <li>
-                  • <span className="font-mono text-accent">{prediction?.methods?.fundamental_anchor?.value?.toFixed(3) ?? "—"}</span> · fundamenttiankkuri (Brent+FX)
+                <li className="flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
+                  <span className="font-mono text-accent">{prediction?.methods?.fundamental_anchor?.value?.toFixed(3) ?? "—"}</span>
+                  <span className="text-slate-400">fundamenttiankkuri (Brent+FX)</span>
                 </li>
-                <li>
-                  • <span className="font-mono text-accent">{prediction?.methods?.ai_llm?.value?.toFixed(3) ?? "—"}</span> · AI / {formatModelName(prediction?.methods?.ai_llm?.model) || "malli ei tiedossa"}
+                <li className="flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
+                  <span className="font-mono text-accent">{prediction?.methods?.ai_llm?.value?.toFixed(3) ?? "—"}</span>
+                  <span className="text-slate-400">AI / {formatModelName(prediction?.methods?.ai_llm?.model) || "malli ei tiedossa"}</span>
                 </li>
               </ul>
-              <button
+              <div
                 data-testid="auto-info-pill"
-                disabled
-                className="mt-6 inline-flex items-center gap-2 px-5 h-10 bg-accent/20 text-accent border border-accent/40 font-semibold text-sm cursor-default"
+                className="mt-6 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-accent/15 text-accent border border-accent/30 font-semibold text-sm"
               >
-                <Clock size={16} />
+                <Clock size={14} />
                 Päivittyy automaattisesti 14:00 ja 21:00 Helsinki-aikaa
-              </button>
+              </div>
             </div>
           </div>
         </Card>
@@ -555,7 +574,7 @@ export default function App() {
               </div>
               <div
                 data-testid="schedule-pill"
-                className="inline-flex items-center gap-2 px-3 h-8 bg-slate-100 text-secondary font-mono text-[11px] font-semibold"
+                className="inline-flex items-center gap-2 px-3 h-8 rounded-lg bg-surface text-secondary font-mono text-[11px] font-semibold border border-line"
               >
                 <Clock size={11} />
                 {tracking?.summary?.today_date
@@ -572,6 +591,7 @@ export default function App() {
                   : "odottaa ensimmäistä captureeen"}
               </div>
             </div>
+
             {/* CHART FILTERS */}
             <div
               data-testid="chart-filters"
@@ -582,18 +602,14 @@ export default function App() {
                   Alue
                 </span>
                 {CHART_CITIES.map((c) => (
-                  <button
+                  <FilterBtn
                     key={c}
-                    data-testid={`chart-city-${c}`}
+                    active={chartCity === c}
                     onClick={() => setChartCity(c)}
-                    className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
-                      chartCity === c
-                        ? "bg-nordDark text-white border-nordDark"
-                        : "bg-white text-secondary border-line hover:border-ink"
-                    }`}
+                    testId={`chart-city-${c}`}
                   >
                     {c}
-                  </button>
+                  </FilterBtn>
                 ))}
               </div>
 
@@ -602,17 +618,13 @@ export default function App() {
                   Jakso
                 </span>
                 {CHART_RANGES.map((r) => (
-                  <button
+                  <FilterBtn
                     key={r.value}
+                    active={chartRange === r.value}
                     onClick={() => setChartRange(r.value)}
-                    className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
-                      chartRange === r.value
-                        ? "bg-nordDark text-white border-nordDark"
-                        : "bg-white text-secondary border-line hover:border-ink"
-                    }`}
                   >
                     {r.label}
-                  </button>
+                  </FilterBtn>
                 ))}
               </div>
 
@@ -621,17 +633,13 @@ export default function App() {
                   Capture
                 </span>
                 {CHART_SLOTS.map((s) => (
-                  <button
+                  <FilterBtn
                     key={s.value}
+                    active={chartSlot === s.value}
                     onClick={() => setChartSlot(s.value)}
-                    className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
-                      chartSlot === s.value
-                        ? "bg-nordDark text-white border-nordDark"
-                        : "bg-white text-secondary border-line hover:border-ink"
-                    }`}
                   >
                     {s.label}
-                  </button>
+                  </FilterBtn>
                 ))}
               </div>
             </div>
@@ -657,7 +665,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* ALL-CITIES AVERAGE + PREDICTION (below cheapest-station section) */}
+      {/* ALL-CITIES AVERAGE */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <Card testId="city-average-card" className="p-6">
           <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
@@ -740,7 +748,7 @@ export default function App() {
           </div>
           <div className="w-full text-muted" data-testid="privacy-notice">
             Tietosuoja: emme kerää sinusta mitään tietoja — vain ne tiedot, joita Railway tai Vercel kerää alustana.{" "}
-            <a href="/privacy.html" className="underline hover:text-secondary" data-testid="privacy-link">
+            <a href="/privacy.html" className="underline hover:text-secondary transition-colors" data-testid="privacy-link">
               Lue tietosuojaseloste
             </a>
           </div>
@@ -770,9 +778,9 @@ function TrackingFooter({ summary, fuel }) {
   return (
     <div
       data-testid="tracking-footer"
-      className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-px bg-line border-t border-line"
+      className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-line pt-4"
     >
-      <div className="bg-white p-3">
+      <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
           Tänään · {today_date ? today_date.slice(8, 10) + "." + today_date.slice(5, 7) + "." : "—"}
         </div>
@@ -781,7 +789,7 @@ function TrackingFooter({ summary, fuel }) {
           <span className="text-secondary text-xs ml-1">€/L</span>
         </div>
       </div>
-      <div className="bg-white p-3">
+      <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
           Huominen ({fuel})
         </div>
@@ -793,7 +801,7 @@ function TrackingFooter({ summary, fuel }) {
           <span className="text-secondary text-xs ml-1">€/L</span>
         </div>
       </div>
-      <div className="bg-white p-3">
+      <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
           MAE (vertailtu)
         </div>
@@ -805,7 +813,7 @@ function TrackingFooter({ summary, fuel }) {
           {n_compared > 0 ? `${n_compared} pv` : "kerää dataa"}
         </div>
       </div>
-      <div className="bg-white p-3">
+      <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
           ≤1 snt tarkkuus
         </div>
@@ -817,9 +825,10 @@ function TrackingFooter({ summary, fuel }) {
   );
 }
 
-function DirectionPill({ delta }) {  if (delta === null || delta === undefined || isNaN(delta)) {
+function DirectionPill({ delta }) {
+  if (delta === null || delta === undefined || isNaN(delta)) {
     return (
-      <span className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800 text-slate-300 font-mono text-xs">
+      <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 text-slate-300 font-mono text-xs border border-slate-700/50">
         <Minus size={12} /> ei dataa
       </span>
     );
@@ -829,7 +838,7 @@ function DirectionPill({ delta }) {  if (delta === null || delta === undefined |
     return (
       <span
         data-testid="direction-pill"
-        className="inline-flex items-center gap-2 px-3 py-1 bg-signalUpBg text-signalUp font-mono text-xs font-semibold"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30 font-mono text-xs font-semibold"
       >
         <ArrowUpRight size={14} strokeWidth={2.6} /> kallistuu +{n.toFixed(3)} €/L
       </span>
@@ -838,7 +847,7 @@ function DirectionPill({ delta }) {  if (delta === null || delta === undefined |
     return (
       <span
         data-testid="direction-pill"
-        className="inline-flex items-center gap-2 px-3 py-1 bg-signalDownBg text-signalDown font-mono text-xs font-semibold"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-semibold"
       >
         <ArrowDownRight size={14} strokeWidth={2.6} /> halpenee {n.toFixed(3)} €/L
       </span>
@@ -846,7 +855,7 @@ function DirectionPill({ delta }) {  if (delta === null || delta === undefined |
   return (
     <span
       data-testid="direction-pill"
-      className="inline-flex items-center gap-2 px-3 py-1 bg-slate-800 text-slate-200 font-mono text-xs"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 text-slate-200 border border-slate-700/50 font-mono text-xs"
     >
       <Minus size={12} /> tasainen
     </span>

@@ -5,15 +5,15 @@ import { cn } from "../lib/utils";
 export function Card({ children, className = "", testId, dark = false, span = "", ...rest }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       data-testid={testId}
       className={cn(
-        "relative overflow-hidden rounded-none border hover-lift",
+        "relative overflow-hidden rounded-xl border hover-lift",
         dark
-          ? "bg-nordDark text-white border-slate-700"
-          : "bg-white text-ink border-line",
+          ? "bg-nordDark text-white border-slate-700/80"
+          : "bg-white text-ink border-line shadow-card",
         span,
         className
       )}
@@ -28,7 +28,7 @@ export function CardLabel({ children, className = "" }) {
   return (
     <div
       className={cn(
-        "font-mono text-[11px] uppercase tracking-[0.2em] text-secondary",
+        "font-mono text-[11px] uppercase tracking-[0.18em] text-secondary",
         className
       )}
     >
@@ -58,7 +58,7 @@ export function StatNumber({ value, suffix = " €/L", digits = 3, testId, class
 export function DeltaBadge({ delta, unit = "€/L", suffix = "" }) {
   if (delta === null || delta === undefined || isNaN(delta)) {
     return (
-      <span className="inline-flex items-center font-mono text-xs px-2 py-1 bg-slate-100 text-secondary">
+      <span className="inline-flex items-center font-mono text-xs px-2.5 py-1 rounded-md bg-slate-100 text-secondary">
         —
       </span>
     );
@@ -73,7 +73,7 @@ export function DeltaBadge({ delta, unit = "€/L", suffix = "" }) {
     : "bg-slate-100 text-secondary";
   const sign = up ? "▲ +" : down ? "▼ " : "  ";
   return (
-    <span className={cn("inline-flex items-center font-mono text-xs font-semibold px-2 py-1", cls)}>
+    <span className={cn("inline-flex items-center font-mono text-xs font-semibold px-2.5 py-1 rounded-md", cls)}>
       {sign}
       {n.toFixed(3)} {unit}
       {suffix}

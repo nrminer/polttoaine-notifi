@@ -6,23 +6,22 @@ const ALL_CITIES = ["Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti"];
 
 function FreshBadge({ ageHours }) {
   if (ageHours == null) return null;
-  let color = "bg-signalDownBg text-signalDown";
-  let label = `${Math.round(ageHours)} h`;
+  let color, label;
   if (ageHours < 1) {
     label = "juuri nyt";
-    color = "bg-signalDownBg text-signalDown";
+    color = "bg-emerald-100 text-emerald-700";
   } else if (ageHours < 6) {
     label = `${Math.round(ageHours)} h sitten`;
-    color = "bg-signalDownBg text-signalDown";
+    color = "bg-emerald-100 text-emerald-700";
   } else if (ageHours < 24) {
     label = `${Math.round(ageHours)} h sitten`;
-    color = "bg-slate-100 text-secondary";
+    color = "bg-surface text-secondary border border-line";
   } else {
     label = `${Math.round(ageHours)} h sitten`;
-    color = "bg-amber-100 text-amber-800";
+    color = "bg-amber-100 text-amber-700";
   }
   return (
-    <span className={`inline-flex items-center gap-1 font-mono text-[10px] font-semibold px-1.5 py-0.5 ${color}`}>
+    <span className={`inline-flex items-center gap-1 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${color}`}>
       <Clock size={9} strokeWidth={2.6} />
       {label}
     </span>
@@ -93,10 +92,10 @@ export default function RegionalGrid({ data, fuel, cityData }) {
       <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-line">
         <button
           onClick={() => setSelected(new Set(ALL_CITIES))}
-          className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
+          className={`px-2.5 h-7 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 ${
             allSelected
-              ? "bg-nordDark text-white border-nordDark"
-              : "bg-white text-secondary border-line hover:border-ink"
+              ? "bg-brand text-white border-brand shadow-sm"
+              : "bg-transparent text-secondary border-line hover:border-brand/50 hover:text-ink"
           }`}
         >
           Kaikki
@@ -105,12 +104,12 @@ export default function RegionalGrid({ data, fuel, cityData }) {
           <button
             key={city}
             onClick={() => toggleCity(city)}
-            className={`px-2.5 h-7 font-mono text-[11px] font-semibold border transition-colors ${
+            className={`px-2.5 h-7 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 ${
               selected.has(city)
                 ? allSelected
-                  ? "bg-white text-ink border-line hover:border-ink"
+                  ? "bg-transparent text-secondary border-line hover:border-brand/50"
                   : "bg-brand/10 text-brand border-brand/40"
-                : "bg-white text-muted border-line opacity-50 hover:opacity-80"
+                : "bg-transparent text-muted border-line opacity-50 hover:opacity-80"
             }`}
           >
             {city}
@@ -119,7 +118,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
 
         <button
           onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-          className="ml-auto flex items-center gap-1.5 px-3 h-7 font-mono text-[11px] font-semibold border border-line hover:bg-surface transition-colors whitespace-nowrap"
+          className="ml-auto flex items-center gap-1.5 px-3 h-7 font-mono text-[11px] font-semibold rounded-md border border-line hover:bg-surface transition-colors whitespace-nowrap"
         >
           <ArrowUpDown size={11} />
           {sortDir === "asc" ? "Halvin ensin" : "Kallein ensin"}
@@ -127,7 +126,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-line">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {withData.map((row) => {
           const isCheapest = row.price === cheapestPrice;
           const meanDiff =
@@ -136,26 +135,26 @@ export default function RegionalGrid({ data, fuel, cityData }) {
             <div
               key={row.region}
               data-testid={`region-cell-${row.region}`}
-              className={`bg-white p-4 hover:bg-surface transition-colors ${
-                isCheapest ? "ring-2 ring-accent z-10" : ""
+              className={`rounded-xl p-4 border transition-all duration-200 hover:shadow-card-hover ${
+                isCheapest
+                  ? "border-accent bg-accent/5 ring-1 ring-accent/30"
+                  : "border-line bg-surface hover:border-brand/20"
               }`}
             >
-              <div className="flex items-baseline justify-between mb-1">
+              <div className="flex items-baseline justify-between mb-1.5">
                 <span className="font-semibold text-sm">{row.region}</span>
                 {isCheapest && (
-                  <span className="font-mono text-[9px] uppercase tracking-wider bg-accent text-ink px-1.5 py-0.5">
+                  <span className="font-mono text-[9px] uppercase tracking-wider bg-accent text-slate-900 px-1.5 py-0.5 rounded-full font-bold">
                     halvin
                   </span>
                 )}
               </div>
 
-              {/* Halvin */}
               <div className="font-mono tnum text-2xl font-bold">
                 {row.price.toFixed(3)}
                 <span className="text-secondary text-xs font-medium ml-1">€/L</span>
               </div>
 
-              {/* Keskihinta + asemamäärä */}
               {row.mean != null && (
                 <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
                   <span className="font-mono text-[10px] text-muted">
@@ -174,7 +173,6 @@ export default function RegionalGrid({ data, fuel, cityData }) {
                 </div>
               )}
 
-              {/* Asema */}
               <div
                 className="text-[11px] text-secondary mt-1.5 line-clamp-1"
                 title={row.station || ""}
@@ -197,7 +195,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
           <div
             key={row.region}
             data-testid={`region-cell-${row.region}`}
-            className="bg-white p-4 opacity-60"
+            className="rounded-xl p-4 border border-line bg-surface opacity-50"
           >
             <div className="flex items-baseline justify-between mb-1">
               <span className="font-semibold text-sm">{row.region}</span>

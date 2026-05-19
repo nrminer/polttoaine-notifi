@@ -13,12 +13,12 @@ import { fmtDateFi } from "../lib/utils";
 
 const CITIES = ["Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti"];
 const CITY_COLOR = {
-  Helsinki: "#2563EB",
-  Espoo: "#7C3AED",
-  Vantaa: "#0891B2",
-  Tampere: "#DB2777",
-  Turku: "#16A34A",
-  Lahti: "#D97706",
+  Helsinki: "#3B82F6",
+  Espoo: "#8B5CF6",
+  Vantaa: "#06B6D4",
+  Tampere: "#EC4899",
+  Turku: "#22C55E",
+  Lahti: "#F59E0B",
 };
 const ALL_COLOR = "#002FA7";
 const PROJ_COLOR = "#FDE047";
@@ -31,14 +31,14 @@ function TooltipBody({ active, payload, label }) {
     return fmtDateFi(d) + (h ? ` · klo ${h}:00` : "");
   })();
   return (
-    <div className="bg-white border border-line shadow-lg px-3 py-2 font-mono text-xs">
-      <div className="text-secondary mb-1">{human}</div>
+    <div className="bg-white border border-line rounded-lg shadow-lg px-3 py-2.5 font-mono text-xs min-w-[180px]">
+      <div className="text-secondary mb-1.5 text-[10px] uppercase tracking-wider">{human}</div>
       {payload.map(
         (p) =>
           p.value != null && (
-            <div key={p.dataKey} className="flex justify-between gap-4 text-ink">
+            <div key={p.dataKey} className="flex justify-between gap-4 text-ink py-0.5">
               <span style={{ color: p.color }}>{p.name}</span>
-              <span className="tnum">{p.value.toFixed(3)} €/L</span>
+              <span className="tnum font-semibold">{p.value.toFixed(3)} €/L</span>
             </div>
           )
       )}
@@ -46,15 +46,6 @@ function TooltipBody({ active, payload, label }) {
   );
 }
 
-/**
- * All-cities average chart.
- *  - One thin line per city (its `average` from each capture's by_city)
- *  - A bold line = mean of the available city averages ("Kaikkien ka.")
- *  - A dashed forward point = tomorrow estimate: latest all-cities mean
- *    shifted by the predicted day-over-day market move (ensemble tomorrow −
- *    today's cheapest). Clearly labelled as an estimate — it is a derived
- *    projection, NOT a per-city model.
- */
 export default function CityAverageChart({
   rows = [],
   marketDelta = null,
@@ -79,7 +70,6 @@ export default function CityAverageChart({
     return point;
   });
 
-  // last real all-cities mean (for the projection anchor)
   let lastIdx = -1;
   for (let i = data.length - 1; i >= 0; i--) {
     if (data[i].allAvg != null) {
@@ -92,7 +82,6 @@ export default function CityAverageChart({
     lastIdx >= 0 && marketDelta != null && !isNaN(marketDelta) && tomorrowDate;
 
   if (canProject) {
-    // anchor the dashed segment on the last real point
     data[lastIdx].projected = data[lastIdx].allAvg;
     const projVal = Number((data[lastIdx].allAvg + marketDelta).toFixed(3));
     data.push({
@@ -110,7 +99,7 @@ export default function CityAverageChart({
   if (prices.length === 0) {
     return (
       <div
-        className="font-mono text-xs text-secondary py-12 text-center border border-dashed border-line"
+        className="font-mono text-xs text-secondary py-12 text-center border border-dashed border-line rounded-lg"
         style={{ height }}
         data-testid="city-avg-chart-empty"
       >
@@ -126,7 +115,7 @@ export default function CityAverageChart({
     <div className="w-full" style={{ height }} data-testid="city-avg-chart">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="2 3" vertical={false} />
+          <CartesianGrid stroke="#E2E8F0" strokeDasharray="2 4" vertical={false} />
           <XAxis
             dataKey="slot"
             tickFormatter={(s) => {
@@ -138,7 +127,7 @@ export default function CityAverageChart({
             tick={{ fontSize: 11, fill: "#64748B" }}
             tickLine={false}
             axisLine={{ stroke: "#CBD5E1" }}
-            minTickGap={20}
+            minTickGap={24}
           />
           <YAxis
             domain={[min, max]}
@@ -154,7 +143,7 @@ export default function CityAverageChart({
             wrapperStyle={{
               fontSize: "11px",
               fontFamily: "JetBrains Mono",
-              paddingBottom: 8,
+              paddingBottom: 10,
             }}
           />
 
@@ -165,7 +154,7 @@ export default function CityAverageChart({
               dataKey={c}
               name={c}
               stroke={CITY_COLOR[c]}
-              strokeWidth={1.25}
+              strokeWidth={1.5}
               strokeOpacity={0.55}
               dot={{ r: 2.5, fill: CITY_COLOR[c], stroke: "#fff", strokeWidth: 0.75 }}
               activeDot={{ r: 4 }}
@@ -180,7 +169,7 @@ export default function CityAverageChart({
             name="Kaikkien kaupunkien ka."
             stroke={ALL_COLOR}
             strokeWidth={3}
-            dot={{ r: 3, fill: ALL_COLOR, stroke: "#fff", strokeWidth: 1 }}
+            dot={{ r: 3.5, fill: ALL_COLOR, stroke: "#fff", strokeWidth: 1.5 }}
             activeDot={{ r: 6 }}
             connectNulls
             isAnimationActive

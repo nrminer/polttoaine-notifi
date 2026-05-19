@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  --grain-opacity: 0.04;
+  --grain-opacity: 0.03;
 
   /* Semantic colour tokens (R G B triplets — consumed by tailwind.config) */
   --c-ink: 10 10 10;
@@ -17,22 +17,30 @@
   --page-bg: #ffffff;
   --page-fg: #0a0a0a;
   --card-bg: #ffffff;
-  --neutral-pill: #f1f5f9; /* slate-100 */
+  --neutral-pill: #f1f5f9;
+
+  /* Card shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 10px 28px -8px rgb(0 0 0 / 0.12), 0 3px 8px -3px rgb(0 0 0 / 0.06);
 }
 
 html.dark {
   color-scheme: dark;
 
-  --c-ink: 226 232 240;       /* near-white text */
-  --c-secondary: 148 163 184; /* slate-400 */
-  --c-muted: 100 116 139;     /* slate-500 */
-  --c-surface: 14 23 38;      /* deep panel */
-  --c-line: 30 41 59;         /* slate-800 border */
+  --c-ink: 226 232 240;
+  --c-secondary: 148 163 184;
+  --c-muted: 100 116 139;
+  --c-surface: 14 23 38;
+  --c-line: 30 41 59;
 
   --page-bg: #0a0f1c;
   --page-fg: #e5e9f0;
-  --card-bg: #131b2d;       /* lifted off the page, distinct from nordDark hero */
+  --card-bg: #111827;
   --neutral-pill: #1e293b;
+
+  /* Dark card shadows — subtle blue glow */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-card-hover: 0 10px 28px -8px rgb(0 47 167 / 0.28), 0 0 0 1px rgb(0 47 167 / 0.14);
 }
 
 html, body, #root {
@@ -53,22 +61,24 @@ body {
   background: #FDE047;
   color: #0A0A0A;
 }
+html.dark ::selection {
+  background: #002FA7;
+  color: #ffffff;
+}
 
 /* ---- Dark theme: retarget literal light-surface utilities ---- */
 html.dark .bg-white { background-color: var(--card-bg) !important; }
-html.dark .bg-white\/70 { background-color: rgb(15 23 42 / 0.82) !important; }
+html.dark .bg-white\/70 { background-color: rgb(15 23 42 / 0.88) !important; }
 html.dark .bg-white\/10 { background-color: rgb(255 255 255 / 0.06) !important; }
 html.dark .bg-slate-100 { background-color: var(--neutral-pill) !important; }
 html.dark .tick-row > * + * { border-left-color: rgb(var(--c-line)); }
-html.dark ::-webkit-scrollbar-thumb { background: #334155; }
-html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-/* Recharts passes light hex stroke props inline — retarget for dark so
-   gridlines/axes don't glare on the dark panels. */
-html.dark .recharts-cartesian-grid line { stroke: #1f2a3d !important; }
+/* Recharts passes light hex stroke props inline — retarget for dark */
+html.dark .recharts-cartesian-grid line { stroke: #1a2744 !important; }
 html.dark .recharts-cartesian-axis-line,
-html.dark .recharts-cartesian-axis-tick-line { stroke: #334155 !important; }
-html.dark .recharts-text { fill: #94a3b8 !important; }
+html.dark .recharts-cartesian-axis-tick-line { stroke: #263452 !important; }
+html.dark .recharts-text { fill: #64748b !important; }
+html.dark .recharts-legend-item-text { color: #94a3b8 !important; }
 
 /* number animation */
 .tnum {
@@ -91,23 +101,26 @@ html.dark .recharts-text { fill: #94a3b8 !important; }
 .deco-underline {
   text-decoration: underline;
   text-decoration-color: #FDE047;
-  text-decoration-thickness: 6px;
-  text-underline-offset: -2px;
+  text-decoration-thickness: 5px;
+  text-underline-offset: 4px;
   text-decoration-skip-ink: none;
 }
 
 /* scrollbar */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 0; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+html.dark ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
 /* hover lift utility */
 .hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
 .hover-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px -8px rgba(15,23,42,0.15);
+  box-shadow: var(--shadow-card-hover);
 }
 
 /* divider tick row */
@@ -124,5 +137,9 @@ html.dark .recharts-text { fill: #94a3b8 !important; }
   40% { opacity: 1; transform: scale(1); }
 }
 
-/* recharts text - force IBM Plex */
+/* recharts text - force monospace */
 .recharts-text { font-family: "JetBrains Mono", ui-monospace, monospace !important; }
+.recharts-legend-item-text {
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  font-size: 11px !important;
+}

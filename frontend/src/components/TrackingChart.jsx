@@ -20,14 +20,14 @@ function TooltipBody({ active, payload, label }) {
     return fmtDateFi(d) + (h ? ` · klo ${h}:00` : "");
   })();
   return (
-    <div className="bg-white border border-line shadow-lg px-3 py-2 font-mono text-xs">
-      <div className="text-secondary mb-1">{human}</div>
+    <div className="bg-white border border-line rounded-lg shadow-lg px-3 py-2.5 font-mono text-xs min-w-[160px]">
+      <div className="text-secondary mb-1.5 text-[10px] uppercase tracking-wider">{human}</div>
       {payload.map(
         (p) =>
           p.value != null && (
-            <div key={p.dataKey} className="flex justify-between gap-4 text-ink">
+            <div key={p.dataKey} className="flex justify-between gap-4 text-ink py-0.5">
               <span style={{ color: p.color }}>{p.name}</span>
-              <span className="tnum">{p.value.toFixed(3)} €/L</span>
+              <span className="tnum font-semibold">{p.value.toFixed(3)} €/L</span>
             </div>
           )
       )}
@@ -65,7 +65,6 @@ export default function TrackingChart({
     };
   });
 
-  // huomisen ennuste vain kansallisessa näkymässä (ei kaupunkikohtaista ennustetta)
   if (!isCity && rows.length && tomorrow?.date && tomorrow?.value != null) {
     data.push({
       slot: `${tomorrow.date} 14`,
@@ -84,7 +83,7 @@ export default function TrackingChart({
   if (prices.length === 0) {
     return (
       <div
-        className="font-mono text-xs text-secondary py-12 text-center border border-dashed border-line"
+        className="font-mono text-xs text-secondary py-12 text-center border border-dashed border-line rounded-lg"
         style={{ height }}
         data-testid="tracking-chart-empty"
       >
@@ -101,7 +100,7 @@ export default function TrackingChart({
     <div className="w-full" style={{ height }} data-testid="tracking-chart">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
-          <CartesianGrid stroke="#E2E8F0" strokeDasharray="2 3" vertical={false} />
+          <CartesianGrid stroke="#E2E8F0" strokeDasharray="2 4" vertical={false} />
           <XAxis
             dataKey="slot"
             tickFormatter={(s) => {
@@ -113,7 +112,7 @@ export default function TrackingChart({
             tick={{ fontSize: 11, fill: "#64748B" }}
             tickLine={false}
             axisLine={{ stroke: "#CBD5E1" }}
-            minTickGap={20}
+            minTickGap={24}
           />
           <YAxis
             domain={[min, max]}
@@ -129,7 +128,7 @@ export default function TrackingChart({
             wrapperStyle={{
               fontSize: "11px",
               fontFamily: "JetBrains Mono",
-              paddingBottom: 8,
+              paddingBottom: 10,
             }}
           />
 
@@ -141,7 +140,7 @@ export default function TrackingChart({
                 name={`${city} · halvin`}
                 stroke="#002FA7"
                 strokeWidth={3}
-                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1 }}
+                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1.5 }}
                 activeDot={{ r: 6 }}
                 connectNulls
                 isAnimationActive
@@ -166,7 +165,7 @@ export default function TrackingChart({
                 name="Toteutunut halvin"
                 stroke="#002FA7"
                 strokeWidth={3}
-                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1 }}
+                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1.5 }}
                 activeDot={{ r: 6 }}
                 connectNulls
                 isAnimationActive

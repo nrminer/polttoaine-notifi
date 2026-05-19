@@ -10,7 +10,7 @@ const FUELS = [
 export default function FuelToggle({ value, onChange, testIdPrefix = "fuel" }) {
   return (
     <div
-      className="inline-flex bg-slate-100 p-1 border border-line"
+      className="inline-flex bg-surface p-1 rounded-lg border border-line"
       role="tablist"
       aria-label="Polttoaine"
       data-testid={`${testIdPrefix}-toggle`}
@@ -26,10 +26,10 @@ export default function FuelToggle({ value, onChange, testIdPrefix = "fuel" }) {
             onClick={() => onChange(id)}
             data-testid={`${testIdPrefix}-toggle-${id.toLowerCase()}`}
             className={cn(
-              "px-4 h-9 inline-flex items-center gap-2 font-mono text-sm font-semibold transition-colors",
+              "px-4 h-9 inline-flex items-center gap-2 font-mono text-sm font-semibold rounded-md transition-all duration-200",
               active
-                ? "bg-nordDark text-white"
-                : "text-secondary hover:text-ink"
+                ? "bg-brand text-white shadow-sm"
+                : "text-secondary hover:text-ink hover:bg-white/60"
             )}
           >
             <Icon size={14} strokeWidth={2.4} />

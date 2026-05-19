@@ -5,9 +5,6 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Semantic tokens are CSS-variable driven so they flip with the
-        // .dark class on <html>. The `<alpha-value>` form keeps Tailwind
-        // opacity modifiers (e.g. text-secondary/60) working.
         ink: "rgb(var(--c-ink) / <alpha-value>)",
         muted: "rgb(var(--c-muted) / <alpha-value>)",
         secondary: "rgb(var(--c-secondary) / <alpha-value>)",
@@ -30,14 +27,26 @@ module.exports = {
       letterSpacing: {
         tightest: "-0.04em",
       },
+      boxShadow: {
+        "card": "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
+        "glow-brand": "0 0 20px -4px rgb(0 47 167 / 0.35)",
+        "glow-accent": "0 0 20px -4px rgb(253 224 71 / 0.40)",
+        "inner-brand": "inset 0 0 0 1px rgb(0 47 167 / 0.20)",
+      },
       animation: {
         "fade-up": "fadeUp 0.5s ease-out forwards",
+        "fade-in": "fadeIn 0.3s ease-out forwards",
         marquee: "marquee 30s linear infinite",
       },
       keyframes: {
         fadeUp: {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
         },
         marquee: {
           "0%": { transform: "translateX(0)" },

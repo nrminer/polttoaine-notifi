@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\adama\\\\.claude\\\\plugins\\\\cache\\\\ui-ux-pro-max-skill\" -Recurse -Filter \"search.py\")",
+      "Bash(Select-Object FullName)",
+      "PowerShell(python \"C:\\\\Users\\\\adama\\\\.claude\\\\plugins\\\\cache\\\\ui-ux-pro-max-skill\\\\ui-ux-pro-max\\\\2.5.0\\\\src\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"fuel price dashboard fintech data analytics dark mode minimal\" --design-system -p \"BensaVahti\" -f markdown 2>&1)",
+      "PowerShell(python \"C:\\\\Users\\\\adama\\\\.claude\\\\plugins\\\\cache\\\\ui-ux-pro-max-skill\\\\ui-ux-pro-max\\\\2.5.0\\\\src\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"dark mode dashboard data dense analytics\" --domain style -n 3 2>&1)",
+      "Read(//mnt/c/Users/adama/Downloads/poltto/polttoaine-notifi/**)",
+      "Bash(yarn build *)"
+    ]
+  }
+}
