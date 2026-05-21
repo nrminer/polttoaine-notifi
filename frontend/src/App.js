@@ -355,15 +355,15 @@ export default function App() {
       <header className="border-b border-line bg-white/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-[1480px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-brand text-white flex items-center justify-center shadow-glow-brand/30">
+            <div className="w-9 h-9 rounded-lg bg-brand text-white flex items-center justify-center shadow-glow-brand">
               <Fuel size={16} strokeWidth={2.4} />
             </div>
             <div>
-              <div className="font-display font-black tracking-tighter text-xl leading-none">
+              <div className="font-display font-black tracking-tighter text-xl leading-none text-ink">
                 BENSAVAHTI
               </div>
-              <div className="font-mono text-[10px] text-muted uppercase tracking-[0.18em]">
-                Suomi · 95E10 + Diesel · Ennustealgoritmi
+              <div className="font-mono text-[10px] text-muted uppercase tracking-[0.18em] mt-1">
+                95E10 + Diesel · huominen ennuste
               </div>
             </div>
           </div>
@@ -410,11 +410,12 @@ export default function App() {
               hinta <span className="deco-underline">tänään.</span>
             </h1>
             <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
-              Neljä rinnakkaista algoritmia (liukuva ka., lineaarinen regressio, eksponentiaalinen
-              tasoitus ja {formatModelName(prediction?.methods?.ai_llm?.model) || "tekoäly"}) yhdistettynä Brent-raakaöljyyn ja EUR/USD-kurssiin —
-              ennustaa{" "}
+              Viisi rinnakkaista menetelmää — liukuva keskiarvo, lineaarinen regressio,
+              eksponentiaalinen tasoitus, fundamenttiankkuri (Brent + EUR/USD) ja{" "}
+              {formatModelName(prediction?.methods?.ai_llm?.model) || "tekoäly"} —
+              yhdistettynä yhdeksi ennusteeksi{" "}
               <span className="font-mono font-semibold text-ink">95E10:n</span> ja{" "}
-              <span className="font-mono font-semibold text-ink">dieselin</span> hinnan huomenna.
+              <span className="font-mono font-semibold text-ink">dieselin</span> huomiselle hinnalle.
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -424,7 +425,7 @@ export default function App() {
                 className="inline-flex items-center gap-2 px-3 h-10 rounded-lg bg-surface text-secondary font-mono text-xs font-semibold border border-line"
               >
                 <Clock size={14} />
-                Auto: 14:00 + 21:00 (Helsinki)
+                Päivittyy klo 14 ja 21 (Helsinki)
               </div>
               {error && (
                 <span data-testid="error-banner" className="text-signalUp font-mono text-xs bg-signalUpBg px-2.5 py-1 rounded-md">
@@ -461,7 +462,7 @@ export default function App() {
                 </div>
                 <div className="pl-5">
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                    Top-{current?.stations_count || "—"} ka.
+                    Halvimpien {current?.stations_count || ""} ka.
                   </div>
                   <div className="hero-num tnum text-2xl mt-1">
                     {cheapAvg != null ? cheapAvg.toFixed(3) : "—"}
@@ -470,7 +471,7 @@ export default function App() {
                 </div>
               </div>
               <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
-                Lähteet: polttoaine.net + tankille.fi (live, ≤24h) · automaattipäivitys klo 14:00 ja 21:00
+                Lähteet: polttoaine.net + tankille.fi (live, ≤ 24 h) · päivittyy automaattisesti klo 14 ja 21
               </div>
             </Card>
           </div>
@@ -485,13 +486,11 @@ export default function App() {
           className="p-7 md:p-10 relative"
         >
           <div
-            className="absolute inset-0 opacity-[0.12] pointer-events-none rounded-xl"
+            aria-hidden
+            className="absolute inset-0 pointer-events-none rounded-xl"
             style={{
-              backgroundImage:
-                "url(https://static.prod-images.emergentagent.com/jobs/fbe4dcec-63a2-4ae5-ab80-570a0bc91b44/images/2f4ce133904abe0795e741e29b1017783b57035191543b365ba039243069fe63.png)",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              mixBlendMode: "overlay",
+              background:
+                "radial-gradient(60rem 30rem at 110% -20%, rgba(0, 47, 167, 0.35), transparent 55%), radial-gradient(40rem 20rem at -10% 120%, rgba(253, 224, 71, 0.06), transparent 55%)",
             }}
           />
           <div className="relative z-10 grid grid-cols-12 gap-6 items-start">
@@ -549,7 +548,7 @@ export default function App() {
                 className="mt-6 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-accent/15 text-accent border border-accent/30 font-semibold text-sm"
               >
                 <Clock size={14} />
-                Päivittyy automaattisesti 14:00 ja 21:00 Helsinki-aikaa
+                Päivittyy automaattisesti klo 14 ja 21 Helsingin aikaa
               </div>
             </div>
           </div>
@@ -564,12 +563,12 @@ export default function App() {
               <div>
                 <CardLabel>Ennuste vs. toteutunut · halvin asema</CardLabel>
                 <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                  {fuel} · automaattinen otanta klo 14:00 ja 21:00 (Helsinki)
+                  {fuel} · automaattinen mittaus klo 14 ja 21 (Helsinki)
                 </h3>
                 <p className="text-[11px] text-muted font-mono mt-1">
                   {chartCity === "Suomi"
                     ? "Vain todellisia havaintoja. Sininen = päivän halvin asema, harmaa risti = edellisen päivän ennuste, keltainen = huomisen ennuste."
-                    : `${chartCity}: sininen = kaupungin halvin asema, oranssi katkoviiva = kaupungin keskihinta. Kertyy klo 14:00 ja 21:00 captureista.`}
+                    : `${chartCity}: sininen = kaupungin halvin asema, oranssi katkoviiva = kaupungin keskihinta. Kertyy klo 14 ja 21 mittauksista.`}
                 </p>
               </div>
               <div
@@ -578,7 +577,7 @@ export default function App() {
               >
                 <Clock size={11} />
                 {tracking?.summary?.today_date
-                  ? `viim. capture: ${tracking.summary.today_date} klo ${
+                  ? `viim. mittaus: ${tracking.summary.today_date} klo ${
                       tracking.summary.today_captured_at
                         ? (() => {
                             const dt = new Date(tracking.summary.today_captured_at);
@@ -588,7 +587,7 @@ export default function App() {
                         ? `${String(tracking.summary.today_hour).padStart(2, "0")}:00`
                         : "—"
                     }`
-                  : "odottaa ensimmäistä captureeen"}
+                  : "odottaa ensimmäistä mittausta"}
               </div>
             </div>
 
@@ -675,10 +674,10 @@ export default function App() {
                 {fuel} · kaupunkien keskihinta + huomisen arvio
               </h3>
               <p className="text-[11px] text-muted font-mono mt-1">
-                Ohuet viivat = kaupungin keskihinta (by_city, klo 14:00/21:00
-                capture). Paksu sininen = kaikkien kaupunkien keskiarvo. Keltainen
-                katkoviiva = huomisen arvio (kaikkien ka. + ennustettu
-                markkinaliike). Käyttää samaa Jakso/Capture-suodatusta yllä.
+                Ohuet viivat = yksittäisen kaupungin keskihinta (klo 14 ja 21
+                mittauksista). Paksu sininen = kaikkien kaupunkien keskiarvo.
+                Keltainen katkoviiva = huomisen arvio (kaikkien ka. + ennustettu
+                markkinaliike). Käyttää samoja suodattimia kuin yllä.
               </p>
             </div>
           </div>
@@ -747,7 +746,7 @@ export default function App() {
             <span className="text-muted">v2.0 · BensaVahti · ei takuuta tarkkuudesta</span>
           </div>
           <div className="w-full text-muted" data-testid="privacy-notice">
-            Tietosuoja: emme kerää sinusta mitään tietoja — vain ne tiedot, joita Railway tai Vercel kerää alustana.{" "}
+            Tietosuoja: emme kerää sinusta tietoja itse — vain alustojen (Railway, Vercel) automaattisesti keräämät tiedot.{" "}
             <a href="/privacy.html" className="underline hover:text-secondary transition-colors" data-testid="privacy-link">
               Lue tietosuojaseloste
             </a>

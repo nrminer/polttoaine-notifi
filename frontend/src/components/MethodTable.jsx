@@ -41,7 +41,7 @@ export default function MethodTable({ result }) {
       </div>
       {result?.data_sources && (
         <p className="text-[10px] text-muted font-mono mb-4" data-testid="method-data-sources">
-          Data: vain live-skrapatut capturet — {result.data_sources.tracker_captures} havaintoa · {result.data_sources.combined_points} päiväpistettä (kerätty tästä päivästä alkaen)
+          Data: vain livenä mitatut havainnot — {result.data_sources.tracker_captures} mittausta · {result.data_sources.combined_points} päiväpistettä (kerätty tästä päivästä alkaen)
         </p>
       )}
 

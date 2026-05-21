@@ -76,7 +76,7 @@ export default function NewsCard({ items = [], fetchedAt }) {
       )}
 
       <div className="mt-3 pt-3 border-t border-line text-[10px] text-muted font-mono">
-        AI lukee näitä otsikoita ennustaessaan huomista. Ei mainoksia, suora syöte.
+        AI lukee nämä otsikot ennustaessaan huomista. Ei mainoksia, suora syöte.
       </div>
     </Card>
   );

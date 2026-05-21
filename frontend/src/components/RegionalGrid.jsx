@@ -85,7 +85,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
         </span>
       </div>
       <div className="text-[11px] text-muted font-mono mb-4">
-        live · halvin asema + kaupungin keskihinta · ≤ {maxAge}h tuoreutta
+        live · halvin asema + kaupungin keskihinta · enintään {maxAge} h vanha
       </div>
 
       {/* Filter bar */}

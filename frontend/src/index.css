@@ -68,10 +68,23 @@ html.dark ::selection {
 
 /* ---- Dark theme: retarget literal light-surface utilities ---- */
 html.dark .bg-white { background-color: var(--card-bg) !important; }
-html.dark .bg-white\/70 { background-color: rgb(15 23 42 / 0.88) !important; }
+html.dark .bg-white\/80 { background-color: rgb(15 23 42 / 0.82) !important; }
+html.dark .bg-white\/70 { background-color: rgb(15 23 42 / 0.78) !important; }
+html.dark .bg-white\/60 { background-color: rgb(30 41 59 / 0.55) !important; }
+html.dark .bg-white\/40 { background-color: rgb(30 41 59 / 0.40) !important; }
 html.dark .bg-white\/10 { background-color: rgb(255 255 255 / 0.06) !important; }
+html.dark .bg-white\/8  { background-color: rgb(255 255 255 / 0.05) !important; }
+html.dark .bg-white\/5  { background-color: rgb(255 255 255 / 0.04) !important; }
 html.dark .bg-slate-100 { background-color: var(--neutral-pill) !important; }
 html.dark .tick-row > * + * { border-left-color: rgb(var(--c-line)); }
+
+/* Light/colour utilities that aren't readable on dark backgrounds */
+html.dark .bg-emerald-100 { background-color: rgb(16 185 129 / 0.16) !important; }
+html.dark .text-emerald-700 { color: #6ee7b7 !important; }
+html.dark .bg-amber-100 { background-color: rgb(245 158 11 / 0.16) !important; }
+html.dark .text-amber-700 { color: #fcd34d !important; }
+html.dark .bg-signalUpBg { background-color: rgb(239 68 68 / 0.16) !important; }
+html.dark .bg-signalDownBg { background-color: rgb(16 185 129 / 0.16) !important; }
 
 /* Recharts passes light hex stroke props inline — retarget for dark */
 html.dark .recharts-cartesian-grid line { stroke: #1a2744 !important; }
@@ -97,13 +110,15 @@ html.dark .recharts-legend-item-text { color: #94a3b8 !important; }
   mix-blend-mode: multiply;
 }
 
-/* underline marker */
+/* underlined word — kept tight + on-brand */
 .deco-underline {
-  text-decoration: underline;
-  text-decoration-color: #FDE047;
-  text-decoration-thickness: 5px;
-  text-underline-offset: 4px;
-  text-decoration-skip-ink: none;
+  background-image: linear-gradient(transparent 62%, rgba(253, 224, 71, 0.55) 62%, rgba(253, 224, 71, 0.55) 92%, transparent 92%);
+  background-repeat: no-repeat;
+  text-decoration: none;
+  padding: 0 0.05em;
+}
+html.dark .deco-underline {
+  background-image: linear-gradient(transparent 62%, rgba(253, 224, 71, 0.35) 62%, rgba(253, 224, 71, 0.35) 92%, transparent 92%);
 }
 
 /* scrollbar */
@@ -125,7 +140,7 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
 /* divider tick row */
 .tick-row > * + * {
-  border-left: 1px solid #E2E8F0;
+  border-left: 1px solid rgb(var(--c-line));
 }
 
 /* loader dot */

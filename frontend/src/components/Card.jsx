@@ -1,5 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
+import { ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export function Card({ children, className = "", testId, dark = false, span = "", ...rest }) {
@@ -58,8 +59,8 @@ export function StatNumber({ value, suffix = " €/L", digits = 3, testId, class
 export function DeltaBadge({ delta, unit = "€/L", suffix = "" }) {
   if (delta === null || delta === undefined || isNaN(delta)) {
     return (
-      <span className="inline-flex items-center font-mono text-xs px-2.5 py-1 rounded-md bg-slate-100 text-secondary">
-        —
+      <span className="inline-flex items-center gap-1 font-mono text-xs px-2.5 py-1 rounded-md bg-slate-100 text-secondary">
+        <Minus size={11} strokeWidth={2.6} />
       </span>
     );
   }
@@ -71,11 +72,14 @@ export function DeltaBadge({ delta, unit = "€/L", suffix = "" }) {
     : down
     ? "bg-signalDownBg text-signalDown"
     : "bg-slate-100 text-secondary";
-  const sign = up ? "▲ +" : down ? "▼ " : "  ";
+  const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
+  const sign = up ? "+" : down ? "−" : "";
+  const formatted = Math.abs(n).toFixed(3);
   return (
-    <span className={cn("inline-flex items-center font-mono text-xs font-semibold px-2.5 py-1 rounded-md", cls)}>
+    <span className={cn("inline-flex items-center gap-1 font-mono text-xs font-semibold px-2.5 py-1 rounded-md", cls)}>
+      <Icon size={11} strokeWidth={2.8} />
       {sign}
-      {n.toFixed(3)} {unit}
+      {formatted} {unit}
       {suffix}
     </span>
   );

@@ -59,7 +59,7 @@ export default function FactorsCard({ factors }) {
       </div>
 
       <div className="mt-4 font-mono text-[10px] text-muted pt-3 border-t border-line leading-relaxed">
-        Heikompi EUR → kalliimpaa polttoainetta. Brent + 1 USD ≈ + 0.7 snt/L.
+        Heikkenevä EUR → kalliimpaa polttoainetta. Brent + 1 USD ≈ + 0,7 snt/L.
       </div>
     </Card>
   );

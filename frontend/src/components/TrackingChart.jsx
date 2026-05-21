@@ -88,8 +88,8 @@ export default function TrackingChart({
         data-testid="tracking-chart-empty"
       >
         {isCity
-          ? `Ei vielä ${city}-dataa. Kaupunkikohtainen historia kertyy klo 14:00 ja 21:00 captureista.`
-          : 'Ei vielä dataa. Päivittäinen otanta käynnistyy klo 14:00 (Helsinki). Aja "Tallenna nyt" pakottaaksesi ensimmäisen pisteen.'}
+          ? `Ei vielä ${city}-dataa. Kaupunkikohtainen historia kertyy klo 14 ja 21 mittauksista.`
+          : 'Ei vielä dataa. Päivittäinen mittaus käynnistyy klo 14 (Helsinki). Aja "Tallenna nyt" pakottaaksesi ensimmäisen pisteen.'}
       </div>
     );
   }

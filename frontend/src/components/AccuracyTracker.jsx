@@ -39,7 +39,7 @@ export default function AccuracyTracker({ data }) {
 
       {entries.length === 0 ? (
         <div className="font-mono text-xs text-secondary py-8 text-center border border-dashed border-line rounded-lg">
-          Ei ennustehistoriaa vielä. Aja ennusteita useamman päivän ajalta,
+          Ei ennustehistoriaa vielä. Aja ennusteita useammalta päivältä,
           niin tarkkuus alkaa kertyä.
         </div>
       ) : (

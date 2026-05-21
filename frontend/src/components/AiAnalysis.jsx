@@ -25,7 +25,7 @@ function DirectionBadge({ direction }) {
 }
 
 export default function AiAnalysis({ ai, brent, eurUsd }) {
-  const explanation = ai?.explanation || "Aja ennustus saadaksesi AI-analyysi.";
+  const explanation = ai?.explanation || "Aja ennuste saadaksesi AI-analyysin.";
   const direction = ai?.direction;
   const value = ai?.value;
   const modelLabel = formatModelName(ai?.model);
@@ -36,12 +36,12 @@ export default function AiAnalysis({ ai, brent, eurUsd }) {
       testId="ai-analysis-card"
       className="p-6 md:p-7 relative"
     >
-      <div className="absolute inset-0 opacity-[0.12] mix-blend-overlay pointer-events-none rounded-xl"
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none rounded-xl"
         style={{
-          backgroundImage:
-            "url(https://static.prod-images.emergentagent.com/jobs/fbe4dcec-63a2-4ae5-ab80-570a0bc91b44/images/2f4ce133904abe0795e741e29b1017783b57035191543b365ba039243069fe63.png)",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          background:
+            "radial-gradient(38rem 22rem at 110% -10%, rgba(253, 224, 71, 0.10), transparent 60%)",
         }}
       />
       <div className="relative z-10">

@@ -103,8 +103,8 @@ export default function CityAverageChart({
         style={{ height }}
         data-testid="city-avg-chart-empty"
       >
-        Ei vielä kaupunkikohtaista keskihintadataa. Kertyy klo 14:00 ja 21:00
-        captureista (by_city).
+        Ei vielä kaupunkikohtaista keskihintadataa. Kertyy klo 14 ja 21
+        mittauksista.
       </div>
     );
   }
