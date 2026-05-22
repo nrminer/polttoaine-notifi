@@ -40,9 +40,20 @@ function FactorRow({ icon: Icon, iconColor, title, subtitle, value, deltaPct, de
   );
 }
 
+// Mechanical wholesale conversion: a +1 USD/bbl Brent move equals
+// 1 / (159 L per bbl × EUR_USD) EUR/L of CRUDE WHOLESALE. Pass-through to
+// the pump is partial and currently unmeasured for the Finnish retail
+// market (the code uses a 0.25 prior in fundamental_anchor). We display
+// only the unambiguous crude-side number, not a fabricated pump number.
+function crudeSensitivityPerUsdBblSnt(eurUsd) {
+  if (eurUsd == null || eurUsd <= 0) return null;
+  return (1 / (159 * Number(eurUsd))) * 100; // €/L → snt/L
+}
+
 export default function FactorsCard({ factors, prediction }) {
   const brent = factors?.brent;
   const fx = factors?.eur_usd;
+  const crudeSens = crudeSensitivityPerUsdBblSnt(fx?.latest);
 
   // Refined product (RBOB / NY Harbor ULSD) — supplied by /api/predict/latest
   // and the day-ahead PRIMARY signal; Brent is background context.
@@ -108,9 +119,15 @@ export default function FactorsCard({ factors, prediction }) {
       </div>
 
       <div className="mt-4 font-mono text-[11px] text-muted pt-3 border-t border-line leading-relaxed">
-        {crack != null
-          ? "Laajeneva crack → jalostusmarginaali vetää pumppua ylös vaikka Brent jää paikoilleen. Heikkenevä EUR → tuontiöljy kallistuu."
-          : "Heikkenevä EUR → kalliimpaa polttoainetta. Brent + 1 USD ≈ + 0,7 snt/L."}
+        {crack != null && "Laajeneva crack → jalostusmarginaali vetää pumppua ylös vaikka Brent jää paikoilleen. "}
+        Heikkenevä EUR → tuontiöljy kallistuu.
+        {crudeSens != null && (
+          <>
+            {" "}Brent ±1 USD/bbl ≈ ±{crudeSens.toFixed(2)} snt/L{" "}
+            <span className="text-muted/80">raakaöljytasolla</span>; pumppuun
+            siirtyvä osuus on tämän markkinan osalta vielä mittaamatta.
+          </>
+        )}
       </div>
     </Card>
   );

@@ -897,7 +897,7 @@ function TrackingFooter({ summary, fuel }) {
   const {
     n_compared,
     mae,
-    within_3c_pct,
+    within_2c_pct,
     today_actual,
     tomorrow_prediction,
     today_date,
@@ -942,10 +942,10 @@ function TrackingFooter({ summary, fuel }) {
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          ≤3 snt tarkkuus
+          ≤2 snt tarkkuus
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">
-          {within_3c_pct != null ? `${within_3c_pct.toFixed(0)}%` : "—"}
+          {within_2c_pct != null ? `${within_2c_pct.toFixed(0)}%` : "—"}
         </div>
       </div>
     </div>

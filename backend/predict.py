@@ -418,7 +418,11 @@ def fundamental_anchor(dates, prices, live_anchor,
     clamp_band = _MAX_DAILY_MOVE + abs(tax_adj)
     pred = max(base - clamp_band, min(base + clamp_band, pred))
 
-    # konfliktitilanteessa epävarmuus kasvaa
+    # Luottamusväli — UNCALIBRATED PRIOR. Nämä ovat ennalta valittuja
+    # leveyksiä, EI mittausdatasta johdettu kattavuus: 0.012 €/L = "tyypillinen
+    # pumpun päivämuutos on tätä pienempi", 0.020 €/L = "konfliktissa
+    # leveämpi". Kalibroidaan toteumadataan kun captureita on riittävästi
+    # (laske mallin systemaattisen virheen std → asetа band ≈ k·σ).
     band = 0.020 if conflict else 0.012
     expl = "Ankkuri " + f"{base:.3f} €/L"
     if parts:
@@ -810,6 +814,10 @@ async def ai_llm_predict(fuel: str, prices: list[float],
 
                 data = json.loads(raw)
                 pred = float(data.get("predicted_price"))
+                # Fallback-leveys ±0.02 €/L on degeneraatiotapaus: vain jos
+                # malli jätti CI-kentät pois palautuksesta. EI mitattu
+                # kattavuus — luottamusväli on aina mallin oman raportoinnin
+                # varassa kun se on saatavilla.
                 lo = float(data.get("confidence_low", pred - 0.02))
                 hi = float(data.get("confidence_high", pred + 0.02))
                 return {

@@ -60,7 +60,12 @@ function CIBand({ lo, hi, value, anchor }) {
       </div>
       <div className="mt-1.5 flex justify-between font-mono text-[11px] text-slate-500 tnum">
         <span>{lo.toFixed(3)}</span>
-        <span className="text-slate-400">95 %-väli</span>
+        <span
+          className="text-slate-400"
+          title="Mallin itse raportoima väli — kattavuutta ei ole kalibroitu toteumiin"
+        >
+          mallin antama väli
+        </span>
         <span>{hi.toFixed(3)}</span>
       </div>
     </div>
