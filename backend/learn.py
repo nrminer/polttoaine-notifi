@@ -64,7 +64,7 @@ async def track_record(db, fuel: str, region: str = "Suomi",
     preds = await db.predictions.find(
         {"fuel": fuel, "region": region, "target_date": {"$gte": cutoff_date}},
         {"_id": 0, "target_date": 1, "methods": 1, "ensemble": 1,
-         "generated_at": 1},
+         "ensemble_full": 1, "generated_at": 1},
     ).sort("target_date", 1).to_list(length=days + 20)
 
     keys = list(methods) + ["ensemble"]
@@ -98,7 +98,18 @@ async def track_record(db, fuel: str, region: str = "Suomi",
                 row["signed"][m] = round(fv - actual, 5)
                 signed[m].append(fv - actual)
 
-        ens_v = (p.get("ensemble") or {}).get("value")
+        # `db.predictions` tallennusmuoto: `ensemble` on FLOAT (uloskaivettu
+        # arvo) ja `ensemble_full` on koko dict. Tue molempia muotoja
+        # varovaisesti — vanha legacy-data saattaa myös tallentaa dictinä.
+        ens_raw = p.get("ensemble_full")
+        if not isinstance(ens_raw, dict):
+            ens_raw = p.get("ensemble")
+        if isinstance(ens_raw, dict):
+            ens_v = ens_raw.get("value")
+        elif isinstance(ens_raw, (int, float)):
+            ens_v = float(ens_raw)
+        else:
+            ens_v = None
         if ens_v is not None:
             try:
                 fv = float(ens_v)
