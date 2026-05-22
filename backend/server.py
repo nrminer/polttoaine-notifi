@@ -773,15 +773,15 @@ async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
     for m, errs in method_errors.items():
         if errs:
             mae = sum(errs) / len(errs)
-            # within 1 cent
-            within1c = sum(1 for e in errs if e <= 0.01) / len(errs) * 100
+            # within 3 cents
+            within3c = sum(1 for e in errs if e <= 0.03) / len(errs) * 100
             summary[m] = {
                 "n": len(errs),
                 "mae": round(mae, 4),
-                "within_1c_pct": round(within1c, 1),
+                "within_3c_pct": round(within3c, 1),
             }
         else:
-            summary[m] = {"n": 0, "mae": None, "within_1c_pct": None}
+            summary[m] = {"n": 0, "mae": None, "within_3c_pct": None}
 
     return {"fuel": fuel, "region": region, "days": days,
             "rows": rows, "summary": summary}
@@ -1042,7 +1042,7 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
     summary = {
         "n_compared": len(errs),
         "mae": round(sum(errs) / len(errs), 4) if errs else None,
-        "within_1c_pct": (round(sum(1 for e in errs if e <= 0.01) / len(errs) * 100, 1)
+        "within_3c_pct": (round(sum(1 for e in errs if e <= 0.03) / len(errs) * 100, 1)
                           if errs else None),
         "tomorrow_prediction": rows[-1].get("prediction_for_tomorrow_cheapest") if rows else None,
         "today_actual": rows[-1].get("actual_cheapest") if rows else None,

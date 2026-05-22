@@ -157,7 +157,7 @@ Grouped logically. All routes are prefixed `/api`.
 | POST | `/api/track/run`     | Capture one fuel manually |
 | POST | `/api/track/run-all?notify=true` | Capture both fuels + optionally fire ntfy |
 | POST | `/api/track/backfill?clear=true` | Bulk-upsert historical points (from notification archive); `clear=true` wipes the collection first |
-| GET  | `/api/track/history?fuel=95E10&days=60` | Read all captures sorted by (date, hour); includes summary (MAE, hit-rate ≤1¢, tomorrow_prediction, today_actual) |
+| GET  | `/api/track/history?fuel=95E10&days=60` | Read all captures sorted by (date, hour); includes summary (MAE, hit-rate ≤3¢, tomorrow_prediction, today_actual) |
 
 ### Notifications
 | POST | `/api/notify/test` | Build summary from latest captures + publish to ntfy. Smoke-test endpoint. |

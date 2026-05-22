@@ -50,7 +50,7 @@ export default function AccuracyTracker({ data }) {
                 <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3">Menetelmä</th>
                 <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">N</th>
                 <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">MAE €/L</th>
-                <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">≤1¢</th>
+                <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">≤3¢</th>
               </tr>
             </thead>
             <tbody>
@@ -87,11 +87,11 @@ export default function AccuracyTracker({ data }) {
                     </span>
                   </td>
                   <td className="py-3 px-3 text-right font-mono tnum text-xs">
-                    {s.within_1c_pct != null && (
+                    {s.within_3c_pct != null && (
                       <span className={`px-2 py-0.5 rounded-md ${
-                        s.within_1c_pct >= 50 ? "bg-emerald-100 text-emerald-700" : "text-secondary"
+                        s.within_3c_pct >= 50 ? "bg-emerald-100 text-emerald-700" : "text-secondary"
                       }`}>
-                        {s.within_1c_pct.toFixed(0)}%
+                        {s.within_3c_pct.toFixed(0)}%
                       </span>
                     )}
                   </td>

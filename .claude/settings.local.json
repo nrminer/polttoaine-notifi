@@ -17,7 +17,8 @@
       "PowerShell(Get-Command *)",
       "Bash(PYTHONIOENCODING=utf-8 python graphify-out/.balance_check.py)",
       "Bash(rm -f graphify-out/.balance_check.py)",
-      "Bash(python -m py_compile predict.py server.py)"
+      "Bash(python -m py_compile predict.py server.py)",
+      "Bash(python -m py_compile server.py)"
     ]
   }
 }
