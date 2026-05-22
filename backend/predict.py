@@ -90,6 +90,63 @@ _BIAS_MIN_N = 8       # alle tämän → korjaus = 0 (estää melun)
 _BIAS_FULL_N = 25     # tällä otoksella koko bias vähennetään
 _BIAS_MAX = 0.020     # turvaraja ±2 snt/L (osa _MAX_DAILY_MOVE-budjetista)
 
+# --- Empiirinen viikonpäivä-adj ---
+# Kun aitoa päivähäntää on tarpeeksi (ks. _WD_MIN_PER_DAY), lasketaan
+# kunkin viikonpäivän keskimääräinen poikkeama lokaalin keskiarvon
+# ympäriltä; käytetään huomisen viikonpäivä-adj:na fundamental_anchorissa
+# kiinteän priorin (±0.004 €/L) sijaan. Kun otos on lyhyt, palautetaan
+# None ja kutsuja voi nojata prioriin — kyseessä on ASTEITTAINEN siirtymä
+# priorin ja datan välillä.
+_WD_MIN_TOTAL = 21              # min. aitoa päivähäntää, ennen kuin yritetään lainkaan
+_WD_MIN_PER_DAY = 3             # min. havaintoa kohdeviikonpäivälle
+_WD_MAX_ADJ = 0.008             # turvaraja ±0.8 snt/L (kaksi kertaa prior)
+
+
+def _empirical_weekday_adj(dates, prices,
+                           tomorrow_weekday: int) -> tuple[float | None, int]:
+    """Empiirinen viikonpäivä-adjustment huomiselle.
+
+    Lähestymistapa:
+      1) Ota aito päivähäntä (max_gap=3, min_len suuri).
+      2) Vähennä jokaisesta hinnasta sen 7-päivän keskittävä rolling-mean
+         → "lokaalisti keskistetty" jäännös (paikallinen trendi poistettu).
+      3) Keskimäärin per viikonpäivä → kunkin viikonpäivän systemaattinen
+         poikkeama.
+      4) Palauta huomisen viikonpäivän mean, rajattu ±_WD_MAX_ADJ.
+
+    Palauttaa (adj, n_samples_for_tomorrow_wd). Jos data ei riitä → (None, 0).
+    """
+    dt = _daily_tail(dates, prices, max_gap=3, min_len=_WD_MIN_TOTAL)
+    if len(dt) < _WD_MIN_TOTAL:
+        return None, 0
+    try:
+        parsed = [(_parse_date(d), float(p)) for d, p in dt]
+    except Exception:
+        return None, 0
+
+    # 7-pv keskittävä rolling mean — jättää reunoille ohuemman ikkunan
+    n = len(parsed)
+    prices_arr = np.array([p for _, p in parsed], dtype=float)
+    half = 3  # ±3 → ikkunan koko 7 sisällä rajojen
+    smoothed = np.empty(n, dtype=float)
+    for i in range(n):
+        lo = max(0, i - half)
+        hi = min(n, i + half + 1)
+        smoothed[i] = prices_arr[lo:hi].mean()
+    residuals = prices_arr - smoothed
+
+    by_wd: dict[int, list[float]] = {}
+    for (d, _), r in zip(parsed, residuals):
+        by_wd.setdefault(d.weekday(), []).append(float(r))
+
+    samples = by_wd.get(int(tomorrow_weekday), [])
+    if len(samples) < _WD_MIN_PER_DAY:
+        return None, len(samples)
+
+    adj = float(np.mean(samples))
+    adj = max(-_WD_MAX_ADJ, min(_WD_MAX_ADJ, adj))
+    return adj, len(samples)
+
 
 def _bias_correction(stats: dict | None, method: str) -> float:
     """Palauta menetelmäkohtainen bias-korjaus (€/L), joka VÄHENNETÄÄN
@@ -322,18 +379,28 @@ def fundamental_anchor(dates, prices, live_anchor,
         if abs(mom_adj) >= 0.0005:
             parts.append(f"momentum {mom_adj*1000:+.1f} m€/L")
 
-    # 3) viikonpäivä-prior (Python: ma=0 … su=6).
-    # Pieni ±0.004 €/L (≈ 0.4 snt/L) on UNCALIBRATED PRIOR — ei mitattu
-    # Suomi-pumppudatasta; tarkoitus on antaa vain heikko suunnatieto.
-    # Korvataan data-pohjaisilla viikonpäivätermillä kun captureita on
-    # ≥4 viikkoa per viikonpäivä (toistaiseksi käytetään prioria).
+    # 3) viikonpäivä-adj — empiirinen kun otosta riittää, muutoin prior.
+    #    Empiirinen: kunkin viikonpäivän keskimääräinen poikkeama lokaalin
+    #    7-pv-keskiarvon ympärillä, rajattu ±_WD_MAX_ADJ. Kun aito
+    #    päivähäntä on liian lyhyt (<21 pv) tai huomisen viikonpäivälle on
+    #    <3 havaintoa, palaudutaan kiinteään ±0.004 €/L -prioriin (heikko
+    #    suunnatieto — tarkoitus EI ole olla mitattu Suomi-spesifinen).
     wd_adj = 0.0
-    if tomorrow_weekday in (1, 2):       # ti, ke
-        wd_adj = 0.004
-    elif tomorrow_weekday in (6, 0):     # su, ma
-        wd_adj = -0.004
+    wd_source = None  # "empiirinen N" | "prior"
+    emp_wd, emp_n = _empirical_weekday_adj(dates, prices, tomorrow_weekday)
+    if emp_wd is not None:
+        wd_adj = emp_wd
+        wd_source = f"empiirinen n={emp_n}"
+    else:
+        if tomorrow_weekday in (1, 2):       # ti, ke
+            wd_adj = 0.004
+        elif tomorrow_weekday in (6, 0):     # su, ma
+            wd_adj = -0.004
+        if wd_adj:
+            wd_source = "prior"
     if wd_adj:
-        parts.append(f"viikonpäivä-prior {wd_adj*1000:+.1f} m€/L")
+        tag = f"viikonpäivä-{wd_source}" if wd_source else "viikonpäivä"
+        parts.append(f"{tag} {wd_adj*1000:+.1f} m€/L")
 
     # 4) tunnettu veroaskel — astuu voimaan huomenna, joten kuuluu hintaan
     tax_adj = float(tax_step_eur_l or 0.0)
@@ -874,6 +941,7 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
         "value": round(weighted, 4),
         "spread": round(spread, 4),
         "n_methods": len(values),
+        "weights": {k: round(v, 4) for k, v in weights.items()},
         "explanation": expl + ".",
     }
 

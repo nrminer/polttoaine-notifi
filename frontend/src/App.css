@@ -1,6 +1,7 @@
 /* Component-level overrides if needed. */
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(72rem 40rem at 115% -15%, rgba(2, 47, 167, 0.07), transparent 55%),
     radial-gradient(50rem 30rem at -15% 115%, rgba(253, 224, 71, 0.09), transparent 55%),

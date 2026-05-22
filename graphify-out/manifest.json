@@ -1,0 +1,282 @@
+{
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\check_prices.py": {
+    "mtime": 1779121552.6242502,
+    "ast_hash": "cecbdd95f8fdcbe4354e574646a2901d",
+    "semantic_hash": "cecbdd95f8fdcbe4354e574646a2901d"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\design_guidelines.json": {
+    "mtime": 1778886902.1566439,
+    "ast_hash": "cf181f2535d81c9f0c8ff8a05065ee02",
+    "semantic_hash": "cf181f2535d81c9f0c8ff8a05065ee02"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\state.json": {
+    "mtime": 1779466203.4715145,
+    "ast_hash": "fe1827a9059db2b03c2cfb78484a6433",
+    "semantic_hash": "fe1827a9059db2b03c2cfb78484a6433"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\.claude\\settings.local.json": {
+    "mtime": 1779204042.6641607,
+    "ast_hash": "3c261bbf222a1f235651a4f9cabe8bd1",
+    "semantic_hash": "3c261bbf222a1f235651a4f9cabe8bd1"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\capture_now.py": {
+    "mtime": 1778944196.3881953,
+    "ast_hash": "5860785829f5726ee15f9a5f53d7a4a6",
+    "semantic_hash": "5860785829f5726ee15f9a5f53d7a4a6"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\factors.py": {
+    "mtime": 1779447489.7272217,
+    "ast_hash": "22bc2f7cf40a65478455c645a47e37bd",
+    "semantic_hash": "22bc2f7cf40a65478455c645a47e37bd"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\learn.py": {
+    "mtime": 1779449495.664986,
+    "ast_hash": "c74106e8c892bcf53a234b74da6c4533",
+    "semantic_hash": "c74106e8c892bcf53a234b74da6c4533"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\news.py": {
+    "mtime": 1778886902.1516416,
+    "ast_hash": "189efcfb435b01db1093aaf16539b4a3",
+    "semantic_hash": "189efcfb435b01db1093aaf16539b4a3"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\notify.py": {
+    "mtime": 1778892975.4555402,
+    "ast_hash": "1980ac0fbb70425dbf7e21c15d6a6040",
+    "semantic_hash": "1980ac0fbb70425dbf7e21c15d6a6040"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\predict.py": {
+    "mtime": 1779449053.6728907,
+    "ast_hash": "0c1c70e0a3022bfbcc923950079490e7",
+    "semantic_hash": "0c1c70e0a3022bfbcc923950079490e7"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\purge_captures.py": {
+    "mtime": 1778945233.6685462,
+    "ast_hash": "4220376ece23363cbf677e72b2fd241c",
+    "semantic_hash": "4220376ece23363cbf677e72b2fd241c"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\railway.json": {
+    "mtime": 1778890576.6185853,
+    "ast_hash": "ee7f2e73bed413415082231c0a1a9347",
+    "semantic_hash": "ee7f2e73bed413415082231c0a1a9347"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\server.py": {
+    "mtime": 1779448791.9417458,
+    "ast_hash": "9ddcb7c9cc63a9e7ec019d4a45886905",
+    "semantic_hash": "9ddcb7c9cc63a9e7ec019d4a45886905"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\tax_events.py": {
+    "mtime": 1779448001.112474,
+    "ast_hash": "814824ef894908d381bdc686ec3eed52",
+    "semantic_hash": "814824ef894908d381bdc686ec3eed52"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\tracker.py": {
+    "mtime": 1779448809.908105,
+    "ast_hash": "cddfabcea4e98b98221785a32e44fac1",
+    "semantic_hash": "cddfabcea4e98b98221785a32e44fac1"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\scrapers\\polttoaine.py": {
+    "mtime": 1778886902.1536467,
+    "ast_hash": "e3d75308b944b46a3d09a9875647e331",
+    "semantic_hash": "e3d75308b944b46a3d09a9875647e331"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\scrapers\\tankille.py": {
+    "mtime": 1778886902.1536467,
+    "ast_hash": "0a9ae278bac07d3ef5c2f10aeffab0c8",
+    "semantic_hash": "0a9ae278bac07d3ef5c2f10aeffab0c8"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\scrapers\\__init__.py": {
+    "mtime": 1778886902.1526418,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\tests\\test_bensavahti_api.py": {
+    "mtime": 1778940511.189311,
+    "ast_hash": "348d8fac80cc6df3d35f10e481561262",
+    "semantic_hash": "348d8fac80cc6df3d35f10e481561262"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\package.json": {
+    "mtime": 1778886902.1566439,
+    "ast_hash": "d7f1ec80c1349eb9a338e31e59907744",
+    "semantic_hash": "d7f1ec80c1349eb9a338e31e59907744"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\postcss.config.js": {
+    "mtime": 1778886902.1576462,
+    "ast_hash": "9a248c780e4c76f85b0f492f63a3d417",
+    "semantic_hash": "9a248c780e4c76f85b0f492f63a3d417"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\tailwind.config.js": {
+    "mtime": 1779203636.1775548,
+    "ast_hash": "d235fdc0b258490ed2ed4c9ff5c810c6",
+    "semantic_hash": "d235fdc0b258490ed2ed4c9ff5c810c6"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\vercel.json": {
+    "mtime": 1778888620.9335277,
+    "ast_hash": "c04e5cc959a27e243047d035156530d6",
+    "semantic_hash": "c04e5cc959a27e243047d035156530d6"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\App.js": {
+    "mtime": 1779328075.9437263,
+    "ast_hash": "232202c6f327c0744de286cfe64b7138",
+    "semantic_hash": "232202c6f327c0744de286cfe64b7138"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\index.js": {
+    "mtime": 1778886902.1652548,
+    "ast_hash": "dff1df1747d7384ada6197bcb6a06f65",
+    "semantic_hash": "dff1df1747d7384ada6197bcb6a06f65"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\AccuracyTracker.jsx": {
+    "mtime": 1779328013.4542105,
+    "ast_hash": "1c3e7086b42af21ab78448c3bed15f19",
+    "semantic_hash": "1c3e7086b42af21ab78448c3bed15f19"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\AiAnalysis.jsx": {
+    "mtime": 1779327974.356978,
+    "ast_hash": "4d6750eb0dcaddbf85cf3e62a9835cd8",
+    "semantic_hash": "4d6750eb0dcaddbf85cf3e62a9835cd8"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\Card.jsx": {
+    "mtime": 1779328093.1321895,
+    "ast_hash": "3c08ce0982baca86f465dd46dd070698",
+    "semantic_hash": "3c08ce0982baca86f465dd46dd070698"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\CityAverageChart.jsx": {
+    "mtime": 1779327998.8345041,
+    "ast_hash": "2f752cd8fef5725bb94396f3e78f922b",
+    "semantic_hash": "2f752cd8fef5725bb94396f3e78f922b"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\FactorsCard.jsx": {
+    "mtime": 1779328019.94623,
+    "ast_hash": "fef028484ef2123c978114af97368b70",
+    "semantic_hash": "fef028484ef2123c978114af97368b70"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\FuelToggle.jsx": {
+    "mtime": 1779203655.1632931,
+    "ast_hash": "0edfc6144967899996f5ae8841f1567d",
+    "semantic_hash": "0edfc6144967899996f5ae8841f1567d"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\MethodTable.jsx": {
+    "mtime": 1779328006.6090999,
+    "ast_hash": "1ea950d7725defc201842a13179c19b9",
+    "semantic_hash": "1ea950d7725defc201842a13179c19b9"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\NewsCard.jsx": {
+    "mtime": 1779327983.100668,
+    "ast_hash": "b150473cc9cffec8c2c168bad33542fa",
+    "semantic_hash": "b150473cc9cffec8c2c168bad33542fa"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\RangeToggle.jsx": {
+    "mtime": 1778886902.164255,
+    "ast_hash": "38d6671b62bee01347afebf5f7a5a9be",
+    "semantic_hash": "38d6671b62bee01347afebf5f7a5a9be"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\RegionalGrid.jsx": {
+    "mtime": 1779328025.4409595,
+    "ast_hash": "9107940720cf921ef1e7d3c6e36c7bdd",
+    "semantic_hash": "9107940720cf921ef1e7d3c6e36c7bdd"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\components\\TrackingChart.jsx": {
+    "mtime": 1779327993.7825031,
+    "ast_hash": "291f3487bf05ec76c0d8352c5e9391d5",
+    "semantic_hash": "291f3487bf05ec76c0d8352c5e9391d5"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\lib\\api.js": {
+    "mtime": 1778886902.1662564,
+    "ast_hash": "80d7c5fd16545ad58a966d9f8eaa6387",
+    "semantic_hash": "80d7c5fd16545ad58a966d9f8eaa6387"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\lib\\modelName.js": {
+    "mtime": 1779121823.0841742,
+    "ast_hash": "a6f00ed680d44ecbb47ec5d6581a5a7a",
+    "semantic_hash": "a6f00ed680d44ecbb47ec5d6581a5a7a"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\src\\lib\\utils.js": {
+    "mtime": 1778886902.1662564,
+    "ast_hash": "57f886b0c06760fcd484f8818c06163e",
+    "semantic_hash": "57f886b0c06760fcd484f8818c06163e"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\scrapers\\polttoaine.py": {
+    "mtime": 1778531383.5612733,
+    "ast_hash": "4fc77d005fc1b5b5e029e0842b13631d",
+    "semantic_hash": "4fc77d005fc1b5b5e029e0842b13631d"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\scrapers\\tankille.py": {
+    "mtime": 1778594223.6816447,
+    "ast_hash": "009f621ddd0a5a82ef6d50b0331069ec",
+    "semantic_hash": "009f621ddd0a5a82ef6d50b0331069ec"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\scrapers\\__init__.py": {
+    "mtime": 1778524857.3939507,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\test_reports\\iteration_1.json": {
+    "mtime": 1778886902.1697729,
+    "ast_hash": "d68670d7e0fb76621ba9b5135137b36e",
+    "semantic_hash": "d68670d7e0fb76621ba9b5135137b36e"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\CLAUDE.md": {
+    "mtime": 1779448417.322546,
+    "ast_hash": "35009673ca91ffe5cf87f4c42cba9938",
+    "semantic_hash": "35009673ca91ffe5cf87f4c42cba9938"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\index.html": {
+    "mtime": 1778531940.806542,
+    "ast_hash": "e8f3f648031ba5ff9ddd5aeef5d1b542",
+    "semantic_hash": "e8f3f648031ba5ff9ddd5aeef5d1b542"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\PRIVACY.md": {
+    "mtime": 1779121111.1360216,
+    "ast_hash": "5a8b74ec849eb72198a6300219051690",
+    "semantic_hash": "5a8b74ec849eb72198a6300219051690"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\RAILWAY_DEPLOYMENT.md": {
+    "mtime": 1778890576.5955384,
+    "ast_hash": "e7c1d68e237e88ab22597eb6d9a825ed",
+    "semantic_hash": "e7c1d68e237e88ab22597eb6d9a825ed"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\README.md": {
+    "mtime": 1778526817.000781,
+    "ast_hash": "d4ad61bcc129e99233d3249d609ad7d5",
+    "semantic_hash": "d4ad61bcc129e99233d3249d609ad7d5"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\requirements.txt": {
+    "mtime": 1778524857.3779092,
+    "ast_hash": "367329e561e1f81e5b24c209c3c3964d",
+    "semantic_hash": "367329e561e1f81e5b24c209c3c3964d"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\VERCEL_DEPLOYMENT.md": {
+    "mtime": 1778888620.9074242,
+    "ast_hash": "cbf4b3e5d9ebe99914bfd030e33b8ee8",
+    "semantic_hash": "cbf4b3e5d9ebe99914bfd030e33b8ee8"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\.emergent\\emergent.yml": {
+    "mtime": 1778894542.6804416,
+    "ast_hash": "d26355460ffd9641edc5191907492311",
+    "semantic_hash": "d26355460ffd9641edc5191907492311"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\.github\\workflows\\check.yml": {
+    "mtime": 1778530917.0776474,
+    "ast_hash": "dfecfbfeb8ad4cdd345024c8a4d2ba9e",
+    "semantic_hash": "dfecfbfeb8ad4cdd345024c8a4d2ba9e"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\backend\\requirements.txt": {
+    "mtime": 1778888620.914937,
+    "ast_hash": "c94aef7075cf0332c9283898947e96f1",
+    "semantic_hash": "c94aef7075cf0332c9283898947e96f1"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\public\\index.html": {
+    "mtime": 1778943400.4866467,
+    "ast_hash": "2873fd2b17d039f437e60474be9b163f",
+    "semantic_hash": "2873fd2b17d039f437e60474be9b163f"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\frontend\\public\\privacy.html": {
+    "mtime": 1779121154.1525366,
+    "ast_hash": "6cc32d32ac27062bacf7c82903f28ace",
+    "semantic_hash": "6cc32d32ac27062bacf7c82903f28ace"
+  },
+  "C:\\Users\\adama\\Downloads\\poltto\\polttoaine-notifi\\memory\\PRD.md": {
+    "mtime": 1778892975.5080006,
+    "ast_hash": "94dbd79427f8fb5300e95b54b4c71285",
+    "semantic_hash": "94dbd79427f8fb5300e95b54b4c71285"
+  }
+}

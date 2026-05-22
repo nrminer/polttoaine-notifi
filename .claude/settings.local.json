@@ -7,7 +7,17 @@
       "PowerShell(python \"C:\\\\Users\\\\adama\\\\.claude\\\\plugins\\\\cache\\\\ui-ux-pro-max-skill\\\\ui-ux-pro-max\\\\2.5.0\\\\src\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"fuel price dashboard fintech data analytics dark mode minimal\" --design-system -p \"BensaVahti\" -f markdown 2>&1)",
       "PowerShell(python \"C:\\\\Users\\\\adama\\\\.claude\\\\plugins\\\\cache\\\\ui-ux-pro-max-skill\\\\ui-ux-pro-max\\\\2.5.0\\\\src\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"dark mode dashboard data dense analytics\" --domain style -n 3 2>&1)",
       "Read(//mnt/c/Users/adama/Downloads/poltto/polttoaine-notifi/**)",
-      "Bash(yarn build *)"
+      "Bash(yarn build *)",
+      "Read(//c/Users/adama/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.5.0/.claude/skills/ui-ux-pro-max/**)",
+      "Bash(python scripts/search.py \"fuel price dashboard data tool dark mode Finland\" --design-system -p \"BensaVahti\" -f markdown)",
+      "Bash(python scripts/search.py \"dashboard data visualization\" --domain ux -n 8)",
+      "Bash(python scripts/search.py \"dark mode data dense analytics\" --domain color -n 5)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('dependencies',{}\\).get\\('lucide-react'\\)\\)\")",
+      "PowerShell(if \\(Test-Path frontend/node_modules\\) { Write-Host \"node_modules: YES\"; \\(Get-ChildItem frontend/node_modules -Directory | Select-Object -First 3 | ForEach-Object { $_.Name }\\) } else { Write-Host \"node_modules: NO\" })",
+      "PowerShell(Get-Command *)",
+      "Bash(PYTHONIOENCODING=utf-8 python graphify-out/.balance_check.py)",
+      "Bash(rm -f graphify-out/.balance_check.py)",
+      "Bash(python -m py_compile predict.py server.py)"
     ]
   }
 }

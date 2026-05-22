@@ -67,13 +67,16 @@ const CHART_SLOTS = [
   { value: 21, label: "21:00" },
 ];
 
-/* Reusable filter button used in chart controls */
+/* Reusable filter button used in chart controls.
+   h-9 (36px) + py implicit hit area pushes effective tap target near 44px;
+   on touch devices users get the bigger area without visual bulk. */
 function FilterBtn({ active, onClick, children, testId }) {
   return (
     <button
       data-testid={testId}
       onClick={onClick}
-      className={`px-2.5 h-7 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 ${
+      type="button"
+      className={`px-3 h-9 min-w-[2.5rem] font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1 ${
         active
           ? "bg-brand text-white border-brand shadow-sm"
           : "bg-transparent text-secondary border-line hover:border-brand/50 hover:text-ink"
@@ -82,6 +85,30 @@ function FilterBtn({ active, onClick, children, testId }) {
       {children}
     </button>
   );
+}
+
+/* Method abbreviations used in the dark hero prediction card.
+   Kept short on purpose — the dark card needs to feel like a terminal,
+   not a marketing paragraph. */
+const DARK_METHODS = [
+  { key: "fundamental_anchor", label: "ANKKURI" },
+  { key: "ai_llm",             label: "AI" },
+  { key: "exp_smoothing",      label: "HOLT" },
+  { key: "linear_regression",  label: "REGR." },
+  { key: "moving_average",     label: "MA·7" },
+];
+
+function deltaColorDark(d) {
+  if (d == null) return "text-slate-500";
+  if (d > 0.0005)  return "text-red-300";
+  if (d < -0.0005) return "text-emerald-300";
+  return "text-slate-400";
+}
+function deltaFmtMilli(d) {
+  if (d == null) return "—";
+  const v = d * 1000;
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "";
+  return `${sign}${Math.abs(v).toFixed(1)} m€`;
 }
 
 export default function App() {
@@ -186,11 +213,23 @@ export default function App() {
             generated_at: data.generated_at,
             target_date: data.target_date,
             current_price: data.current_price,
+            live_anchor: data.live_anchor,
             ensemble: data.ensemble,
             methods: data.methods,
             brent: data.brent,
             eur_usd: data.eur_usd,
             data_sources: data.data_sources,
+            // rikkaampi konteksti (taustamuuttujat + self-training)
+            conflict_signal: data.conflict_signal,
+            n_daily_points: data.n_daily_points,
+            product_label: data.product_label,
+            product_usd_gal: data.product_usd_gal,
+            product_chg: data.product_chg,
+            crack_eur_l: data.crack_eur_l,
+            tax_events: data.tax_events,
+            tax_step_eur_l: data.tax_step_eur_l,
+            self_training: data.self_training,
+            news_headlines: data.news_headlines,
           });
         } else {
           setPrediction(null);
@@ -351,6 +390,9 @@ export default function App() {
 
   return (
     <div className="app-shell relative">
+      <a href="#main-content" className="skip-link">
+        Siirry pääsisältöön
+      </a>
       {/* TOP BAR */}
       <header className="border-b border-line bg-white/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-[1480px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
@@ -362,18 +404,18 @@ export default function App() {
               <div className="font-display font-black tracking-tighter text-xl leading-none text-ink">
                 BENSAVAHTI
               </div>
-              <div className="font-mono text-[10px] text-muted uppercase tracking-[0.18em] mt-1">
+              <div className="font-mono text-[11px] text-muted uppercase tracking-[0.18em] mt-1">
                 95E10 + Diesel · huominen ennuste
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-2 px-3 h-8 rounded-lg bg-surface font-mono text-xs text-secondary">
+            <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-lg bg-surface font-mono text-xs text-secondary">
               <Clock size={12} />
               {current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "—"}
               {current?.stale && (
-                <span className="ml-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] rounded-md">
+                <span className="ml-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[11px] rounded-md">
                   CACHED
                 </span>
               )}
@@ -381,17 +423,19 @@ export default function App() {
             <button
               data-testid="theme-toggle-btn"
               onClick={toggleTheme}
+              type="button"
               aria-label={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
               title={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line hover:bg-surface transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-line hover:bg-surface transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
             >
-              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
             <button
               data-testid="refresh-prices-btn"
               onClick={handleRefreshAll}
               disabled={isLoading}
-              className="inline-flex items-center gap-2 px-3 h-9 rounded-lg border border-line hover:bg-surface text-sm font-mono font-semibold transition-colors disabled:opacity-60"
+              type="button"
+              className="inline-flex items-center gap-2 px-3 h-10 rounded-lg border border-line hover:bg-surface text-sm font-mono font-semibold transition-colors disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
             >
               <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
               Päivitä
@@ -401,22 +445,52 @@ export default function App() {
       </header>
 
       {/* HERO */}
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pt-10 md:pt-16 pb-8">
+      <section
+        id="main-content"
+        className="max-w-[1480px] mx-auto px-6 md:px-10 pt-10 md:pt-16 pb-8"
+      >
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7">
-            <CardLabel className="mb-3">Suomen polttoainemarkkina · ennustealgoritmi</CardLabel>
+            <CardLabel className="mb-3">Suomi · day-ahead pumppuhinta-arvio</CardLabel>
             <h1 className="font-display text-5xl md:text-7xl font-black tracking-tightest leading-[0.95]">
               Huomisen<br />
               hinta <span className="deco-underline">tänään.</span>
             </h1>
             <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
-              Viisi rinnakkaista menetelmää — liukuva keskiarvo, lineaarinen regressio,
-              eksponentiaalinen tasoitus, fundamenttiankkuri (Brent + EUR/USD) ja{" "}
-              {formatModelName(prediction?.methods?.ai_llm?.model) || "tekoäly"} —
-              yhdistettynä yhdeksi ennusteeksi{" "}
-              <span className="font-mono font-semibold text-ink">95E10:n</span> ja{" "}
-              <span className="font-mono font-semibold text-ink">dieselin</span> huomiselle hinnalle.
+              Live capture klo 14 ja 21. Viisi mallia, datalaatupainotettu
+              yhdistelmä, ankkuroitu live-hintaan.
             </p>
+
+            {/* Context chips: real numbers, not marketing copy */}
+            <div className="mt-5 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+              {prediction?.n_daily_points != null && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
+                  <span className="text-muted">päivähäntä</span>
+                  <span className="text-ink font-semibold tnum">{prediction.n_daily_points} pv</span>
+                </span>
+              )}
+              {current?.stations_count != null && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
+                  <span className="text-muted">otanta</span>
+                  <span className="text-ink font-semibold tnum">{current.stations_count} as.</span>
+                </span>
+              )}
+              {prediction?.methods?.ai_llm?.model && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
+                  <span className="text-muted">ai</span>
+                  <span className="text-ink font-semibold">{formatModelName(prediction.methods.ai_llm.model)}</span>
+                </span>
+              )}
+              {prediction?.conflict_signal && (
+                <span
+                  data-testid="geopol-chip"
+                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-amber-50 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-400/30 text-amber-800 dark:text-amber-200 font-semibold"
+                  title="Uutisista poimittu konflikti-/tarjontahäiriösignaali — leveämpi epävarmuusväli."
+                >
+                  ⚑ geopol. signaali
+                </span>
+              )}
+            </div>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <FuelToggle value={fuel} onChange={setFuel} />
@@ -449,7 +523,7 @@ export default function App() {
               </div>
               <div className="mt-6 grid grid-cols-2 gap-4 tick-row border-t border-line pt-5">
                 <div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                  <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
                     Huominen · halvin ennuste
                   </div>
                   <div
@@ -461,7 +535,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="pl-5">
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                  <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
                     Halvimpien {current?.stations_count || ""} ka.
                   </div>
                   <div className="hero-num tnum text-2xl mt-1">
@@ -515,37 +589,90 @@ export default function App() {
             </div>
 
             <div className="col-span-12 md:col-span-7 md:border-l md:border-slate-700/60 md:pl-8">
-              <CardLabel className="text-slate-400">Mistä ennuste rakentuu</CardLabel>
-              <ul className="mt-4 space-y-2.5 text-slate-200 text-sm leading-relaxed">
-                <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
-                  <span className="font-mono text-accent">{prediction?.methods?.moving_average?.value?.toFixed(3) ?? "—"}</span>
-                  <span className="text-slate-400">liukuva 7 pv keskiarvo</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
-                  <span className="font-mono text-accent">{prediction?.methods?.linear_regression?.value?.toFixed(3) ?? "—"}</span>
-                  <span className="text-slate-400">lineaarinen regressio</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
-                  <span className="font-mono text-accent">{prediction?.methods?.exp_smoothing?.value?.toFixed(3) ?? "—"}</span>
-                  <span className="text-slate-400">Holt-tasoitus</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand/70 shrink-0" />
-                  <span className="font-mono text-accent">{prediction?.methods?.fundamental_anchor?.value?.toFixed(3) ?? "—"}</span>
-                  <span className="text-slate-400">fundamenttiankkuri (Brent+FX)</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
-                  <span className="font-mono text-accent">{prediction?.methods?.ai_llm?.value?.toFixed(3) ?? "—"}</span>
-                  <span className="text-slate-400">AI / {formatModelName(prediction?.methods?.ai_llm?.model) || "malli ei tiedossa"}</span>
-                </li>
-              </ul>
+              <div className="flex items-center justify-between mb-4">
+                <CardLabel className="text-slate-400">Mistä ennuste rakentuu</CardLabel>
+                {prediction?.current_price != null && (
+                  <span className="font-mono text-[11px] text-slate-500">
+                    suhteessa live · <span className="tnum text-slate-300">{prediction.current_price.toFixed(3)}</span>
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1.5" data-testid="dark-method-grid">
+                {DARK_METHODS.map(({ key, label }) => {
+                  const m = prediction?.methods?.[key];
+                  const v = m?.value;
+                  const live = prediction?.current_price ?? prediction?.live_anchor;
+                  const d = v != null && live != null ? v - live : null;
+                  const w = prediction?.ensemble?.weights?.[key];
+                  const sub =
+                    key === "ai_llm"
+                      ? formatModelName(prediction?.methods?.ai_llm?.model) || "ei ajettu"
+                      : key === "fundamental_anchor"
+                      ? "Brent + RBOB/HO + FX"
+                      : null;
+                  return (
+                    <div
+                      key={key}
+                      className="grid grid-cols-[5.5rem_1fr_4rem_3rem] md:grid-cols-[6rem_1fr_4.5rem_3.5rem] items-center gap-3 py-1.5 border-b border-slate-700/40 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-300">
+                          {label}
+                        </div>
+                        {sub && (
+                          <div className="font-mono text-[11px] text-slate-500 truncate" title={sub}>
+                            {sub}
+                          </div>
+                        )}
+                      </div>
+                      <div className="font-mono tnum text-slate-100 text-sm md:text-base">
+                        {v != null ? v.toFixed(3) : "—"}
+                        <span className="text-slate-500 text-[11px] ml-1">€/L</span>
+                      </div>
+                      <div className={`font-mono tnum text-[11px] text-right ${deltaColorDark(d)}`}>
+                        {deltaFmtMilli(d)}
+                      </div>
+                      <div className="font-mono tnum text-[11px] text-right text-slate-500">
+                        {w != null ? `${Math.round(w * 100)}%` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                {prediction?.crack_eur_l != null && (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-white/5 border border-slate-700/60 text-slate-300"
+                    title="Crack-spread: jalostettu tuote − Brent (EUR/L). Positiivinen = jalostusmarginaali laajenee → pumppupaine ylös."
+                  >
+                    <span className="text-slate-500">crack</span>
+                    <span className={`tnum font-semibold ${prediction.crack_eur_l >= 0 ? "text-amber-300" : "text-slate-200"}`}>
+                      {prediction.crack_eur_l >= 0 ? "+" : ""}{prediction.crack_eur_l.toFixed(3)} €/L
+                    </span>
+                  </span>
+                )}
+                {prediction?.product_label && prediction?.product_chg != null && (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-white/5 border border-slate-700/60 text-slate-300"
+                    title="Jalostetun tuotteen (RBOB / NY Harbor ULSD) ≈5 päivän muutos. Day-ahead-pääsignaali."
+                  >
+                    <span className="text-slate-500">{prediction.product_label.startsWith("RBOB") ? "RBOB" : "ULSD"} ~5pv</span>
+                    <span className={`tnum font-semibold ${prediction.product_chg >= 0 ? "text-red-300" : "text-emerald-300"}`}>
+                      {prediction.product_chg >= 0 ? "+" : ""}{(prediction.product_chg * 100).toFixed(1)}%
+                    </span>
+                  </span>
+                )}
+                {prediction?.tax_step_eur_l && Math.abs(prediction.tax_step_eur_l) > 0.0001 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-amber-500/15 border border-amber-400/30 text-amber-200 font-semibold">
+                    veroaskel {prediction.tax_step_eur_l >= 0 ? "+" : ""}{(prediction.tax_step_eur_l * 100).toFixed(2)} snt/L
+                  </span>
+                )}
+              </div>
+
               <div
                 data-testid="auto-info-pill"
-                className="mt-6 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-accent/15 text-accent border border-accent/30 font-semibold text-sm"
+                className="mt-5 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-accent/15 text-accent border border-accent/30 font-semibold text-sm"
               >
                 <Clock size={14} />
                 Päivittyy automaattisesti klo 14 ja 21 Helsingin aikaa
@@ -597,7 +724,7 @@ export default function App() {
               className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 pb-4 border-b border-line"
             >
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted mr-1">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
                   Alue
                 </span>
                 {CHART_CITIES.map((c) => (
@@ -613,7 +740,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted mr-1">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
                   Jakso
                 </span>
                 {CHART_RANGES.map((r) => (
@@ -628,7 +755,7 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted mr-1">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
                   Capture
                 </span>
                 {CHART_SLOTS.map((s) => (
@@ -707,6 +834,7 @@ export default function App() {
               ai={prediction?.methods?.ai_llm}
               brent={prediction?.brent ?? factors?.brent?.latest}
               eurUsd={prediction?.eur_usd ?? factors?.eur_usd?.latest}
+              anchor={prediction?.current_price ?? prediction?.live_anchor}
             />
           </div>
           <div className="col-span-12 lg:col-span-5">
@@ -727,7 +855,7 @@ export default function App() {
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-16">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-5">
-            <FactorsCard factors={factors} />
+            <FactorsCard factors={factors} prediction={prediction} />
           </div>
           <div className="col-span-12 lg:col-span-7">
             <AccuracyTracker data={accuracy} />
@@ -780,7 +908,7 @@ function TrackingFooter({ summary, fuel }) {
       className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-line pt-4"
     >
       <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
           Tänään · {today_date ? today_date.slice(8, 10) + "." + today_date.slice(5, 7) + "." : "—"}
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">
@@ -789,7 +917,7 @@ function TrackingFooter({ summary, fuel }) {
         </div>
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
           Huominen ({fuel})
         </div>
         <div
@@ -801,19 +929,19 @@ function TrackingFooter({ summary, fuel }) {
         </div>
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
           MAE (vertailtu)
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">
           {mae != null ? mae.toFixed(4) : "—"}
           <span className="text-secondary text-xs ml-1">€/L</span>
         </div>
-        <div className="font-mono text-[10px] text-muted mt-0.5">
+        <div className="font-mono text-[11px] text-muted mt-0.5">
           {n_compared > 0 ? `${n_compared} pv` : "kerää dataa"}
         </div>
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
           ≤1 snt tarkkuus
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">

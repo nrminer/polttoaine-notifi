@@ -153,8 +153,77 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
 }
 
 /* recharts text - force monospace */
-.recharts-text { font-family: "JetBrains Mono", ui-monospace, monospace !important; }
+.recharts-text { font-family: "JetBrains Mono", ui-monospace, monospace !important; font-size: 12px !important; }
 .recharts-legend-item-text {
   font-family: "JetBrains Mono", ui-monospace, monospace !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
+}
+
+/* Skip-to-main-content link (visible only on keyboard focus) */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: #002FA7;
+  color: #fff;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: top 0.18s ease;
+}
+.skip-link:focus {
+  top: 1rem;
+  outline: 2px solid #FDE047;
+  outline-offset: 2px;
+}
+
+/* Mini delta bar used in the dark prediction card method breakdown */
+.delta-bar-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  background: rgba(148, 163, 184, 0.14);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.delta-bar-track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: rgba(148, 163, 184, 0.45);
+}
+.delta-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 9999px;
+  transition: width 220ms ease, left 220ms ease;
+}
+
+/* Respect prefers-reduced-motion across the app
+   (Framer Motion / hover-lift / dot-pulse / marquee / scroll-smoothing). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .hover-lift:hover {
+    transform: none !important;
+  }
+  .dot-pulse {
+    animation: none !important;
+    opacity: 0.7 !important;
+  }
+  .delta-bar-fill {
+    transition: none !important;
+  }
 }

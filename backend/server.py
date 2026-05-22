@@ -490,6 +490,16 @@ async def run_prediction(req: PredictionRequest):
         "eur_usd": fx_val,
         "news_headlines": headlines,
         "data_sources": result.get("data_sources"),
+        # rikkaampi konteksti UI:lle (näytetään prediction-kortissa)
+        "conflict_signal": result.get("conflict_signal"),
+        "n_daily_points": result.get("n_daily_points"),
+        "product_label": result.get("product_label"),
+        "product_usd_gal": result.get("product_usd_gal"),
+        "product_chg": result.get("product_chg"),
+        "crack_eur_l": result.get("crack_eur_l"),
+        "tax_events": result.get("tax_events"),
+        "tax_step_eur_l": result.get("tax_step_eur_l"),
+        "self_training": result.get("self_training"),
     }
     await db.predictions.update_one(
         {"target_date": target_date, "fuel": fuel, "region": region},
@@ -543,6 +553,16 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         "eur_usd": doc.get("eur_usd"),
         "news_headlines": doc.get("news_headlines", []),
         "data_sources": doc.get("data_sources"),
+        # rikkaampi konteksti — taustamuuttujat & self-training (näytetään UI:ssa)
+        "conflict_signal": doc.get("conflict_signal"),
+        "n_daily_points": doc.get("n_daily_points"),
+        "product_label": doc.get("product_label"),
+        "product_usd_gal": doc.get("product_usd_gal"),
+        "product_chg": doc.get("product_chg"),
+        "crack_eur_l": doc.get("crack_eur_l"),
+        "tax_events": doc.get("tax_events") or [],
+        "tax_step_eur_l": doc.get("tax_step_eur_l"),
+        "self_training": doc.get("self_training"),
     }
 
 

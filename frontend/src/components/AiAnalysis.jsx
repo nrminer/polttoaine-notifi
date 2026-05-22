@@ -7,35 +7,77 @@ function DirectionBadge({ direction }) {
   if (!direction) return null;
   if (direction === "up")
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/15 border border-red-400/30 text-red-300 font-display text-base font-bold">
-        <TrendingUp size={14} /> NOUSU
+      <span className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-red-500/15 border border-red-400/30 text-red-300 font-display text-sm font-bold uppercase tracking-wider">
+        <TrendingUp size={13} /> Nousu
       </span>
     );
   if (direction === "down")
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-display text-base font-bold">
-        <TrendingDown size={14} /> LASKU
+      <span className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-display text-sm font-bold uppercase tracking-wider">
+        <TrendingDown size={13} /> Lasku
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-700/40 border border-slate-600/30 text-slate-300 font-display text-base font-bold">
-      <Minus size={14} /> TASAINEN
+    <span className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-slate-700/40 border border-slate-600/30 text-slate-300 font-display text-sm font-bold uppercase tracking-wider">
+      <Minus size={13} /> Tasainen
     </span>
   );
 }
 
-export default function AiAnalysis({ ai, brent, eurUsd }) {
+/* Visual confidence interval band: shows lo / value / hi as a positioned
+   marker over a horizontal range. Anchor = live price (or value itself
+   if no anchor available) so the band reads as a directional gap. */
+function CIBand({ lo, hi, value, anchor }) {
+  if (lo == null || hi == null || value == null) return null;
+  const min = Math.min(lo, anchor ?? value);
+  const max = Math.max(hi, anchor ?? value);
+  const width = Math.max(0.001, max - min);
+  const pct = (x) => ((x - min) / width) * 100;
+  const leftLo = Math.max(0, pct(lo));
+  const widthLoHi = Math.max(2, pct(hi) - leftLo);
+  const valuePos = Math.min(100, Math.max(0, pct(value)));
+  const anchorPos =
+    anchor != null ? Math.min(100, Math.max(0, pct(anchor))) : null;
+  return (
+    <div className="mt-2">
+      <div className="relative h-3 rounded-full bg-white/5 border border-slate-700/60">
+        <div
+          className="absolute top-0 bottom-0 rounded-full bg-accent/40"
+          style={{ left: `${leftLo}%`, width: `${widthLoHi}%` }}
+        />
+        {anchorPos != null && (
+          <span
+            className="absolute -top-0.5 -bottom-0.5 w-px bg-slate-400"
+            style={{ left: `${anchorPos}%` }}
+            title="live-ankkuri"
+          />
+        )}
+        <span
+          className="absolute -top-1 -bottom-1 w-0.5 bg-accent shadow-glow-accent"
+          style={{ left: `${valuePos}%` }}
+          title="AI-arvio"
+        />
+      </div>
+      <div className="mt-1.5 flex justify-between font-mono text-[11px] text-slate-500 tnum">
+        <span>{lo.toFixed(3)}</span>
+        <span className="text-slate-400">95 %-väli</span>
+        <span>{hi.toFixed(3)}</span>
+      </div>
+    </div>
+  );
+}
+
+export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
   const explanation = ai?.explanation || "Aja ennuste saadaksesi AI-analyysin.";
   const direction = ai?.direction;
   const value = ai?.value;
+  const lo = ai?.confidence_low;
+  const hi = ai?.confidence_high;
   const modelLabel = formatModelName(ai?.model);
+  const drivers = (ai?.key_drivers || []).slice(0, 4);
 
   return (
-    <Card
-      dark
-      testId="ai-analysis-card"
-      className="p-6 md:p-7 relative"
-    >
+    <Card dark testId="ai-analysis-card" className="p-6 md:p-7 relative">
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none rounded-xl"
@@ -45,79 +87,114 @@ export default function AiAnalysis({ ai, brent, eurUsd }) {
         }}
       />
       <div className="relative z-10">
-        <div className="flex items-center gap-2 mb-4">
-          <Brain size={14} className="text-accent" strokeWidth={2.4} />
-          <CardLabel className="text-accent" data-testid="ai-model-label">
-            AI-analyysi{modelLabel ? ` · ${modelLabel}` : ""}
-          </CardLabel>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Brain size={14} className="text-accent" strokeWidth={2.4} />
+            <CardLabel className="text-accent" data-testid="ai-model-label">
+              AI-analyysi{modelLabel ? ` · ${modelLabel}` : ""}
+            </CardLabel>
+          </div>
+          {direction && (
+            <div data-testid="ai-direction">
+              <DirectionBadge direction={direction} />
+            </div>
+          )}
         </div>
+
+        {/* Hero number row */}
+        <div className="flex items-end gap-6 flex-wrap" data-testid="ai-value-row">
+          {value != null && (
+            <div>
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+                Mallin arvio
+              </div>
+              <div className="font-display font-black tnum text-4xl md:text-5xl text-white leading-none">
+                {Number(value).toFixed(3)}
+                <span className="text-slate-400 font-mono font-medium text-base ml-2">€/L</span>
+              </div>
+            </div>
+          )}
+          {anchor != null && value != null && (
+            <div>
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+                Δ live
+              </div>
+              <div
+                className={`font-mono tnum text-xl font-semibold ${
+                  value - anchor > 0.0005
+                    ? "text-red-300"
+                    : value - anchor < -0.0005
+                    ? "text-emerald-300"
+                    : "text-slate-300"
+                }`}
+              >
+                {value - anchor > 0 ? "+" : ""}
+                {((value - anchor) * 1000).toFixed(1)} m€/L
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Confidence interval band */}
+        <CIBand lo={lo} hi={hi} value={value} anchor={anchor} />
+
+        {/* Explanation — sized like normal body text, not a giant quote */}
         <p
-          className="font-display text-2xl md:text-3xl tracking-tighter leading-tight"
+          className="mt-5 text-slate-200 text-sm md:text-base leading-relaxed max-w-prose"
           data-testid="ai-explanation"
         >
           {explanation}
         </p>
 
-        {ai?.key_drivers && ai.key_drivers.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2" data-testid="ai-drivers">
-            {ai.key_drivers.slice(0, 4).map((d, i) => (
-              <span
-                key={i}
-                className="font-mono text-[11px] px-2.5 py-1 rounded-md bg-white/8 text-accent border border-accent/25"
-              >
-                {d}
-              </span>
-            ))}
+        {/* Key drivers — numbered, not just a flat row of chips */}
+        {drivers.length > 0 && (
+          <div className="mt-5" data-testid="ai-drivers">
+            <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-2">
+              Avainajurit
+            </div>
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {drivers.map((d, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-2.5 px-3 py-2 rounded-md bg-white/5 border border-slate-700/60"
+                >
+                  <span className="font-mono text-[11px] tnum text-accent shrink-0 mt-0.5 w-4">
+                    {i + 1}
+                  </span>
+                  <span className="text-slate-200 text-[13px] leading-snug">{d}</span>
+                </li>
+              ))}
+            </ol>
           </div>
         )}
 
-        <div className="mt-6 flex flex-wrap items-end gap-x-6 gap-y-4">
-          {value != null && (
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-1">
-                Mallin ennuste
-              </div>
-              <div className="font-mono tnum text-3xl font-bold">
-                {Number(value).toFixed(3)}
-                <span className="text-sm text-slate-400 ml-1">€/L</span>
-              </div>
-            </div>
-          )}
-          {direction && (
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-1">
-                Suunta
-              </div>
-              <div data-testid="ai-direction">
-                <DirectionBadge direction={direction} />
-              </div>
-            </div>
-          )}
+        {/* Backdrop macro row */}
+        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 border-t border-slate-700/60">
           {brent != null && (
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
                 Brent
               </div>
-              <div className="font-mono tnum text-lg font-semibold">
+              <div className="font-mono tnum text-base font-semibold text-slate-100">
                 {Number(brent).toFixed(2)}
-                <span className="text-slate-400 text-sm ml-1">USD</span>
+                <span className="text-slate-500 text-[11px] ml-1">USD/bbl</span>
               </div>
             </div>
           )}
           {eurUsd != null && (
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
                 EUR/USD
               </div>
-              <div className="font-mono tnum text-lg font-semibold">
+              <div className="font-mono tnum text-base font-semibold text-slate-100">
                 {Number(eurUsd).toFixed(4)}
               </div>
             </div>
           )}
-        </div>
-        <div className="mt-5 flex items-center gap-2 text-[11px] text-slate-400 font-mono">
-          <Sparkles size={12} className="text-accent shrink-0" />
-          AI tarkastelee historiaa, kausivaihtelua, Brent-hintaa ja EUR/USD-kurssia
+          <div className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
+            <Sparkles size={11} className="text-accent shrink-0" />
+            forward-katsova; Brent-priced ei tuplalaskettu
+          </div>
         </div>
       </div>
     </Card>

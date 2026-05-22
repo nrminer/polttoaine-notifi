@@ -91,8 +91,9 @@ export default function RegionalGrid({ data, fuel, cityData }) {
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-line">
         <button
+          type="button"
           onClick={() => setSelected(new Set(ALL_CITIES))}
-          className={`px-2.5 h-7 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 ${
+          className={`px-3 h-9 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${
             allSelected
               ? "bg-brand text-white border-brand shadow-sm"
               : "bg-transparent text-secondary border-line hover:border-brand/50 hover:text-ink"
@@ -103,8 +104,10 @@ export default function RegionalGrid({ data, fuel, cityData }) {
         {ALL_CITIES.map((city) => (
           <button
             key={city}
+            type="button"
             onClick={() => toggleCity(city)}
-            className={`px-2.5 h-7 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 ${
+            aria-pressed={selected.has(city)}
+            className={`px-3 h-9 font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${
               selected.has(city)
                 ? allSelected
                   ? "bg-transparent text-secondary border-line hover:border-brand/50"
@@ -117,8 +120,10 @@ export default function RegionalGrid({ data, fuel, cityData }) {
         ))}
 
         <button
+          type="button"
           onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-          className="ml-auto flex items-center gap-1.5 px-3 h-7 font-mono text-[11px] font-semibold rounded-md border border-line hover:bg-surface transition-colors whitespace-nowrap"
+          aria-label={sortDir === "asc" ? "Lajittele kallein ensin" : "Lajittele halvin ensin"}
+          className="ml-auto flex items-center gap-1.5 px-3 h-9 font-mono text-[11px] font-semibold rounded-md border border-line hover:bg-surface transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
         >
           <ArrowUpDown size={11} />
           {sortDir === "asc" ? "Halvin ensin" : "Kallein ensin"}

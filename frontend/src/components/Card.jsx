@@ -1,14 +1,15 @@
 import React from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export function Card({ children, className = "", testId, dark = false, span = "", ...rest }) {
+  const reduce = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      initial={reduce ? false : { opacity: 0, y: 12 }}
+      animate={reduce ? undefined : { opacity: 1, y: 0 }}
+      transition={reduce ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       data-testid={testId}
       className={cn(
         "relative overflow-hidden rounded-xl border hover-lift",

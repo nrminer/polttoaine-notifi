@@ -56,6 +56,8 @@ export default function MethodTable({ result }) {
           const label = dyn?.label ?? m.label;
           const sub = dyn?.sub ?? m.sub;
           const color = METHOD_COLORS[key] || "#64748B";
+          const weight = result?.ensemble?.weights?.[key];
+          const weightPct = weight != null ? Math.max(0, Math.min(100, weight * 100)) : null;
           return (
             <div
               key={key}
@@ -64,23 +66,36 @@ export default function MethodTable({ result }) {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-                  <m.Icon size={13} strokeWidth={2.4} style={{ color }} className="shrink-0" />
+                  <m.Icon size={14} strokeWidth={2.4} style={{ color }} className="shrink-0" />
                   <span className="font-semibold text-sm">{label}</span>
-                  <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
+                  <span className="font-mono text-[11px] text-muted uppercase tracking-wider">
                     {sub}
                   </span>
                 </div>
-                <p className="text-xs text-secondary mt-1 leading-relaxed line-clamp-2 pl-[18px]">
+                <p className="text-xs text-secondary mt-1 leading-relaxed line-clamp-2 pl-[22px]">
                   {row.explanation || "—"}
                 </p>
                 {lo != null && hi != null && (
-                  <p className="font-mono text-[10px] text-muted mt-1 pl-[18px]">
+                  <p className="font-mono text-[11px] text-muted mt-1 pl-[22px]">
                     luottamus {fmtPrice(lo)} … {fmtPrice(hi)} €/L
                   </p>
+                )}
+                {weightPct != null && (
+                  <div
+                    className="pl-[22px] mt-2 flex items-center gap-2"
+                    title={`Yhdistelmäpaino ${weightPct.toFixed(0)} %`}
+                    data-testid={`method-weight-${key}`}
+                  >
+                    <div className="flex-1 h-1.5 rounded-full bg-line overflow-hidden max-w-[180px]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${weightPct}%`, backgroundColor: color }}
+                      />
+                    </div>
+                    <span className="font-mono text-[11px] tnum text-secondary tabular-nums w-9 text-right">
+                      {weightPct.toFixed(0)}%
+                    </span>
+                  </div>
                 )}
               </div>
               <div className="text-right shrink-0">
