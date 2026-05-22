@@ -23,6 +23,8 @@ import predict as predict_mod
 import factors as factors_mod
 import news as news_mod
 import notify as notify_mod
+import tax_events as tax_events_mod
+import learn as learn_mod
 from scrapers import polttoaine, tankille
 
 logger = logging.getLogger("bensavahti.tracker")
@@ -223,14 +225,29 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         loop = asyncio.get_event_loop()
         brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
         fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
+        product_task = loop.run_in_executor(
+            executor, factors_mod.fetch_product_for_fuel, fuel, 30
+        )
         news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
-        brent_series, fx_series, headlines = await asyncio.gather(
-            brent_task, fx_task, news_task
+        brent_series, fx_series, product_pair, headlines = await asyncio.gather(
+            brent_task, fx_task, product_task, news_task
         )
         brent_val = factors_mod.latest_value(brent_series)
         fx_val = factors_mod.latest_value(fx_series)
         brent_chg = factors_mod.change_frac(brent_series, 5)
         fx_chg = factors_mod.change_frac(fx_series, 5)
+
+        product_series, product_label = product_pair
+        product_val = factors_mod.latest_value(product_series)
+        product_chg = factors_mod.change_frac(product_series, 5)
+        crack_val = factors_mod.crack_spread_eur_per_l(product_val, brent_val, fx_val)
+
+        # Tunnetut veromuutokset: huomenna voimaan tuleva askel + 30 pv ikkuna
+        today_iso = datetime.now(timezone.utc).date().isoformat()
+        target_iso = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+        tax_step = tax_events_mod.applicable_step(fuel, today_iso, target_iso)
+        tax_step_eur_l = tax_step["delta_eur_per_l"] if tax_step else None
+        tax_upcoming = tax_events_mod.upcoming(today_iso, lookahead_days=30, fuel=fuel)
 
         # Aja AINA koko ennusteputki (predict_tomorrow). Se degradoituu
         # hallitusti vähäisellä datalla: fundamental_anchor toimii live-
@@ -240,6 +257,10 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         # cold-startissa, jolloin niitä eniten tarvitaan.
         # itsekalibrointi: menetelmien toteutunut MAE aidoista captureista
         mae = await realized_method_mae(db, fuel, region)
+        # Self-training: aiempien ennusteiden vs. toteumien track record
+        # (sekä fundamental_anchorin numeerinen bias-korjaus että AI:n
+        # näkyvä historia samasta lähteestä).
+        track_rec = await learn_mod.track_record(db, fuel, region, days=30)
         full = await predict_mod.predict_tomorrow(
             fuel, dates, prices, brent_val, fx_val,
             live_today_price=cheapest["price"],
@@ -248,6 +269,13 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
             brent_chg=brent_chg,
             eur_usd_chg=fx_chg,
             method_mae=mae,
+            product_usd_gal=product_val,
+            product_chg=product_chg,
+            product_label=product_label,
+            crack_eur_l=crack_val,
+            tax_events=tax_upcoming,
+            tax_step_eur_l=tax_step_eur_l,
+            track_record=track_rec,
         )
         # VAIN aito malliennuste talletetaan. Jos ensemble ei tuottanut
         # arvoa (esim. cold-start, kaikki menetelmät None), EI fabrikoida

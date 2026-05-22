@@ -59,9 +59,56 @@ def _daily_tail(dates, prices, max_gap: int = 3, min_len: int = 4):
 
 
 # Suomen pumppuhinta liikkuu päivässä käytännössä alle tämän
+# (poikkeus: tunnettu veromuutos voimaan → clamppia laajennetaan steppin verran)
 _MAX_DAILY_MOVE = 0.06
 # 1 tynnyri = 159 L
 _BBL_LITRES = 159.0
+# 1 US gallon = 3.785… L (RBOB / HO -futuurit hinnoitellaan USD/gallona)
+_GAL_LITRES = 3.785411784
+# Lag-feature-päivät, jotka näytetään AI-promptissa eksplisiittisesti
+_LAG_DAYS = (1, 2, 3, 7)
+
+# --- Pass-through-priorit (KÄYTÄNNÖN PRIORIT, EI MITATTU SUOMESTA) ---
+# Nämä ovat ennalta valittuja painokertoimia joita kalibroidaan vasta kun
+# daily_tracker-captureita kertyy riittävästi. Pidämme molemmat
+# konservatiivisina ja yhtä suurina, jotta emme silmäkalibroi tuloksia.
+# Suuntavalinta refined > Brent perustuu yleiseen markkinaintuitioon
+# (jalostettu tuote on lähempänä pumppupuolta), ei mitattuun Suomi-spesifiseen
+# tutkimustulokseen.
+_BRENT_PASSTHROUGH_FRAC = 0.25   # ALKUPRIORI — säilytetty alkuperäinen
+_REFINED_PASSTHROUGH_FRAC = 0.30  # ALKUPRIORI — vain hieman Brentiä korkeampi
+
+# --- Self-training: bias-korjauksen vaimennus ---
+# Nämä OVAT VALITTUJA INSINÖÖRIVAKIOITA, EIVÄT MITATTUJA ARVOJA.
+# Tarkoitus: estää että alustava melu pienestä otoksesta vääristää
+# fundamental_anchorin lähtötasoa. Linear damping (n / _BIAS_FULL_N) on
+# arvattu heuristiikka — vakaampi vaihtoehto olisi Bayesian credibility
+# weighting; tämä on kuitenkin yksinkertainen ja läpinäkyvä alku.
+# Säätämällä näitä voi vaihtaa pehmeämpään tai aggressiivisempaan
+# self-correctioniin ilman, että algoritmin logiikka muuttuu.
+_BIAS_MIN_N = 8       # alle tämän → korjaus = 0 (estää melun)
+_BIAS_FULL_N = 25     # tällä otoksella koko bias vähennetään
+_BIAS_MAX = 0.020     # turvaraja ±2 snt/L (osa _MAX_DAILY_MOVE-budjetista)
+
+
+def _bias_correction(stats: dict | None, method: str) -> float:
+    """Palauta menetelmäkohtainen bias-korjaus (€/L), joka VÄHENNETÄÄN
+    raakaennusteesta. Konservatiivinen: korjauksen suuruus skaalautuu
+    näytemäärällä, ja se on aina rajattu ±_BIAS_MAX:n sisään."""
+    if not stats:
+        return 0.0
+    rec = stats.get(method) or {}
+    n = int(rec.get("n") or 0)
+    bias = rec.get("bias")
+    if n < _BIAS_MIN_N or bias is None:
+        return 0.0
+    try:
+        bias = float(bias)
+    except (TypeError, ValueError):
+        return 0.0
+    lam = min(1.0, n / float(_BIAS_FULL_N))
+    corr = -lam * bias  # positiivinen bias → vähennetään
+    return max(-_BIAS_MAX, min(_BIAS_MAX, corr))
 # Konflikti-/tarjontahäiriösanat uutisseulontaan
 _CONFLICT_KEYWORDS = (
     "sota", "sodan", "sodas", "konflikti", "kriisi", "isku", "hyökkä",
@@ -207,16 +254,28 @@ def exp_smoothing(prices: list[float], alpha: float = 0.4, beta: float = 0.2,
 
 def fundamental_anchor(dates, prices, live_anchor,
                        brent, eur_usd, brent_chg, eur_usd_chg,
-                       tomorrow_weekday: int, conflict: bool = False) -> dict:
+                       tomorrow_weekday: int, conflict: bool = False,
+                       product_usd_gal: float | None = None,
+                       product_chg: float | None = None,
+                       product_label: str | None = None,
+                       tax_step_eur_l: float | None = None,
+                       track_stats: dict | None = None) -> dict:
     """Fysikaalisesti motivoitu day-ahead-malli:
 
         ennuste = live-ankkuri
-                + Brent-EUR-pass-through (jo hinnoiteltu geopol. riski)
+                + JALOSTETUN TUOTTEEN EUR/L-pass-through  (ensisijainen)
+                  TAI Brent-pass-through                  (fallback)
                 + EUR/USD-vaikutus
                 + päivätason momentum (aito päivähäntä)
                 + viikonpäiväefekti
+                + tunnettu veroaskel (jos voimaan huomenna)
 
-    Tulos rajataan ±0.06 €/L live-hinnasta (Suomen päivämuutos ei ylitä tätä)."""
+    Refined-tuote (RBOB/HO) on day-ahead-ennusteelle olennaisesti parempi
+    syöte kuin Brent: Brent → pumppu -viive on 1–2 viikkoa, refined → pumppu
+    on 3–7 päivää. Käytetään pääsignaalina kun saatavilla.
+
+    Tulos rajataan ±0.06 €/L live-hinnasta — clamppia laajennetaan
+    tunnetun verostepin verran kun se astuu voimaan."""
     p = _safe_prices(prices)
     base = live_anchor if live_anchor is not None else (p[-1] if p else None)
     if base is None:
@@ -225,16 +284,29 @@ def fundamental_anchor(dates, prices, live_anchor,
 
     parts: list[str] = []
 
-    # 1) Brent-EUR-pass-through. Brent EUR/L = (USD/bbl ÷ EURUSD) ÷ 159.
+    # 1) Pass-through — refined-tuote ensisijainen, Brent fallback.
+    # Käytetään moduulitason ENNALTA VALITTUJA priorikertoimia
+    # (_REFINED_PASSTHROUGH_FRAC, _BRENT_PASSTHROUGH_FRAC). Niitä EI ole
+    # mitattu Suomi-spesifisellä regressiolla; ne ovat alkupriorit, jotka
+    # kalibroidaan kun daily_tracker-captureita on tarpeeksi.
     crude_adj = 0.0
-    if brent is not None and eur_usd not in (None, 0):
+    if (product_usd_gal is not None and product_chg is not None
+            and eur_usd not in (None, 0)):
+        prod_eur_l = (product_usd_gal / _GAL_LITRES) / eur_usd
+        d_prod = prod_eur_l * product_chg
+        d_fx = (-prod_eur_l * eur_usd_chg) if eur_usd_chg is not None else 0.0
+        crude_adj = _REFINED_PASSTHROUGH_FRAC * (d_prod + d_fx)
+        crude_adj = max(-0.035, min(0.035, crude_adj))
+        if abs(crude_adj) >= 0.0005:
+            tag = product_label or "refined"
+            parts.append(f"{tag} {crude_adj*1000:+.1f} m€/L")
+    elif brent is not None and eur_usd not in (None, 0):
+        # Brent EUR/L = (USD/bbl ÷ EURUSD) ÷ 159.
         brent_eur_l = (brent / eur_usd) / _BBL_LITRES
         d_crude = brent_eur_l * brent_chg if brent_chg is not None else 0.0
         # EUR heikkenee (eur_usd_chg < 0) → tuontiöljy kallistuu
         d_fx = (-brent_eur_l * eur_usd_chg) if eur_usd_chg is not None else 0.0
-        # Vähittäishinta seuraa viiveellä → huomenna näkyy vain osa liikkeestä.
-        frac = 0.25
-        crude_adj = frac * (d_crude + d_fx)
+        crude_adj = _BRENT_PASSTHROUGH_FRAC * (d_crude + d_fx)
         crude_adj = max(-0.035, min(0.035, crude_adj))
         if abs(crude_adj) >= 0.0005:
             parts.append(f"Brent-EUR {crude_adj*1000:+.1f} m€/L")
@@ -250,17 +322,34 @@ def fundamental_anchor(dates, prices, live_anchor,
         if abs(mom_adj) >= 0.0005:
             parts.append(f"momentum {mom_adj*1000:+.1f} m€/L")
 
-    # 3) viikonpäiväefekti (Python: ma=0 … su=6)
+    # 3) viikonpäivä-prior (Python: ma=0 … su=6).
+    # Pieni ±0.004 €/L (≈ 0.4 snt/L) on UNCALIBRATED PRIOR — ei mitattu
+    # Suomi-pumppudatasta; tarkoitus on antaa vain heikko suunnatieto.
+    # Korvataan data-pohjaisilla viikonpäivätermillä kun captureita on
+    # ≥4 viikkoa per viikonpäivä (toistaiseksi käytetään prioria).
     wd_adj = 0.0
     if tomorrow_weekday in (1, 2):       # ti, ke
         wd_adj = 0.004
     elif tomorrow_weekday in (6, 0):     # su, ma
         wd_adj = -0.004
     if wd_adj:
-        parts.append(f"viikonpäivä {wd_adj*1000:+.1f} m€/L")
+        parts.append(f"viikonpäivä-prior {wd_adj*1000:+.1f} m€/L")
 
-    pred = base + crude_adj + mom_adj + wd_adj
-    pred = max(base - _MAX_DAILY_MOVE, min(base + _MAX_DAILY_MOVE, pred))
+    # 4) tunnettu veroaskel — astuu voimaan huomenna, joten kuuluu hintaan
+    tax_adj = float(tax_step_eur_l or 0.0)
+    if abs(tax_adj) >= 0.0001:
+        parts.append(f"vero {tax_adj*1000:+.1f} m€/L")
+
+    # 5) self-training: vähennä tämän menetelmän aiempi signed bias
+    # (vain jos otosta on riittävästi — pieni n → korjaus = 0)
+    bias_adj = _bias_correction(track_stats, "fundamental_anchor")
+    if abs(bias_adj) >= 0.0005:
+        parts.append(f"itsekalibrointi {bias_adj*1000:+.1f} m€/L")
+
+    pred = base + crude_adj + mom_adj + wd_adj + tax_adj + bias_adj
+    # Verostep on tunnettu eksogeeninen muutos → laajenna clamppia steppin verran
+    clamp_band = _MAX_DAILY_MOVE + abs(tax_adj)
+    pred = max(base - clamp_band, min(base + clamp_band, pred))
 
     # konfliktitilanteessa epävarmuus kasvaa
     band = 0.020 if conflict else 0.012
@@ -287,7 +376,14 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                          news_headlines: list[dict] | None = None,
                          region: str = "Suomi",
                          brent_chg: float | None = None,
-                         eur_usd_chg: float | None = None) -> dict:
+                         eur_usd_chg: float | None = None,
+                         product_usd_gal: float | None = None,
+                         product_chg: float | None = None,
+                         product_label: str | None = None,
+                         crack_eur_l: float | None = None,
+                         tax_events: list[dict] | None = None,
+                         tax_step_eur_l: float | None = None,
+                         track_record: dict | None = None) -> dict:
     """Claude Opus 4.7 -ennuste. Hoitaa ETUPAINOTTEISEN geopoliittisen riskin:
     konflikti-/tarjontahäiriöuutiset jotka Brent ei vielä täysin hinnoittele."""
     try:
@@ -342,6 +438,149 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     live_line = (f"{live_today_price:.3f} €/L"
                  if live_today_price is not None else "ei tiedossa")
 
+    # Jalostettu tuoteputki (RBOB / HO) — day-ahead-ennusteen tärkein
+    # syöte: refined → pumppu -viive on 3–7 pv vs. Brentin 1–2 viikkoa.
+    if product_usd_gal is not None and eur_usd not in (None, 0):
+        prod_eur_l = (product_usd_gal / _GAL_LITRES) / eur_usd
+        prod_line = (f"{product_label or 'refined-tuote'}: "
+                     f"{product_usd_gal:.3f} USD/gal "
+                     f"(≈ {prod_eur_l:.3f} €/L tukkuna)")
+        if product_chg is not None:
+            prod_line += f" · ≈{product_chg*100:+.1f} % viim. ~5 pv"
+    else:
+        prod_line = (f"{product_label or 'refined-tuote'}: ei tiedossa "
+                     "(fallback: Brent)")
+
+    if crack_eur_l is not None:
+        crack_line = (f"crack-spread (tuote − Brent): {crack_eur_l:+.3f} €/L "
+                      "(vertaile suhteessa edellispäivien tasoon — ei "
+                      "absoluuttisia kynnyksiä)")
+    else:
+        crack_line = "crack-spread: ei tiedossa"
+
+    # Lag-piikit aidosta päivähännästä — exposeataan eksplisiittisesti
+    # malli ei joudu päättelemään niitä karkeasta listasta
+    lag_lines: list[str] = []
+    if dt:
+        # dt = [(date_iso, price), …] järjestyksessä vanhin → uusin
+        by_date = {d: pr for d, pr in dt}
+        ordered_dates = [d for d, _ in dt]
+        last_date_iso = ordered_dates[-1]
+        try:
+            last_date = _parse_date(last_date_iso)
+            for lag in _LAG_DAYS:
+                from datetime import timedelta as _td
+                target = (last_date - _td(days=lag)).isoformat()
+                if target in by_date:
+                    lag_lines.append(f"  t-{lag} ({target}): {by_date[target]:.3f} €/L")
+                else:
+                    # lähin pienempi tai yhtä suuri päivä, jos tarkka osuma ei löydy
+                    candidates = [d for d in ordered_dates if d <= target]
+                    if candidates:
+                        nearest = candidates[-1]
+                        lag_lines.append(
+                            f"  t-{lag} (~{nearest}): {by_date[nearest]:.3f} €/L "
+                            "(lähin saatavilla oleva)"
+                        )
+        except Exception:
+            pass
+    lag_block = ("\n".join(lag_lines) if lag_lines
+                 else "  (ei vielä riittävää päivähäntää lag-piikkeihin)")
+
+    # Tunnetut veromuutokset — eksogeeninen askel; mallin EI pidä
+    # opettelematta huomata sitä historiasta.
+    if tax_events:
+        ev_lines = []
+        for e in tax_events:
+            d = float(e.get("delta_eur_per_l") or 0.0)
+            sign = "+" if d >= 0 else ""
+            ev_lines.append(
+                f"  · {e.get('effective_date', '?')}: "
+                f"{sign}{d*100:.2f} snt/L — {e.get('note', '')}"
+            )
+        tax_block = "\n".join(ev_lines)
+    else:
+        tax_block = "  (ei tunnettuja veromuutoksia tulossa)"
+
+    if tax_step_eur_l and abs(tax_step_eur_l) >= 0.0001:
+        tax_step_line = (
+            f"\nHUOM: huomenna astuu voimaan {tax_step_eur_l*100:+.2f} snt/L "
+            "veroaskel — sisällytä se ennusteeseen koko summaltaan."
+        )
+    else:
+        tax_step_line = ""
+
+    # Self-training: aiempien ennusteiden vs. toteumien track record.
+    # Antaa AI:lle näkyvyyden omaan systemaattiseen vinoumaansa.
+    if track_record and track_record.get("n_total"):
+        tr_rows = track_record.get("rows") or []
+        tr_stats = track_record.get("stats") or {}
+        recent = tr_rows[-10:]  # näytetään max 10 viimeisintä päivää
+        recent_lines = []
+        for r in recent:
+            ai_pred = r["methods"].get("ai_llm")
+            ens_pred = r["methods"].get("ensemble")
+            actual = r.get("actual")
+            ai_part = (f" AI {ai_pred:.3f} (Δ {r['signed'].get('ai_llm', 0):+.3f})"
+                       if ai_pred is not None else "")
+            ens_part = (f" · ens {ens_pred:.3f} (Δ {r['signed'].get('ensemble', 0):+.3f})"
+                        if ens_pred is not None else "")
+            recent_lines.append(
+                f"  {r['date']}: toteuma {actual:.3f}{ai_part}{ens_part}"
+            )
+        ai_stat = tr_stats.get("ai_llm") or {}
+        ai_bias = ai_stat.get("bias")
+        ai_n = ai_stat.get("n") or 0
+
+        bias_lines = []
+        for m_key, m_label in (
+            ("ai_llm", "AI (oma)"),
+            ("fundamental_anchor", "fundamental_anchor"),
+            ("moving_average", "MA"),
+            ("linear_regression", "LR"),
+            ("exp_smoothing", "Holt"),
+            ("ensemble", "ensemble"),
+        ):
+            s = tr_stats.get(m_key) or {}
+            if (s.get("n") or 0) <= 0:
+                continue
+            b = s.get("bias")
+            m = s.get("mae")
+            # Näytä RAAKANUMEROT — älä laita kategorista verdiktiä, anna
+            # AI:n itse arvioida onko bias merkityksellinen otoksen koossa.
+            bias_lines.append(
+                f"  {m_label}: n={s['n']}, MAE={m:.4f} €/L, "
+                f"signed bias {b:+.4f} €/L"
+            )
+
+        # Oma rivi näytetään aina kun otosta on lainkaan — ei keinotekoista
+        # kynnystä, jonka alapuolella malli ei näe biastaan lainkaan.
+        if ai_bias is not None and ai_n > 0:
+            own_hint = (
+                f"\nOma track record: n={ai_n} vertailupäivää, "
+                f"signed bias {ai_bias:+.4f} €/L ({ai_bias*100:+.2f} snt/L). "
+                "Arvioi itse onko otos riittävä korjaukseen ja kuinka paljon "
+                "biasta on syytä huomioida."
+            )
+        else:
+            own_hint = ""
+
+        recent_block = "\n".join(recent_lines) if recent_lines else "  (ei vertailtavia päiviä)"
+        bias_block = "\n".join(bias_lines) if bias_lines else "  (ei riittävää otosta vielä)"
+        track_section = (
+            f"\n\n=== AIEMPI TARKKUUS (self-training, raakanumerot) ===\n"
+            f"Viim. {len(recent)} vertailupäivää (toteuma vs. ennuste):\n"
+            f"{recent_block}\n\n"
+            f"Menetelmäkohtainen signed bias (n päivää, MAE, bias €/L):\n"
+            f"{bias_block}"
+            f"{own_hint}"
+        )
+    else:
+        track_section = (
+            "\n\n=== AIEMPI TARKKUUS (self-training) ===\n"
+            "  (ei vielä riittävää historiaa — kerätään tästä päivästä alkaen)"
+        )
+
     today_iso = datetime.now(timezone.utc).date().isoformat()
     wd = ["maanantai", "tiistai", "keskiviikko", "torstai",
           "perjantai", "lauantai", "sunnuntai"]
@@ -373,26 +612,50 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                      "konflikti-/tarjontahäiriösignaaleja uutisissa.")
 
     system_message = (
-        "Olet Mikko, Suomen vähittäispolttoainemarkkinoiden kvantitatiivinen "
-        "analyytikko — 14 v kokemusta Neste/ABC/Teboil/Shell/St1-hinnoittelusta. "
-        "Ydinperiaatteesi:\n"
-        "1. ANKKURI: Live-hinta on totuus. KAIKKI data on tänä päivänä ja sen "
-        "jälkeen live-skrapattua — ei vanhaa tilastohistoriaa. Ankkuroi "
-        "ennuste aina tuoreimpaan live-hintaan.\n"
-        "2. VERO VAKIO: ~70 % pump-hinnasta veroja → päivämuutos yleensä "
-        "alle ±0,05 €/L.\n"
-        "3. BRENT-VIIVE: Brent-muutos näkyy pumpulla 3–10 pv viiveellä; "
-        "Neste nopein, ABC/Teboil seuraavat.\n"
-        "4. EUR/USD-BETA: 1 % EUR-heikennys → ~+0,003–0,005 €/L (tuontiöljy "
-        "kallistuu).\n"
-        "5. VIIKONPÄIVÄ: Ti–Ke tyypillisesti +0,5–1,5 ¢/L vs. Su–Ma. Huominen "
-        "on " + tomorrow_weekday_fi + ".\n"
-        "6. MOMENTUM: aito päivätason kaltevuus on paras lyhytsignaali — älä "
-        "taistele trendiä vastaan ilman katalyyttiä.\n"
-        "7. GEOPOLITIIKKA: sodat, konfliktit, OPEC+-leikkaukset, saarrot ja "
-        "pakotteet nostavat Brentiä → pumppuhintaa. ÄLÄ tuplalaske jo "
-        "Brentissä näkyvää riskiä; lisää preemio vain jos konflikti "
-        "ESKALOITUU eikä ole vielä täysin hinnoiteltu. Epävarmuus kasvaa.\n"
+        "Olet kvantitatiivinen analyytikko, joka ennustaa Suomen "
+        "vähittäispolttoaineen pumppuhintoja day-ahead-ikkunassa. "
+        "Käytät seuraavia periaatteita — ne ovat alkupriorit, kalibroidaan "
+        "havaintodatasta kun sitä kertyy:\n"
+        "1. ANKKURI: Live-hinta on totuus. KAIKKI hintadata on tänä päivänä "
+        "ja sen jälkeen live-skrapattua — ei vanhaa tilastohistoriaa. "
+        "Ankkuroi ennuste aina tuoreimpaan live-hintaan.\n"
+        "2. VEROT TUNNETTU ASKEL: polttoaineen verot (excise / ALV) ovat "
+        "julkista tietoa ennen voimaantuloa — ÄLÄ yritä oppia niitä "
+        "historiasta. Jos VEROMUUTOKSET-osio ilmoittaa huomenna voimaan "
+        "tulevan stepin, lisää se SELLAISENAAN (ei pehmennystä). Ilman "
+        "askelta päivämuutos on tyypillisesti pieni; rajaa ennuste "
+        "konservatiivisesti.\n"
+        "3. JALOSTETTU TUOTE = lähempänä pumppua: tukkutason RBOB / ULSD "
+        "liikkuu yleensä ennen Brentin pumppuvaikutusta, koska Brent on "
+        "raakaöljytaso ja viive pumppuun on pidempi. Käytä jalostettua "
+        "tuotetta day-ahead-pääsignaalina; Brent on taustakonteksti. Jos "
+        "refined puuttuu, fallback Brentiin pienemmällä painolla. Tarkkoja "
+        "viivepäiviä ei tähän markkinaan ole mitattu — käytä suuntaa, älä "
+        "lukkoa.\n"
+        "4. CRACK-SPREAD (tuote − Brent EUR/L): suuntasignaali "
+        "jalostusmarginaalille. Laajeneva crack → tukkupuoli vetää pumppua "
+        "ylös vaikka Brent jäisi paikoilleen; kapeneva crack → vastaava "
+        "puristus alas. Älä käytä mitään kynnysarvoja kategorisointiin — "
+        "vertaile suhteessa viime päivien tasoon.\n"
+        "5. EUR/USD: heikkenevä EUR (eur_usd_chg < 0) → tuontiöljy "
+        "kallistuu euroissa → pumppupaine ylös. Vaikuttaa sekä Brentin että "
+        "jalostetun tuotteen kautta.\n"
+        "6. VIIKONPÄIVÄ-PRIOR (heikko): yleinen havainto on, että hinnat "
+        "voivat hivuttua ylös arkiviikon aikana ja laskea viikonlopun "
+        "vaihteessa, mutta tämä on heikko suuntaprior — Suomi-spesifisiä "
+        "viikonpäiväkertoimia ei ole tähän mitattu. Anna tuoreen lag-datan "
+        "(esp. t-7) ratkaista, älä kiinteiden snt-arvojen. Huominen on "
+        + tomorrow_weekday_fi + ".\n"
+        "7. LAG-PIIKIT: t-1 ja t-2 ovat parhaita lähihistoriallisia "
+        "ankkureita; t-7 paljastaa viikonpäivärytmin EMPIIRISESTI. Käytä "
+        "LAG-PIIKIT-osion arvoja suoraan, älä keskiarvoista niitä pois.\n"
+        "8. MOMENTUM: aito päivätason kaltevuus on paras lyhytsignaali — "
+        "älä taistele trendiä vastaan ilman katalyyttiä.\n"
+        "9. GEOPOLITIIKKA: sodat, konfliktit, OPEC+-leikkaukset, saarrot ja "
+        "pakotteet nostavat Brentiä → jalostettua tuotetta → pumppuhintaa. "
+        "ÄLÄ tuplalaske jo Brentissä näkyvää riskiä; lisää preemio vain jos "
+        "konflikti ESKALOITUU eikä ole vielä täysin hinnoiteltu. "
+        "Epävarmuusväli kasvaa.\n"
         "Vastaat AINA pelkkänä JSON-objektina, ei muuta tekstiä."
     )
 
@@ -400,21 +663,43 @@ async def ai_llm_predict(fuel: str, prices: list[float],
         f"Ennusta {fuel}-pump-hinta huomiselle ({today_iso}, "
         f"{tomorrow_weekday_fi}) alueella {region}. Tänään {weekday_fi}.\n\n"
         f"=== HINTA-ANKKURI (pääankkuri) ===\nLive nyt: {live_line}\n\n"
+        f"=== LAG-PIIKIT (eksplisiittiset viiveet aidosta päivähännästä) ===\n"
+        f"{lag_block}\n\n"
         f"=== MOMENTUMSIGNAALI ===\n7 pv trendi: {slope_str}\n\n"
         f"=== LIVE-SKRAPATTU PÄIVÄHISTORIA (kerätty tästä päivästä alkaen) ===\n"
         f"{sample_lines}\n\n"
         f"=== DATALAATU ===\n{data_quality_note}\n\n"
-        f"=== MAKROINPUTTEJA ===\nBrent: {brent_line}\nEUR/USD: {fx_line}"
+        f"=== JALOSTETTU TUOTE (day-ahead-pääsignaali) ===\n{prod_line}\n"
+        f"{crack_line}\n\n"
+        f"=== MAKROINPUTTEJA (tausta) ===\nBrent: {brent_line}\n"
+        f"EUR/USD: {fx_line}\n\n"
+        f"=== VEROMUUTOKSET (tunnettuja eksogeenisia askeleita) ===\n"
+        f"{tax_block}{tax_step_line}"
+        f"{track_section}"
         f"{news_block}{geo_block}\n\n"
         f"=== TEHTÄVÄSI ===\n"
-        f"1. Brent/FX-paine + 7 pv momentum → arvioi pre-tax muutos vs. tänään.\n"
-        f"2. Lisää geopoliittinen preemio VAIN jos eskaloituva, ei jo "
+        f"1. Refined-tuotteen 5 pv muutos + crack-spread → arvioi tukkupaine "
+        f"pumpulle huomenna. Jalostettu tuote on day-ahead-ikkunan "
+        f"pääsignaali; tarkkaa Suomi-kohtaista pass-through-viivettä ei ole "
+        f"mitattu, joten käytä suuntaa eikä kiinteää viivelukua. Jos "
+        f"refined puuttuu, käytä Brentiä pienemmällä painolla.\n"
+        f"2. Tarkista LAG-PIIKIT — onko viime päivinä jo nähty trendi joka "
+        f"jatkuu? Käytä t-1 lähtötasona, t-7 viikonpäivärytmin tarkasteluun.\n"
+        f"3. Huomioi viikonpäivä ({tomorrow_weekday_fi}) heikkona priorina, "
+        f"mutta anna lag-datan ratkaista jos se on ristiriidassa.\n"
+        f"4. Jos VEROMUUTOKSET-osio ilmoittaa askeleen huomenna → lisää se "
+        f"sellaisenaan. Älä levitä sitä päivien yli.\n"
+        f"5. Lisää geopoliittinen preemio VAIN jos eskaloituva, ei jo "
         f"hinnoiteltu riski.\n"
-        f"3. Lisää viikonpäiväefekti ({tomorrow_weekday_fi}).\n"
-        f"4. Ankkuroi tulos live-hintaan (ei historiaan); päivämuutos "
-        f"realistisesti alle ±0,05 €/L ilman selvää katalyyttiä.\n"
-        f"5. Confidence-väli: normaali ±0,008–0,015; korkea volatiliteetti / "
-        f"konflikti ±0,02–0,04 €/L.\n\n"
+        f"6. SELF-CHECK: katso AIEMPI TARKKUUS -osio. Arvioi itse onko oma "
+        f"signed bias merkityksellinen kyseisellä otoskoolla (n). Jos näet "
+        f"selkeän systemaattisen vinouman, korjaa huomista vastaavasti, mutta "
+        f"älä yliampu — korjaus enintään oman biasin suuruinen.\n"
+        f"7. Ankkuroi tulos live-hintaan. Ilman veroaskelta tai selvää "
+        f"katalyyttiä päivämuutos on yleensä pieni — vältä yliampumista.\n"
+        f"8. Confidence-väli: kapeampi normaalitilassa, leveämpi konfliktissa "
+        f"tai veromuutoksen voimaantulopäivänä. Numerot valitsee mallisi "
+        f"havainnoista, ei kiinteistä taulukoista.\n\n"
         f"Palauta VAIN tämä JSON:\n"
         f'{{\n'
         f'  "predicted_price": <€/L, 3 desimaalia>,\n'
@@ -605,14 +890,28 @@ async def predict_tomorrow(fuel: str,
                            region: str = "Suomi",
                            brent_chg: float | None = None,
                            eur_usd_chg: float | None = None,
-                           method_mae: dict | None = None) -> dict:
+                           method_mae: dict | None = None,
+                           product_usd_gal: float | None = None,
+                           product_chg: float | None = None,
+                           product_label: str | None = None,
+                           crack_eur_l: float | None = None,
+                           tax_events: list[dict] | None = None,
+                           tax_step_eur_l: float | None = None,
+                           track_record: dict | None = None) -> dict:
     """Aja kaikki menetelmät ja palauta ennusteet + datalaatutietoinen ensemble.
 
     `brent_chg` / `eur_usd_chg` = murto-osamuutos (esim. 0.03 = +3 %) viim.
-    ~5 pörssipäivältä; käytetään Brent-EUR-pass-throughiin. Jos live-hinta on
-    annettu, se on ankkuri sekä historian viimeisenä pisteenä että ensemble-
-    rajauksessa. `method_mae` = menetelmäkohtainen toteutunut MAE aidoista
-    captureista → ensemble itsekalibroituu (None = kiinteät painot)."""
+    ~5 pörssipäivältä; käytetään Brent-EUR-pass-throughiin (fallback).
+    `product_usd_gal` / `product_chg` / `product_label` = jalostetun tuotteen
+    (RBOB tai HO ULSD) viimeisin spot ja 5 pv muutos — ENSISIJAINEN day-ahead-
+    pass-through; tarkempi kuin Brent. `crack_eur_l` = tuote − Brent EUR/L.
+    `tax_events` = lista tunnetuista tulevista veromuutoksista (näytetään
+    AI:lle). `tax_step_eur_l` = jos JOKIN niistä astuu voimaan huomenna,
+    summa €/L → lisätään fundamental_anchoriin ja kerrotaan AI:lle.
+    Jos live-hinta on annettu, se on ankkuri sekä historian viimeisenä
+    pisteenä että ensemble-rajauksessa. `method_mae` = menetelmäkohtainen
+    toteutunut MAE aidoista captureista → ensemble itsekalibroituu
+    (None = kiinteät painot)."""
     if live_today_price is not None and prices:
         prices = list(prices)
         prices[-1] = float(live_today_price)
@@ -624,15 +923,23 @@ async def predict_tomorrow(fuel: str,
     ma = moving_average(prices, 7, dates=dates)
     lr = linear_regression(prices, 30, dates=dates)
     es = exp_smoothing(prices, dates=dates)
+    track_stats = (track_record or {}).get("stats")
     fa = fundamental_anchor(
         dates, prices, live_today_price, brent, eur_usd,
         brent_chg, eur_usd_chg, tomorrow_weekday, conflict=conflict,
+        product_usd_gal=product_usd_gal, product_chg=product_chg,
+        product_label=product_label, tax_step_eur_l=tax_step_eur_l,
+        track_stats=track_stats,
     )
     ai = await ai_llm_predict(
         fuel, prices, dates, brent, eur_usd,
         live_today_price=live_today_price,
         news_headlines=news_headlines, region=region,
         brent_chg=brent_chg, eur_usd_chg=eur_usd_chg,
+        product_usd_gal=product_usd_gal, product_chg=product_chg,
+        product_label=product_label, crack_eur_l=crack_eur_l,
+        tax_events=tax_events, tax_step_eur_l=tax_step_eur_l,
+        track_record=track_record,
     )
 
     predictions = {
@@ -652,6 +959,17 @@ async def predict_tomorrow(fuel: str,
         "live_anchor": live_today_price,
         "conflict_signal": conflict,
         "n_daily_points": n_daily,
+        "product_label": product_label,
+        "product_usd_gal": product_usd_gal,
+        "product_chg": product_chg,
+        "crack_eur_l": crack_eur_l,
+        "tax_events": tax_events or [],
+        "tax_step_eur_l": tax_step_eur_l,
+        "self_training": {
+            "n_total": (track_record or {}).get("n_total", 0),
+            "days_window": (track_record or {}).get("days_window"),
+            "stats": track_stats or {},
+        },
         "methods": predictions,
         "ensemble": ens,
     }

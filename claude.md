@@ -197,7 +197,7 @@ Grouped logically. All routes are prefixed `/api`.
                     ├─▶ fundamental_anchor()  live + Brent-EUR    │
                     │      pass-through + weekday + momentum,     │
                     │      clamped ±0.06 €/L                      │
-                    └─▶ ai_llm_predict()  Mikko + geo-risk        │
+                    └─▶ ai_llm_predict()  Claude + geo-risk       │
                           │  (emergentintegrations, Opus 4.7 →    │
                           │   4.6 → Sonnet 4.5 → Haiku 4.5)       │
                           ▼
@@ -211,25 +211,34 @@ Grouped logically. All routes are prefixed `/api`.
 
 ## 7. The Claude prompt (`predict.py` → `ai_llm_predict`)
 
-The system message is the **"Mikko" persona** — a Finnish fuel-pricing analyst
-with **7 numbered principles** (anchor=live-only / tax constant / Brent lag /
-EUR-USD beta / weekday effect / momentum / **geopolitics: wars, OPEC+, blockades,
-sanctions — don't double-count what Brent already prices**). The user message
-sections:
+The system message frames the model as a quantitative analyst for Finnish
+retail fuel pricing and lists **9 numbered principles** that are explicitly
+labelled as **uncalibrated priors** (to be tightened from captured data,
+not blindly trusted): live-anchor / tax-as-known-step / refined product as
+day-ahead lead signal / crack-spread direction / EUR-USD direction / weak
+weekday prior / explicit lag-pikes (t-1, t-2, t-3, t-7) / momentum /
+geopolitics (don't double-count Brent-priced risk). Specific Finland-
+unmeasured day-counts, c/L bands, and threshold numbers have been removed —
+the prompt uses directional language and lets the data decide magnitudes.
+The user message sections:
 
 ```
 === HINTA-ANKKURI ===                 live pump price as the anchor
+=== LAG-PIIKIT ===                    t-1, t-2, t-3, t-7 prices from daily tail
 === MOMENTUMSIGNAALI ===              real daily-tail slope (m€/L/day)
 === LIVE-SKRAPATTU PÄIVÄHISTORIA ===  recent live captures day-by-day
 === DATALAATU ===                     n real daily points; flags THIN data
+=== JALOSTETTU TUOTE ===              RBOB / HO spot USD/gal + ≈EUR/L + crack
 === MAKROINPUTTEJA ===                Brent + EUR/USD (+ ~5d % change) + news
+=== VEROMUUTOKSET ===                 upcoming excise/VAT step events (if any)
 === GEOPOLIITTINEN RISKI ===          conflict headlines (keyword-scanned)
 === TEHTÄVÄSI ===                     numbered recipe (geo premium only if escalating)
 ```
 
-Brent/EUR-USD ~5-day % change is threaded in via `factors.change_frac`.
-Geopolitical/conflict risk is split: *already-priced* risk flows through
-Brent → `fundamental_anchor`; *forward* risk is Mikko's job (no double-count).
+Brent/EUR-USD ~5-day % change and the refined-product 5-day change are
+threaded in via `factors.change_frac`. Geopolitical/conflict risk is split:
+*already-priced* risk flows through Brent → `fundamental_anchor`; *forward*
+risk is the AI's job (no double-count).
 
 Model returns strict JSON; the function strips markdown fences, finds the first
 `{` and last `}`, parses, and returns a `dict` with `value`, `confidence_low/high`,
@@ -388,10 +397,16 @@ Critical contract details:
 
 ### Tune the prediction
 1. `predict.py:ensemble()` weights (two regimes: ≥14 daily pts vs thin)
-2. `predict.py:fundamental_anchor()` — pass-through frac (0.25), weekday
-   ±0.004, momentum/crude clamps, `_MAX_DAILY_MOVE` (0.06 €/L)
+2. `predict.py:fundamental_anchor()` — uncalibrated priors (see module
+   constants `_BRENT_PASSTHROUGH_FRAC = 0.25`, `_REFINED_PASSTHROUGH_FRAC =
+   0.30`, hard-coded weekday-prior ±0.004), momentum/crude clamps,
+   `_MAX_DAILY_MOVE` (0.06 €/L; expanded by tax step when applicable).
+   None of these are Finland-measured — replace with data-calibrated
+   coefficients once captures accumulate.
 3. `predict.py:moving_average(window=…)` / `linear_regression(lookback=…)`
-4. `predict.py:ai_llm_predict.system_message` — Mikko's 7 principles
+4. `predict.py:ai_llm_predict.system_message` — 9 numbered priors (all
+   explicitly labelled as uncalibrated; no fabricated tenure / specific
+   Finland-unmeasured day-counts or c/L bands)
 5. `predict.py:ai_llm_predict.models_to_try` — fallback chain
 6. `tracker.py:SCHEDULED_HOURS` — capture times; `NEWS_WATCH_SECONDS` env
 
@@ -444,7 +459,7 @@ curl https://polttoaine-notifi-production.up.railway.app/api/factors
 - ✅ Date-aware MA/LR/ES (project +1 calendar day, daily-tail), new
   `fundamental_anchor` (live + Brent-EUR pass-through + weekday + momentum),
   data-quality-aware ensemble clamped ±0.06 €/L, Brent/FX `change_frac`.
-- ✅ Mikko 7th principle = geopolitics; conflict keyword scan; AI handles
+- ✅ Geopolitics principle in the AI system message; conflict keyword scan; AI handles
   forward risk, Brent handles already-priced risk.
 - ✅ `tracker.capture_daily` always runs full `predict_tomorrow` (the old
   `<7 pts → AI-only` cold-start branch that hid `fundamental_anchor` is gone).

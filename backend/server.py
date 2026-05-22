@@ -30,6 +30,8 @@ import factors as factors_mod
 import news as news_mod
 import tracker as tracker_mod
 import notify as notify_mod
+import tax_events as tax_events_mod
+import learn as learn_mod
 from predict import predict_tomorrow
 
 # ---------------- konfiguraatio ----------------
@@ -410,22 +412,42 @@ async def run_prediction(req: PredictionRequest):
     dates = [d for d, _ in series_pairs]
     prices = [p for _, p in series_pairs]
 
-    # rinnakkain: Brent + FX + uutiset
+    # rinnakkain: Brent + FX + refined-tuote + uutiset
     brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 30)
     fx_task = loop.run_in_executor(executor, factors_mod.fetch_eur_usd, 30)
+    product_task = loop.run_in_executor(
+        executor, factors_mod.fetch_product_for_fuel, fuel, 30
+    )
     news_task = loop.run_in_executor(executor, news_mod.fetch_news, None, 14, 6)
 
-    brent_series, fx_series, headlines = await asyncio.gather(
-        brent_task, fx_task, news_task
+    brent_series, fx_series, product_pair, headlines = await asyncio.gather(
+        brent_task, fx_task, product_task, news_task
     )
     brent_val = factors_mod.latest_value(brent_series)
     fx_val = factors_mod.latest_value(fx_series)
     brent_chg = factors_mod.change_frac(brent_series, 5)
     fx_chg = factors_mod.change_frac(fx_series, 5)
 
+    product_series, product_label = product_pair
+    product_val = factors_mod.latest_value(product_series)
+    product_chg = factors_mod.change_frac(product_series, 5)
+    crack_val = factors_mod.crack_spread_eur_per_l(product_val, brent_val, fx_val)
+
+    # Tunnetut veromuutokset — askel huomiselle (jos osuu väliin), plus
+    # AI:lle näytettävä lista 30 pv eteenpäin.
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    target_iso = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    tax_step = tax_events_mod.applicable_step(fuel, today_iso, target_iso)
+    tax_step_eur_l = tax_step["delta_eur_per_l"] if tax_step else None
+    tax_upcoming = tax_events_mod.upcoming(today_iso, lookahead_days=30, fuel=fuel)
+
     # itsekalibrointi: menetelmien toteutunut MAE aidoista daily_tracker-
     # captureista (sama totuuslähde kuin /api/accuracy)
     method_mae = await tracker_mod.realized_method_mae(db, fuel, region)
+
+    # Self-training: aiempien ennusteiden vs. toteumien track record
+    # (signed bias per menetelmä, viim. rivit AI:n näkyväksi).
+    track_record = await learn_mod.track_record(db, fuel, region, days=30)
 
     result = await predict_tomorrow(
         fuel, dates, prices, brent_val, fx_val,
@@ -435,6 +457,13 @@ async def run_prediction(req: PredictionRequest):
         brent_chg=brent_chg,
         eur_usd_chg=fx_chg,
         method_mae=method_mae,
+        product_usd_gal=product_val,
+        product_chg=product_chg,
+        product_label=product_label,
+        crack_eur_l=crack_val,
+        tax_events=tax_upcoming,
+        tax_step_eur_l=tax_step_eur_l,
+        track_record=track_record,
     )
 
     # data source provenance — vain live-kerätty data
