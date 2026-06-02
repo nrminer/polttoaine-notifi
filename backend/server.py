@@ -20,10 +20,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from scrapers import polttoaine, tankille
 import factors as factors_mod
@@ -59,13 +62,21 @@ executor = ThreadPoolExecutor(max_workers=12)
 # in-memory cache for the /api/regional endpoint (90s TTL)
 _regional_cache: dict = {}
 
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="BensaVahti API", version="2.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS - tightened to Vercel origin (can be overridden via env)
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "https://polttoaine-notifi.vercel.app").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Admin-Token"],
 )
 
 
@@ -83,7 +94,7 @@ PRICE_MEDIAN_DEV = 0.25
 def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
     """Drop obviously-wrong prices.
     1. Hard bounds (1.10 .. 3.50 EUR/L)
-    2. > 25% deviation from the batch median
+    2. IQR-based outlier detection (1.5×IQR rule)
     """
     if not rows:
         return rows
@@ -99,16 +110,23 @@ def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
         kept_hard.append(r)
     if len(kept_hard) < 3:
         return kept_hard
-    sorted_p = sorted(r["price"] for r in kept_hard)
-    median = sorted_p[len(sorted_p) // 2]
+    # IQR-based outlier detection
+    prices = sorted(r["price"] for r in kept_hard)
+    n = len(prices)
+    q1_idx = n // 4
+    q3_idx = (3 * n) // 4
+    q1 = prices[q1_idx]
+    q3 = prices[q3_idx]
+    iqr = q3 - q1
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
     kept = []
     for r in kept_hard:
-        dev = abs(r["price"] - median) / median if median else 0
-        if dev > PRICE_MEDIAN_DEV:
-            logger.warning("sanity[%s] drop median %.3f vs median %.3f at %s",
-                           label, r["price"], median, r.get("station"))
-            continue
-        kept.append(r)
+        if lower <= r["price"] <= upper:
+            kept.append(r)
+        else:
+            logger.warning("sanity[%s] drop IQR %.3f (bounds [%.3f, %.3f]) at %s",
+                           label, r["price"], lower, upper, r.get("station"))
     return kept
 
 
@@ -211,7 +229,9 @@ async def meta():
 
 
 @app.post("/api/seed")
-async def seed_history(days: int = 365, force: bool = False):
+async def seed_history(days: int = 365, force: bool = False,
+                       x_admin_token: Optional[str] = Header(default=None)):
+    _check_admin(x_admin_token or "")
     """Historiallinen seedaus on POISTETTU KÄYTÖSTÄ.
 
     Tilastokeskuksen (Statfin) data on vanhaa eikä sitä enää käytetä.
@@ -366,11 +386,17 @@ async def get_factors():
 
 
 @app.post("/api/predict/run")
-async def run_prediction(req: PredictionRequest):
+@limiter.limit("10/minute")
+async def run_prediction(req: PredictionRequest, request: Request):
     fuel = req.fuel
     region = req.region
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
+    # CRITICAL FIX: Only "Suomi" region supported - data collection and training
+    # only happens for national aggregate. Per-city predictions would need
+    # separate per-city capture in tracker.py
+    if region != "Suomi":
+        raise HTTPException(400, f"only region='Suomi' supported (national aggregate)")
     if region not in SUPPORTED_REGIONS:
         raise HTTPException(400, f"unknown region {region}")
 
@@ -397,7 +423,9 @@ async def run_prediction(req: PredictionRequest):
         {"fuel": fuel, "region": "Suomi"},
         sort=[("ts", -1)],
     )
-    live_anchor = latest_snap.get("cheap_sample_avg") if latest_snap else None
+    # CRITICAL FIX: Use national_min (cheapest station) instead of cheap_sample_avg
+    # to align anchor with target (actual_cheapest in daily_tracker)
+    live_anchor = latest_snap.get("national_min") if latest_snap else None
 
     # Tarvitsemme vähintään YHDEN live-pisteen (capture tai snapshot).
     # Vähäiselläkin datalla predict_tomorrow ankkuroi fundamental_anchoriin
@@ -799,7 +827,8 @@ async def _notify_async(captures: list[dict]) -> None:
 
 
 @app.post("/api/track/run")
-async def track_run(fuel: str = Query("95E10")):
+@limiter.limit("20/minute")
+async def track_run(fuel: str = Query("95E10"), request: Request = None):
     """Aja päivän capture nyt (skraapaa halvin + ennusta huominen).
     Idempotentti: saman päivän uusinta-ajo korvaa rivin.
     Lähettää ntfy-ilmoituksen jokaisen capturen jälkeen.
@@ -813,7 +842,8 @@ async def track_run(fuel: str = Query("95E10")):
 
 
 @app.post("/api/track/run-all")
-async def track_run_all(notify: bool = Query(True)):
+@limiter.limit("10/minute")
+async def track_run_all(notify: bool = Query(True), request: Request = None):
     out = []
     for fuel in FUELS:
         doc = await tracker_mod.capture_daily(db, executor, fuel)
@@ -827,7 +857,8 @@ async def track_run_all(notify: bool = Query(True)):
 
 
 @app.post("/api/notify/test")
-async def notify_test():
+async def notify_test(x_admin_token: Optional[str] = Header(default=None)):
+    _check_admin(x_admin_token or "")
     """Send a test ntfy notification using the latest captures from the DB
     (no scraping). Useful for verifying the notification format end-to-end."""
     cur = db.daily_tracker.find(
@@ -979,11 +1010,15 @@ class TrackBackfillPoint(BaseModel):
 
 
 @app.post("/api/track/backfill")
-async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(False)):
+async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(False),
+                         x_admin_token: Optional[str] = Header(default=None)):
     """Bulk-upsert historical daily_tracker rows from external sources
     (e.g. previous version's notification archive). Idempotent on
     (date, hour, fuel, region).
     If clear=true, wipe daily_tracker first (use to reset bad / fake data)."""
+    _check_admin(x_admin_token or "")
+    if len(points) > 1000:
+        raise HTTPException(400, "max 1000 points per request")
     cleared = 0
     if clear:
         res = await db.daily_tracker.delete_many({})
@@ -1080,7 +1115,7 @@ async def on_startup():
     app.state.news_task = asyncio.create_task(
         tracker_mod.news_watch_loop(db, executor, FUELS, _news_predict)
     )
-    logger.info("BensaVahti up - MONGO_URL=%s DB=%s", MONGO_URL, DB_NAME)
+    logger.info("BensaVahti up - DB=%s (MongoDB connected)", DB_NAME)
 
 
 @app.on_event("shutdown")

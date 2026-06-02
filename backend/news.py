@@ -9,10 +9,11 @@ We filter by fuel/oil keywords client-side.
 """
 from __future__ import annotations
 import re
+import html
 import requests
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from xml.etree import ElementTree as ET
+from defusedxml.ElementTree import fromstring
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BensaVahti/2.0)"}
 TIMEOUT = 12
@@ -50,7 +51,7 @@ KEYWORDS = re.compile(
 def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
     out = []
     try:
-        root = ET.fromstring(xml_text)
+        root = fromstring(xml_text)
     except Exception:
         return out
     for it in root.findall(".//item"):
@@ -58,6 +59,10 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
         link = (it.findtext("link") or "").strip()
         desc = (it.findtext("description") or "").strip()
         pub_raw = (it.findtext("pubDate") or "").strip()
+
+        # Sanitize title to prevent prompt injection
+        title = _sanitize_text(title)
+
         try:
             pub_dt = parsedate_to_datetime(pub_raw).astimezone(timezone.utc)
         except Exception:
@@ -74,6 +79,16 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
             ),
         })
     return out
+
+
+def _sanitize_text(text: str) -> str:
+    """Remove control characters and escape HTML to prevent prompt injection."""
+    # Remove control characters, keep only printable
+    text = "".join(c for c in text if c.isprintable() or c.isspace())
+    # Escape HTML entities
+    text = html.escape(text)
+    # Limit length
+    return text[:200]
 
 
 def fetch_news(queries=None, max_age_days: int = 14, limit: int = 8) -> list[dict]:

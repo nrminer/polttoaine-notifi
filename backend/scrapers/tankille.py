@@ -59,11 +59,12 @@ def _freshness_hours(date_text: str) -> float:
     m = re.search(r"(\d+)\s*minuut", t)
     if m:
         return int(m.group(1)) / 60.0
-    if re.search(r"\btunti(?:\b|\s|sitten)", t) and not re.search(r"\d+\s*tuntia", t):
-        return 1.0
+    # FIXED: Check plural hours BEFORE singular to avoid "2 tuntia" returning 1.0
     m = re.search(r"(\d+)\s*tunti", t)
     if m:
         return float(m.group(1))
+    if re.search(r"\btunti(?:\b|\s|sitten)", t):
+        return 1.0
     if "eilen" in t:
         return 24.0
     m = re.search(r"(\d+)\s*p[äa]iv", t)

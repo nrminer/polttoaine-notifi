@@ -23,7 +23,8 @@ def _parse_price(text: str):
     text = text.strip()
     if not text or text == "-":
         return None
-    m = re.search(r"(\d+[.,]\d+)", text)
+    # FIXED: Require 2-3 decimals for consistency with tankille.py
+    m = re.search(r"(\d+[.,]\d{2,3})", text)
     if not m:
         return None
     return float(m.group(1).replace(",", "."))
