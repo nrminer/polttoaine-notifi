@@ -1,0 +1,87 @@
+<h2>BensaVahti dashboard redesign — layout options</h2>
+<p class="subtitle">Pick the structure that best matches “quiet, premium utility dashboard”: first screen is the real dashboard, no AI/model branding, dense but readable.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A · Executive market dashboard</div>
+        <div class="mockup-body">
+          <div class="mock-nav">BensaVahti · 95E10 / Diesel · Theme · Päivitä</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0;">
+            <div class="placeholder">Halvin nyt</div><div class="placeholder">Kaupunkiavg</div><div class="placeholder">Huomenna</div><div class="placeholder">Päivitetty</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.4fr .8fr;gap:10px;">
+            <div class="placeholder" style="height:120px;">Iso huomisen ennuste + suunta + vaihteluväli</div>
+            <div class="placeholder" style="height:120px;">Halvin asema + tuoreus</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+            <div class="placeholder" style="height:100px;">Kaupunkivertailu</div>
+            <div class="placeholder" style="height:100px;">Markkinatekijät + uutiset</div>
+          </div>
+          <div class="placeholder" style="height:80px;margin-top:10px;">Ennuste vs toteuma chart</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · Summary-first</h3>
+      <p>Most polished and decision-oriented. Highlights “what should I pay attention to now?” before tables and charts.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B · City comparison first</div>
+        <div class="mockup-body">
+          <div class="mock-nav">BensaVahti · controls sticky</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;">
+            <div class="placeholder">Halvin 95E10</div><div class="placeholder">Halvin Diesel</div><div class="placeholder">Huominen</div>
+          </div>
+          <div class="placeholder" style="height:150px;margin-bottom:10px;">Kaupunkien hintataulukko + asemarivit</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="placeholder" style="height:110px;">Huomisen ennuste</div>
+            <div class="placeholder" style="height:110px;">Tuoreus / lähteet</div>
+          </div>
+          <div class="placeholder" style="height:80px;margin-top:10px;">Charts alempana</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · Price-comparison first</h3>
+      <p>Best if users primarily open the app to compare cities/stations. Forecast becomes supporting context.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C · Chart-forward analyst view</div>
+        <div class="mockup-body">
+          <div class="mock-nav">BensaVahti · controls</div>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin:10px 0;">
+            <div class="placeholder" style="height:170px;">Iso trendikaavio + range/city filters</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="placeholder">Huomenna</div>
+              <div class="placeholder">Halvin nyt</div>
+              <div class="placeholder">Osumatarkkuus</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="placeholder" style="height:100px;">City average chart</div>
+            <div class="placeholder" style="height:100px;">Kaupunkitaulukko</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · Trend-first</h3>
+      <p>Best for repeat users studying movement, but less immediately useful on mobile and may feel less practical.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>Recommended</h4><ul><li>A: summary-first keeps the first screen useful, neutral, and dashboard-like.</li><li>Still leaves room for rich city comparison and charts below the fold.</li></ul></div>
+  <div class="cons"><h4>Trade-off</h4><ul><li>B is stronger for station hunting.</li><li>C is stronger for analytical repeat usage.</li></ul></div>
+</div>
