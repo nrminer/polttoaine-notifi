@@ -10,7 +10,7 @@
   push-notifier. UI in Finnish.
 - **Stack**: React (CRA) on Vercel · FastAPI + Motor (async MongoDB) on Railway
   · MongoDB Atlas (free M0).
-- **AI**: Codex Opus 4.7 via `emergentintegrations` SDK (Anthropic) — invoked
+- **AI**: Claude Opus 4.7 via `emergentintegrations` SDK (Anthropic) — invoked
   from `backend/predict.py` for the AI-prediction method.
 - **Data inputs**: **LIVE-GATHERED ONLY** — scrapes of `polttoaine.net` +
   `tankille.fi` captured into `daily_tracker` from today onward; Yahoo Finance
@@ -34,7 +34,7 @@ tell us — no hard-coded ±N ¢/L claim). The app:
    Vantaa, Tampere, Turku, Lahti) with cheapest **and average** per city.
 2. Predicts **tomorrow's** cheapest using **5 parallel methods** (MA, LR, Holt
    exp.smoothing, **fundamental_anchor** = live + Brent-EUR pass-through +
-   weekday + momentum, and Codex Opus 4.7 with geopolitical-risk handling) →
+   weekday + momentum, and Claude Opus 4.7 with geopolitical-risk handling) →
    a **data-quality-aware ensemble clamped to ±0.06 €/L of the live price**.
 3. Captures actuals at **14:00 and 21:00 Helsinki** (`SCHEDULED_HOURS` in
    `tracker.py`) and tracks prediction-vs-actual accuracy against **real
@@ -58,7 +58,7 @@ tell us — no hard-coded ±N ¢/L claim). The app:
                                                      │ scheduled (14:00 / 21:00 Helsinki) + news-watcher
                                                      ▼
                                           ┌──────────────────────┐         ┌──────────────────────┐
-                                          │  ntfy.sh             │         │  Anthropic Codex     │
+                                          │  ntfy.sh             │         │  Anthropic Claude    │
                                           │  topic: polttoaine   │         │  via emergentintegr.  │
                                           │  bearer token auth   │         │  Opus 4.7 → Sonnet… │
                                           └──────────────────────┘         └──────────────────────┘
@@ -107,7 +107,7 @@ The backend has NO frontend assets — pure API.
         ├── lib/
         │   ├── api.js     … axios wrappers for every backend route
         │   ├── utils.js   … fmtPrice, fmtDelta, fmtDateFi…
-        │   └── modelName.js … converts "Codex-opus-4-7" → "Codex Opus 4.7"
+        │   └── modelName.js … converts "claude-opus-4-7" → "Claude Opus 4.7"
         └── components/
             ├── Card.jsx        … design-system primitives (Card, CardLabel, StatNumber, DeltaBadge)
             ├── FuelToggle.jsx  … 95E10 / Diesel toggle
@@ -115,7 +115,7 @@ The backend has NO frontend assets — pure API.
             ├── TrackingChart.jsx … prediction-vs-actual line chart; city mode (cheapest+avg), filters
             ├── CityAverageChart.jsx … all-cities average + market-move projection
             ├── MethodTable.jsx  … 5-method comparison + ensemble (incl. fundamenttiankkuri)
-            ├── AiAnalysis.jsx   … Codex analysis card
+            ├── AiAnalysis.jsx   … Claude analysis card
             ├── FactorsCard.jsx  … Brent + EUR/USD sparklines
             ├── NewsCard.jsx     … RSS news list
             ├── RegionalGrid.jsx … city-by-city cheapest grid
@@ -198,7 +198,7 @@ Grouped logically. All routes are prefixed `/api`.
                     ├─▶ fundamental_anchor()  live + Brent-EUR    │
                     │      pass-through + weekday + momentum,     │
                     │      clamped ±0.06 €/L                      │
-                    └─▶ ai_llm_predict()  Codex + geo-risk       │
+                    └─▶ ai_llm_predict()  Claude + geo-risk      │
                           │  (emergentintegrations, Opus 4.7 →    │
                           │   4.6 → Sonnet 4.5 → Haiku 4.5)       │
                           ▼
@@ -210,7 +210,7 @@ Grouped logically. All routes are prefixed `/api`.
    fuel-news headline set changes (rate-limited, ≥15 min gap).
 ```
 
-## 7. The Codex prompt (`predict.py` → `ai_llm_predict`)
+## 7. The Claude prompt (`predict.py` → `ai_llm_predict`)
 
 The system message frames the model as a quantitative analyst for Finnish
 retail fuel pricing and lists **9 numbered principles** that are explicitly
@@ -309,7 +309,7 @@ CRA bakes env vars at build time → changing this requires a redeploy.
 |----------------------|----------|-------|
 | `MONGO_URL`          | yes      | MongoDB Atlas connection string |
 | `DB_NAME`            | yes      | `bensavahti` |
-| `EMERGENT_LLM_KEY`   | yes      | Universal LLM key (`sk-emergent-…`) for Codex via emergentintegrations |
+| `EMERGENT_LLM_KEY`   | yes      | Universal LLM key (`sk-emergent-…`) for Claude via emergentintegrations |
 | `PIP_EXTRA_INDEX_URL`| yes      | `https://d33sy5i8bnduwe.cloudfront.net/simple/` — emergentintegrations lives on Emergent's private PyPI, not on public PyPI |
 | `CORS_ORIGINS`       | no       | defaults to `*` |
 | `ADMIN_TOKEN`        | optional | enables `POST /api/admin/run` (unset → 503). Constant-time compared to body `password` / `X-Admin-Token` header |
@@ -352,7 +352,7 @@ Critical contract details:
 - Numeric fields are JSON floats (e.g. `1.857`), NOT strings
 - Timestamps are ISO-8601 with timezone
 - `data_sources` field is `null | {tracker_captures, combined_points, source:"live_scrape_only"}`
-- `methods.ai_llm.model` is the actual model id string (`Codex-opus-4-7`) — `lib/modelName.js` converts it to display label
+- `methods.ai_llm.model` is the actual model id string (`claude-opus-4-7`) — `lib/modelName.js` converts it to display label
 
 ## 13. UI conventions
 

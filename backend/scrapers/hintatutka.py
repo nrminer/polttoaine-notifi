@@ -1,5 +1,5 @@
 """
-Scraper for hintatutka.fi - Finnish fuel price comparison site.
+Experimental scraper for hintatutka.fi - Finnish fuel price comparison site.
 
 Site-specific notes:
 - hintatutka.fi aggregates station prices with city/region filtering
@@ -8,7 +8,9 @@ Site-specific notes:
 - Station names often include chain prefix (e.g., "ABC Express", "Neste Oil")
 - The site may use JavaScript rendering; check if requests.get yields prices or if selenium/API endpoint is needed
 
-This is a template implementation that needs investigation of hintatutka.fi's actual structure.
+This scraper is not part of the production scrape path unless
+ENABLE_HINTATUTKA_EXPERIMENTAL=1 is set. It still needs verification against
+live hintatutka.fi HTML before it can be promoted to a production data source.
 Key unknowns (to be filled after manual site inspection):
 - Exact URL patterns for fuel types and cities
 - HTML structure (table rows vs div cards)
@@ -30,7 +32,7 @@ HEADERS = {
 }
 TIMEOUT = 30
 
-# Fuel mappings (verified from hintatutka.net)
+# Fuel mappings for the table headers seen in local fixtures.
 FUEL_MAP = {
     "95E10": "95 E10",
     "diesel": "Diesel",
@@ -56,7 +58,7 @@ def _parse_price(text: str) -> Optional[float]:
 
 def _freshness_hours(date_text: str) -> float:
     """
-    Parse timestamp from hintatutka.net format.
+    Parse timestamp from hintatutka.fi format.
 
     Examples:
       "19 h sitten"                -> 19.0
@@ -70,6 +72,11 @@ def _freshness_hours(date_text: str) -> float:
         return 999.0
 
     t_lower = t.lower()
+
+    if t_lower in {"juuri nyt", "äsken", "asken"}:
+        return 0.0
+    if "eilen" in t_lower:
+        return 24.0
 
     # "19 h sitten" format
     m = re.search(r"(\d+)\s*h\s", t_lower)
@@ -85,11 +92,18 @@ def _freshness_hours(date_text: str) -> float:
     m = re.search(r"(\d+)\s*tunti", t_lower)
     if m:
         return float(m.group(1))
+    if "tunti" in t_lower:
+        return 1.0
 
     # Days
     m = re.search(r"(\d+)\s*p[äa]iv", t_lower)
     if m:
         return int(m.group(1)) * 24.0
+    m = re.search(r"(\d+)\s*viikko", t_lower)
+    if m:
+        return int(m.group(1)) * 7.0 * 24.0
+    if "viikko" in t_lower:
+        return 7.0 * 24.0
 
     # Full timestamp: "Päivitetty: 19.05.2026 klo 23.59" or just "19.05.2026"
     m = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})", t)
@@ -97,7 +111,7 @@ def _freshness_hours(date_text: str) -> float:
         day, month, year = map(int, m.groups())
         try:
             # Extract time if present
-            time_match = re.search(r"klo\s+(\d{1,2})[:.](\\d{2})", t)
+            time_match = re.search(r"klo\s+(\d{1,2})[:.](\d{2})", t)
             if time_match:
                 hour, minute = map(int, time_match.groups())
                 update_time = datetime(year, month, day, hour, minute)
@@ -124,7 +138,7 @@ def _extract_chain(station_name: str) -> str:
 
 
 def _scrape_city(city: str, fuel: str) -> List[Dict]:
-    """Scrape hintatutka.net national page and filter for target city."""
+    """Scrape hintatutka.fi national page and filter for target city."""
 
     fuel_display = FUEL_MAP.get(fuel)
     if not fuel_display:
@@ -185,7 +199,7 @@ def _scrape_city(city: str, fuel: str) -> List[Dict]:
             "date": timestamp_text,
             "age_hours": _freshness_hours(timestamp_text),
             "fuel": fuel,
-            "source": "hintatutka.net",
+            "source": "hintatutka.fi",
             "chain": _extract_chain(station_cell),
             "raw_name": station_cell,
         })
@@ -211,7 +225,7 @@ def fetch_prices(fuel: str = "95E10", cities: Optional[List[str]] = None) -> Lis
             "date": str,
             "age_hours": float,
             "fuel": str,
-            "source": "hintatutka.net",
+            "source": "hintatutka.fi",
             "chain": str,          # Additional field
             "raw_name": str,       # Additional field
         }

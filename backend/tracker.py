@@ -20,7 +20,7 @@ import asyncio
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import predict as predict_mod
 import factors as factors_mod
@@ -32,7 +32,15 @@ from scrapers import polttoaine, tankille
 
 logger = logging.getLogger("bensavahti.tracker")
 
-HELSINKI = ZoneInfo("Europe/Helsinki")
+try:
+    HELSINKI = ZoneInfo("Europe/Helsinki")
+except ZoneInfoNotFoundError:
+    try:
+        from dateutil import tz
+
+        HELSINKI = tz.gettz("Europe/Helsinki")
+    except Exception:
+        HELSINKI = timezone(timedelta(hours=2), "Europe/Helsinki")
 
 # Päivittäiset ajastetut captureajat (Helsinki-aika) — ennuste + ilmoitus
 SCHEDULED_HOURS = (14, 21)
@@ -246,7 +254,7 @@ async def silent_scrape(db, executor, fuel: str, hour: int) -> dict:
 async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
                         hour: int | None = None) -> dict:
     """One scheduled capture (14:00 or 21:00 Helsinki). Idempotent on
-    (date, fuel, region, hour) � re-running the same slot overwrites it."""
+    (date, fuel, region, hour) - re-running the same slot overwrites it."""
     now_hel = datetime.now(HELSINKI)
     today = now_hel.date()
     if hour is None:
@@ -384,7 +392,7 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
     return doc
 
 
-(db, executor, fuels=("95E10", "diesel")):
+async def unified_scheduler_loop(db, executor, fuels=("95E10", "diesel")):
     """Background task: sleep until next scheduled event (notification capture or silent scrape).
 
     - SCHEDULED_HOURS (14, 21): full capture with prediction and notification

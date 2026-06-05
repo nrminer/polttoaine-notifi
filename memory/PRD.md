@@ -15,14 +15,14 @@ React frontend on **Vercel**, FastAPI backend on **Railway**, MongoDB on
 ## Tech stack
 - Frontend: React 18, Create React App, Tailwind CSS, Framer Motion, Recharts, axios
 - Backend: FastAPI 0.110, Uvicorn, Motor (async MongoDB), Pydantic 2.6
-- AI: Claude Sonnet 4.5 via `emergentintegrations` (requires `PIP_EXTRA_INDEX_URL`)
+- AI: Claude Opus 4.7 via `emergentintegrations`, fallback chain to Claude Opus 4.6, Claude Sonnet 4.5, and Claude Haiku 4.5 (requires `PIP_EXTRA_INDEX_URL`)
 - Scrapers: polttoaine.net + tankille.fi (live, ≤24h)
 - Market data: Yahoo Finance (Brent, EUR/USD)
 
 ## Core requirements (locked)
 1. Show today's cheapest 95E10 / diesel price across Finland
-2. Predict tomorrow's price using 4 parallel methods + ensemble
-3. Track prediction-vs-actual over time (capture at 06:00 + 20:00 Helsinki)
+2. Predict tomorrow's price using 5 parallel methods + ensemble
+3. Track prediction-vs-actual over time (capture at 14:00 + 21:00 Helsinki)
 4. Display regional prices (Helsinki, Espoo, Vantaa, Tampere, Turku, Lahti)
 5. News feed about fuel price drivers
 6. Brent + EUR/USD as context factors
@@ -47,7 +47,7 @@ React frontend on **Vercel**, FastAPI backend on **Railway**, MongoDB on
 ### Railway (backend)
 - `MONGO_URL` = Atlas connection string
 - `DB_NAME` = bensavahti
-- `EMERGENT_LLM_KEY` = Universal LLM key (for Claude Sonnet 4.5)
+- `EMERGENT_LLM_KEY` = Universal LLM key (for Claude Opus 4.7 fallback chain)
 - `PIP_EXTRA_INDEX_URL` = https://d33sy5i8bnduwe.cloudfront.net/simple/
   (required for `emergentintegrations` install)
 

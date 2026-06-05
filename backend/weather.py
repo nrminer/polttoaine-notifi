@@ -15,15 +15,14 @@ Weather and road condition data for Finnish fuel demand modeling.
    - Authentication: None
    - License: CC 4.0
 
-**Usage in prediction**:
-- Harsh winter (cold, ice, precipitation) → +1–2% diesel demand (heating, idling)
-- Mild conditions → −0.5% demand
-- Returns demand multiplier: 0.98–1.02 for use in fundamental_anchor
+**Status**:
+Experimental helper. This module is not currently wired into run_prediction()
+or predict_tomorrow(), so API responses and UI labels must not claim
+weather-adjusted predictions until that integration exists.
 
 **Caching**: 3-hour cache (weather updates frequently but not minute-by-minute)
 
-Error handling: returns neutral values (None / 1.0) on API failure — prediction
-degrades gracefully without weather signal.
+Error handling: returns neutral values (None / 1.0) on API failure.
 """
 from __future__ import annotations
 import logging

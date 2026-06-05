@@ -4,8 +4,7 @@ BensaVahti - polttoaineen hintaennustaja Suomeen.
 FastAPI-palvelin, joka:
   - Skrapeerää nykyhinnat (polttoaine.net + tankille.fi)
   - Tallentaa havaintoja MongoDB:hen
-  - Generoi simuloidun historian seed-vaiheessa
-  - Laskee 4 ennustetta + ensemble (MA, LR, Holt, Claude Sonnet 4.5)
+  - Laskee 5 ennustetta + ensemble (MA, LR, Holt, fundamenttiankkuri, Claude Opus 4.7)
   - Hakee Brent + EUR/USD Yahoo Financelta
   - Tarjoaa REST-rajapinnan dashboardille
 """
@@ -131,36 +130,48 @@ def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
 
 
 async def _scrape_all(fuel: str) -> list[dict]:
-    """Hae nykyhinnat kolmesta skrapereista taustasäikeessä.
+    """Fetch current prices from production-validated scrapers.
 
-    tankille.fi on PRIMÄÄRINEN lähde (käyttäjäkokemuksen perusteella tarkempi
-    ja tuoreempi). hintatutka.net on SEKUNDÄÄRINEN (laajempi kattavuus).
-    polttoaine.net toimii vertailu/täydennyslähteenä (TERTIÄÄRINEN).
-    Kaikista suodatetaan järjettömät hinnat (out-of-range tai >25% medianista
-    poikkeavat) ennen yhdistämistä."""
+    tankille.fi is the primary source and polttoaine.net is the cross-check.
+    Hintatutka is experimental and skipped unless
+    ENABLE_HINTATUTKA_EXPERIMENTAL=1 is set. Each source is sanity-filtered
+    independently before results are merged.
+    """
     loop = asyncio.get_event_loop()
-    t_task = loop.run_in_executor(executor, tankille.fetch_prices, fuel)
-    h_task = loop.run_in_executor(executor, hintatutka.fetch_prices, fuel)
-    p_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
+    tasks = [
+        ("tankille", loop.run_in_executor(executor, tankille.fetch_prices, fuel)),
+        ("polttoaine", loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)),
+    ]
+    enable_hintatutka = os.environ.get("ENABLE_HINTATUTKA_EXPERIMENTAL", "").lower() in {
+        "1", "true", "yes", "on"
+    }
+    if enable_hintatutka:
+        try:
+            from scrapers import hintatutka
+            tasks.insert(
+                1,
+                ("hintatutka", loop.run_in_executor(executor, hintatutka.fetch_prices, fuel)),
+            )
+        except Exception as e:
+            logger.warning("hintatutka experimental import failed: %s", e)
     try:
-        results = await asyncio.gather(t_task, h_task, p_task, return_exceptions=True)
-        t_rows, h_rows, p_rows = results
+        results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
     except Exception as e:
         logger.warning("scrape error: %s", e)
         return []
-    # filter each source independently against its own median first
-    t_clean = _sanity_filter(t_rows if isinstance(t_rows, list) else [], "tankille")
-    h_clean = _sanity_filter(h_rows if isinstance(h_rows, list) else [], "hintatutka")
-    p_clean = _sanity_filter(p_rows if isinstance(p_rows, list) else [], "polttoaine")
-    if not isinstance(t_rows, list):
-        logger.warning("tankille failed: %s", t_rows)
-    if not isinstance(h_rows, list):
-        logger.warning("hintatutka failed: %s", h_rows)
-    if not isinstance(p_rows, list):
-        logger.warning("polttoaine failed: %s", p_rows)
-    # tankille first (PRIMARY) → hintatutka second (SECONDARY) → polttoaine last (TERTIARY)
-    # downstream picks "first match" when deduplicating by city/brand
-    return t_clean + h_clean + p_clean
+    clean_by_source: dict[str, list[dict]] = {}
+    for (name, _), rows in zip(tasks, results):
+        if not isinstance(rows, list):
+            logger.warning("%s failed: %s", name, rows)
+            rows = []
+        clean_by_source[name] = _sanity_filter(rows, name)
+    # tankille first (PRIMARY), optional experimental Hintatutka second,
+    # polttoaine last; downstream keeps first match in city/source merges.
+    return (
+        clean_by_source.get("tankille", [])
+        + clean_by_source.get("hintatutka", [])
+        + clean_by_source.get("polttoaine", [])
+    )
 
 
 def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
@@ -658,26 +669,6 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         sort=[("generated_at", -1)],
     )
     if not doc:
-
-    # Fetch hourly predictions from daily_tracker
-    today_iso = datetime.now(timezone.utc).date().isoformat()
-    
-    hourly_predictions = {}
-    best_window = None
-    
-    # Get today's captures with predictions for tomorrow
-    tracker_docs = await db.daily_tracker.find(
-        {"fuel": fuel, "region": region, "date": today_iso},
-        {"_id": 0, "hour": 1, "hourly_predictions": 1, "best_window": 1},
-    ).sort("hour", -1).to_list(length=10)
-    
-    if tracker_docs:
-        # Use most recent capture's hourly predictions
-        latest_capture = tracker_docs[0]
-        hourly_predictions = latest_capture.get("hourly_predictions") or {}
-        best_window = latest_capture.get("best_window")
-
-
         return {"available": False}
 
     # Calculate historical MAE from realized method performance
@@ -700,14 +691,23 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
 
     # Build prediction_confidence object
     ensemble_full = doc.get("ensemble_full") or {"value": doc.get("ensemble")}
+    prediction_mae = None
+    if isinstance(ensemble_mae, dict):
+        prediction_mae = ensemble_mae.get("mae")
+    elif isinstance(ensemble_mae, (int, float)):
+        prediction_mae = ensemble_mae
     prediction_confidence = {
         "historical_mae": ensemble_mae,
+        "prediction_mae": prediction_mae,
         "confidence_range": {
             "low": ensemble_full.get("confidence_low"),
             "high": ensemble_full.get("confidence_high"),
         },
         "data_quality": data_quality,
         "last_updated": doc.get("generated_at"),
+        "most_recent_scrape": data_sources.get("most_recent_scrape") or doc.get("generated_at"),
+        "sources_count": data_sources.get("sources_count"),
+        "stations_count": data_sources.get("stations_count"),
     }
 
 

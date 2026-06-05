@@ -14,7 +14,9 @@ Liikenneindeksi on kysyntäsignaali:
 - traffic_demand_proxy() palauttaa suhdeluvun: nykyviikon ka / 4 viikon ka
 
 Jos verkko ei ole käytettävissä tai API rajaa, palautetaan None.
-Ennustemalli vähentää gracefully-tyyliin traffic-signaalin painoarvoa.
+Status: experimental helper. This module is not currently wired into
+run_prediction() or predict_tomorrow(), so API responses and UI labels must not
+claim traffic-adjusted predictions until that integration exists.
 """
 from __future__ import annotations
 import requests

@@ -1,17 +1,23 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Fuel,
-  Gauge,
-  Sparkles,
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowDown,
   Minus,
   Clock,
   Globe,
   Sun,
   Moon,
+  Activity,
+  CheckCircle2,
+  Database,
+  LineChart,
+  MapPin,
+  Radio,
+  ShieldCheck,
 } from "lucide-react";
 
 import "./App.css";
@@ -20,16 +26,12 @@ import FuelToggle from "./components/FuelToggle";
 import TrackingChart from "./components/TrackingChart";
 import CityAverageChart from "./components/CityAverageChart";
 import MethodTable from "./components/MethodTable";
-import { RecommendationCard } from "./components/RecommendationCard";
-import { WeeklyCycleCard } from "./components/WeeklyCycleCard";
-import PriceDrivers from "./components/PriceDrivers";
 
 import AiAnalysis from "./components/AiAnalysis";
 import RegionalGrid from "./components/RegionalGrid";
 import AccuracyTracker from "./components/AccuracyTracker";
 import FactorsCard from "./components/FactorsCard";
 import { ConfidenceStrip } from "./components/ConfidenceStrip";
-import SourceBreakdown from "./components/SourceBreakdown";
 import {
   fetchCurrent,
   fetchHistory,
@@ -40,18 +42,11 @@ import {
   fetchAccuracy,
   fetchNews,
   fetchTrackHistory,
-  runTrackCapture,
   seedHistory,
 } from "./lib/api";
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
 import { formatModelName } from "./lib/modelName";
 import NewsCard from "./components/NewsCard";
-
-const RANGE_OPTIONS = [
-  { value: 30, label: "30 PV" },
-  { value: 90, label: "90 PV" },
-  { value: 365, label: "1 V" },
-];
 
 const CHART_CITIES = [
   "Suomi",
@@ -72,6 +67,7 @@ const CHART_SLOTS = [
   { value: 14, label: "14:00" },
   { value: 21, label: "21:00" },
 ];
+const HISTORY_RANGE_DAYS = 90;
 
 /* Reusable filter button used in chart controls.
    h-9 (36px) + py implicit hit area pushes effective tap target near 44px;
@@ -117,9 +113,126 @@ function deltaFmtMilli(d) {
   return `${sign}${Math.abs(v).toFixed(1)} m€`;
 }
 
+const LANDING_SOURCES = [
+  {
+    name: "tankille.fi",
+    label: "ensisijainen kaupunkidata",
+    detail: "halvin + keskiarvo",
+    accent: "emerald",
+  },
+  {
+    name: "polttoaine.net",
+    label: "ristitarkistus",
+    detail: "kansallinen otanta",
+    accent: "amber",
+  },
+  {
+    name: "Yahoo Finance",
+    label: "markkinatekijät",
+    detail: "Brent + EUR/USD",
+    accent: "sky",
+  },
+  {
+    name: "daily_tracker",
+    label: "todelliset capturet",
+    detail: "14:00 + 21:00",
+    accent: "slate",
+  },
+];
+
+const PIPELINE_STEPS = [
+  { icon: Radio, label: "Kerää", detail: "live HTML" },
+  { icon: ShieldCheck, label: "Suodata", detail: "raja + mediaani" },
+  { icon: Database, label: "Tallenna", detail: "daily_tracker" },
+  { icon: LineChart, label: "Arvioi", detail: "ankkuroitu ensemble" },
+];
+
+function LandingMetric({ icon: Icon, label, value, detail, testId }) {
+  return (
+    <motion.div
+      data-testid={testId}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: "easeOut" }}
+      className="landing-metric"
+    >
+      <div className="landing-metric-icon">
+        <Icon size={15} />
+      </div>
+      <div className="min-w-0">
+        <div className="landing-metric-label">{label}</div>
+        <div className="landing-metric-value">{value}</div>
+        {detail && <div className="landing-metric-detail">{detail}</div>}
+      </div>
+    </motion.div>
+  );
+}
+
+function LandingSourceRow({ source, delay = 0 }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay, duration: 0.42, ease: "easeOut" }}
+      className={`landing-source-row landing-source-${source.accent}`}
+    >
+      <span className="landing-source-dot" />
+      <div className="min-w-0 flex-1">
+        <div className="landing-source-name">{source.name}</div>
+        <div className="landing-source-label">{source.label}</div>
+      </div>
+      <span className="landing-source-detail">{source.detail}</span>
+    </motion.div>
+  );
+}
+
+function LandingBars({ series }) {
+  const bars = series.length
+    ? series
+    : Array.from({ length: 12 }, (_, i) => ({
+        value: null,
+        height: 34 + ((i * 17) % 44),
+        muted: true,
+      }));
+
+  return (
+    <div className="landing-bars" aria-hidden="true">
+      {bars.map((bar, idx) => (
+        <motion.span
+          key={`${bar.value ?? "pending"}-${idx}`}
+          initial={{ scaleY: 0.35, opacity: 0 }}
+          animate={{ scaleY: 1, opacity: bar.muted ? 0.28 : 1 }}
+          transition={{ delay: idx * 0.035, duration: 0.38, ease: "easeOut" }}
+          style={{ height: `${bar.height}%` }}
+          className={bar.muted ? "is-muted" : ""}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PipelineStep({ step, index }) {
+  const Icon = step.icon;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.18 + index * 0.08, duration: 0.42, ease: "easeOut" }}
+      className="landing-pipeline-step"
+    >
+      <div className="landing-pipeline-icon">
+        <Icon size={15} />
+      </div>
+      <div>
+        <div className="landing-pipeline-label">{step.label}</div>
+        <div className="landing-pipeline-detail">{step.detail}</div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function App() {
   const [fuel, setFuel] = useState("95E10");
-  const [range, setRange] = useState(90);
   const [current, setCurrent] = useState(null);
   const [history, setHistory] = useState([]);
   const [factors, setFactors] = useState(null);
@@ -299,24 +412,12 @@ export default function App() {
     }
   }, []);
 
-  const captureToday = useCallback(async () => {
-    setLoad("capture", true);
-    try {
-      await runTrackCapture(fuel);
-      await loadTracking(fuel);
-    } catch (e) {
-      console.warn("capture failed", e);
-    } finally {
-      setLoad("capture", false);
-    }
-  }, [fuel, loadTracking]);
-
   useEffect(() => {
     (async () => {
       await ensureSeeded();
       await Promise.all([
         loadCurrent(fuel),
-        loadHistory(fuel, range),
+        loadHistory(fuel, HISTORY_RANGE_DAYS),
         loadFactors(),
         loadPrediction(fuel, false),
         loadRegional(fuel),
@@ -333,7 +434,7 @@ export default function App() {
     (async () => {
       await Promise.all([
         loadCurrent(fuel),
-        loadHistory(fuel, range),
+        loadHistory(fuel, HISTORY_RANGE_DAYS),
         loadPrediction(fuel, false),
         loadRegional(fuel),
         loadAccuracy(fuel),
@@ -343,17 +444,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fuel]);
 
-  useEffect(() => {
-    if (!seeded) return;
-    loadHistory(fuel, range);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range]);
-
   const handleRefreshAll = async () => {
     setError(null);
     await Promise.all([
       loadCurrent(fuel),
-      loadHistory(fuel, range),
+      loadHistory(fuel, HISTORY_RANGE_DAYS),
       loadFactors(),
       loadRegional(fuel),
       loadTracking(fuel),
@@ -372,13 +467,6 @@ export default function App() {
     if (prev?.actual_cheapest == null) return null;
     return todayMin - prev.actual_cheapest;
   }, [todayMin, tracking]);
-  const yesterdayPrice = useMemo(() => {
-    if (!history || history.length < 2) return null;
-    const today = new Date().toISOString().slice(0, 10);
-    const filtered = history.filter((h) => h.date < today);
-    return filtered.length ? filtered[filtered.length - 1].price : null;
-  }, [history]);
-
   const tomorrowVal = tomorrowCheapest;
   const tomorrowDelta = tomorrowVal != null && todayMin != null ? tomorrowVal - todayMin : null;
 
@@ -395,6 +483,41 @@ export default function App() {
   }, [tracking, chartRange, chartSlot]);
 
   const isLoading = Object.values(loading).some(Boolean);
+  const cheapestCity = useMemo(() => {
+    if (!current?.by_city) return null;
+    const entries = Object.entries(current.by_city)
+      .filter(([, value]) => value?.min != null)
+      .sort((a, b) => a[1].min - b[1].min);
+    return entries[0]?.[0] || null;
+  }, [current]);
+  const landingSeries = useMemo(() => {
+    const trackerValues = (tracking?.rows || [])
+      .filter((row) => row.actual_cheapest != null)
+      .slice(-12)
+      .map((row) => Number(row.actual_cheapest))
+      .filter((value) => Number.isFinite(value));
+    const historyValues = (history || [])
+      .slice(-12)
+      .map((row) => Number(row.price))
+      .filter((value) => Number.isFinite(value));
+    const values = trackerValues.length >= 3 ? trackerValues : historyValues;
+    if (!values.length) return [];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(max - min, 0.001);
+    return values.map((value) => ({
+      value,
+      height: 22 + ((value - min) / span) * 72,
+    }));
+  }, [tracking, history]);
+  const comparedCount = tracking?.summary?.n_compared ?? 0;
+  const sourceCount =
+    current?.sources_count ?? prediction?.prediction_confidence?.sources_count ?? null;
+  const scrapeTime = current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "odottaa dataa";
+  const accuracyBadge =
+    tracking?.summary?.mae != null
+      ? `${(tracking.summary.mae * 100).toFixed(1)} c/L MAE`
+      : `${comparedCount} vertailua`;
 
   return (
     <div className="app-shell relative">
@@ -452,21 +575,162 @@ export default function App() {
         </div>
       </header>
 
-      {/* HERO */}
+      {/* LANDING */}
       <section
         id="main-content"
+        className="landing-hero px-6 md:px-10"
+        data-testid="landing-hero"
+      >
+        <div className="max-w-[1480px] mx-auto landing-hero-inner">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
+            className="landing-copy"
+          >
+            <div className="landing-kicker">
+              <span className="landing-kicker-dot" />
+              Live-skräpätty polttoainedata · ei synteettistä historiaa
+            </div>
+            <h1 className="landing-title">
+              BensaVahti
+            </h1>
+            <p className="landing-lead">
+              Tumma, operatiivinen näkymä Suomen pumppuhintoihin: lähteet,
+              sanity-filtterit, todelliset capturet ja huomisen arvio samassa
+              rytmissä.
+            </p>
+
+            <div className="landing-actions">
+              <a href="#dashboard" className="landing-primary-action">
+                <ArrowDown size={16} />
+                Katso dashboard
+              </a>
+              <button
+                data-testid="landing-refresh-btn"
+                onClick={handleRefreshAll}
+                disabled={isLoading}
+                type="button"
+                className="landing-secondary-action"
+              >
+                <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
+                Päivitä data
+              </button>
+            </div>
+
+            <div className="landing-metrics" aria-label="Datalaadun yhteenveto">
+              <LandingMetric
+                icon={Database}
+                label="Otanta"
+                value={current?.stations_count != null ? `${current.stations_count} asemaa` : "odottaa"}
+                detail={sourceCount != null ? `${sourceCount} lähdettä mukana` : "live-lähteet"}
+                testId="landing-sample-metric"
+              />
+              <LandingMetric
+                icon={Clock}
+                label="Viimeisin scrape"
+                value={scrapeTime}
+                detail={current?.stale ? "välimuistista" : "tuore live-haku"}
+                testId="landing-scrape-metric"
+              />
+              <LandingMetric
+                icon={CheckCircle2}
+                label="Toteuma vs arvio"
+                value={accuracyBadge}
+                detail={`${comparedCount} todellista osumaa`}
+                testId="landing-accuracy-metric"
+              />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 22, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.08, duration: 0.6, ease: "easeOut" }}
+            className="landing-data-plane"
+            data-testid="landing-data-plane"
+          >
+            <div className="landing-plane-top">
+              <div>
+                <div className="landing-plane-eyebrow">Live-datan valvomo</div>
+                <div className="landing-plane-title">Lähteet ja tarkistusketju</div>
+              </div>
+              <div className="landing-plane-status">
+                <span className="landing-status-light" />
+                {isLoading ? "päivittyy" : "online"}
+              </div>
+            </div>
+
+            <div className="landing-price-strip">
+              <div>
+                <div className="landing-price-label">Tänään · halvin</div>
+                <div className="landing-price-value tnum">
+                  {todayMin != null ? todayMin.toFixed(3) : "—"}
+                  <span>€/L</span>
+                </div>
+                <div className="landing-price-note">
+                  {cheapestCity ? <><MapPin size={12} /> {cheapestCity}</> : "kaupunkidata odottaa"}
+                </div>
+              </div>
+              <div>
+                <div className="landing-price-label">Huomenna · arvio</div>
+                <div className="landing-price-value tnum is-accent">
+                  {tomorrowCheapest != null ? tomorrowCheapest.toFixed(3) : "—"}
+                  <span>€/L</span>
+                </div>
+                <div className="landing-price-note">
+                  {tomorrowDelta != null ? deltaFmtMilli(tomorrowDelta) : "ennuste odottaa"}
+                </div>
+              </div>
+            </div>
+
+            <div className="landing-chart-block">
+              <div className="landing-chart-head">
+                <span>capture-trendi</span>
+                <span>{landingSeries.length ? `${landingSeries.length} pistettä` : "ei vielä dataa"}</span>
+              </div>
+              <LandingBars series={landingSeries} />
+            </div>
+
+            <div className="landing-source-list">
+              {LANDING_SOURCES.map((source, idx) => (
+                <LandingSourceRow
+                  key={source.name}
+                  source={source}
+                  delay={0.16 + idx * 0.06}
+                />
+              ))}
+            </div>
+
+            <div className="landing-pipeline" aria-label="Dataputki">
+              {PIPELINE_STEPS.map((step, idx) => (
+                <PipelineStep key={step.label} step={step} index={idx} />
+              ))}
+            </div>
+
+            <div className="landing-plane-footer">
+              <span><Activity size={13} /> 14:00 + 21:00 Helsinki</span>
+              <span><ShieldCheck size={13} /> mediaanipoikkeamat suodatetaan</span>
+            </div>
+            <span className="landing-scan-line" aria-hidden="true" />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* HERO */}
+      <section
+        id="dashboard"
         className="max-w-[1480px] mx-auto px-6 md:px-10 pt-10 md:pt-16 pb-8"
       >
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7">
             <CardLabel className="mb-3">Suomi · day-ahead pumppuhinta-arvio</CardLabel>
-            <h1 className="font-display text-5xl md:text-7xl font-black tracking-tightest leading-[0.95]">
-              Huomisen<br />
-              hinta <span className="deco-underline">tänään.</span>
-            </h1>
+            <h2 className="font-display text-4xl md:text-5xl font-black tracking-normal leading-[1.02]">
+              Live dashboard
+            </h2>
             <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
-              Live capture klo 14 ja 21. Viisi mallia, datalaatupainotettu
-              yhdistelmä, ankkuroitu live-hintaan.
+              Tuoreimmat hinnat, capture-historia ja mallien välinen vertailu
+              yhdessä näkymässä.
             </p>
 
             {/* Context chips: real numbers, not marketing copy */}
