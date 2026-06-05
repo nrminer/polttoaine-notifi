@@ -1,3 +1,14 @@
+/* Base font size: 18px for better readability */
+html {
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
 /* Component-level overrides if needed. */
 .app-shell {
   min-height: 100vh;
@@ -20,4 +31,109 @@ html.dark .app-shell {
   font-feature-settings: "tnum" 1;
   font-weight: 700;
   letter-spacing: -0.04em;
+}
+
+/* Tabular numbers utility */
+.tnum {
+  font-feature-settings: "tnum" 1;
+}
+
+/* Price display utilities */
+.price-hero {
+  font-size: clamp(3rem, 8vw, 5rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-feature-settings: "tnum" 1;
+}
+
+.price-large {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Cycle phase badges */
+.cycle-stable {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: rgb(16, 185, 129);
+}
+
+html.dark .cycle-stable {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: rgb(52, 211, 153);
+}
+
+.cycle-rising {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: rgb(245, 158, 11);
+}
+
+html.dark .cycle-rising {
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: rgb(251, 191, 36);
+}
+
+.cycle-peak {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: rgb(239, 68, 68);
+}
+
+html.dark .cycle-peak {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: rgb(248, 113, 113);
+}
+
+.cycle-falling {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: rgb(59, 130, 246);
+}
+
+html.dark .cycle-falling {
+  background-color: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: rgb(96, 165, 250);
+}
+
+/* Recommendation card emphasis */
+.recommendation-wait {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02));
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+html.dark .recommendation-wait {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.03));
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.recommendation-buy {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+html.dark .recommendation-buy {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.03));
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* Improved contrast for dark mode numbers */
+html.dark .text-ink {
+  color: rgb(248, 250, 252);
+}
+
+html.dark .text-secondary {
+  color: rgb(148, 163, 184);
+}
+
+html.dark .text-muted {
+  color: rgb(100, 116, 139);
 }

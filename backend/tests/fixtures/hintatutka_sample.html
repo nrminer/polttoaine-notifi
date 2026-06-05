@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <title>Polttoaineen hinnat - Hintatutka.fi</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Bensiinin hinnat Helsingissä</h1>
+
+        <!-- Table pattern (common format #1) -->
+        <table class="price-table">
+            <thead>
+                <tr>
+                    <th>Asema</th>
+                    <th>Hinta</th>
+                    <th>Päivitetty</th>
+                    <th>Osoite</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>ABC Express Viikki</td>
+                    <td>1.857 €/l</td>
+                    <td>2 tuntia sitten</td>
+                    <td>Viikinportti 1</td>
+                </tr>
+                <tr>
+                    <td>Neste Oil Helsinki Keskusta</td>
+                    <td>1.899 €/l</td>
+                    <td>5 tuntia sitten</td>
+                    <td>Mannerheimintie 45</td>
+                </tr>
+                <tr>
+                    <td>ST1 Itäkeskus</td>
+                    <td>1,922 €/l</td>
+                    <td>eilen</td>
+                    <td>Itäkatu 1-7</td>
+                </tr>
+                <tr>
+                    <td>Shell Automaattiasema Kamppi</td>
+                    <td>1.949 €/l</td>
+                    <td>30 minuuttia sitten</td>
+                    <td>Fredrikinkatu 63</td>
+                </tr>
+                <tr>
+                    <td>SEO Leppävaara</td>
+                    <td>1.879 €/l</td>
+                    <td>1 tunti sitten</td>
+                    <td>Leppävaarankatu 3-9</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Card pattern (alternative format #2) -->
+        <div class="stations-grid">
+            <div class="station-card">
+                <span class="station-name">Teboil Kallio</span>
+                <span class="price">1.889 €/l</span>
+                <span class="updated">juuri nyt</span>
+                <span class="address">Hämeentie 155</span>
+            </div>
+
+            <div class="station-card">
+                <span class="station-name">Alepa Pasila</span>
+                <span class="price">1.915 €/l</span>
+                <span class="updated">3 tuntia sitten</span>
+                <span class="address">Pasilankatu 2</span>
+            </div>
+
+            <div class="station-card">
+                <span class="station-name">S-Market Kannelmäki</span>
+                <span class="price">1,869 €/l</span>
+                <span class="updated">6 tuntia sitten</span>
+                <span class="address">Klaneettitie 5</span>
+            </div>
+        </div>
+
+        <!-- Edge cases for parsing robustness -->
+        <table class="price-table">
+            <tbody>
+                <!-- Missing address -->
+                <tr>
+                    <td>Unknown Chain Station</td>
+                    <td>1.999 €/l</td>
+                    <td>äsken</td>
+                    <td></td>
+                </tr>
+
+                <!-- Unusual price format -->
+                <tr>
+                    <td>Test Station A</td>
+                    <td>€2,055/l</td>
+                    <td>2 päivää sitten</td>
+                    <td>Test Address 1</td>
+                </tr>
+
+                <!-- Very old timestamp -->
+                <tr>
+                    <td>Test Station B</td>
+                    <td>1.799 €/l</td>
+                    <td>viikko sitten</td>
+                    <td>Test Address 2</td>
+                </tr>
+
+                <!-- Invalid row (missing price - should be skipped) -->
+                <tr>
+                    <td>Incomplete Station</td>
+                    <td>-</td>
+                    <td>N/A</td>
+                </tr>
+
+                <!-- Price with extra spaces -->
+                <tr>
+                    <td>Test Station C</td>
+                    <td>  1.877  €/l  </td>
+                    <td>15 minuuttia sitten</td>
+                    <td>Test Address 3</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

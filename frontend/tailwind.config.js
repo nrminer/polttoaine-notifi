@@ -18,11 +18,24 @@ module.exports = {
         brandHover: "#002380",
         accent: "#FDE047",
         nordDark: "#0F172A",
+        // Cycle phase colors
+        cycleStable: "#10B981",
+        cycleRising: "#F59E0B",
+        cyclePeak: "#EF4444",
+        cycleFalling: "#3B82F6",
+        // Recommendation colors
+        recommendWait: "#10B981",
+        recommendBuy: "#3B82F6",
+        recommendNeutral: "#6B7280",
       },
       fontFamily: {
-        display: ['"Cabinet Grotesk"', '"Recoleta"', "ui-sans-serif", "system-ui"],
-        body: ['"IBM Plex Sans"', "ui-sans-serif", "system-ui"],
-        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "monospace"],
+        display: ['"Cabinet Grotesk"', '"Recoleta"', "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        body: ['"IBM Plex Sans"', "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
+      },
+      fontSize: {
+        'hero': ['4rem', { lineHeight: '1', letterSpacing: '-0.04em', fontWeight: '900' }],
+        'hero-sm': ['3rem', { lineHeight: '1', letterSpacing: '-0.04em', fontWeight: '900' }],
       },
       letterSpacing: {
         tightest: "-0.04em",

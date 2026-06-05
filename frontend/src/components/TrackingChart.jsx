@@ -3,6 +3,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Line,
+  Area,
   Scatter,
   XAxis,
   YAxis,
@@ -62,21 +63,28 @@ export default function TrackingChart({
       hour,
       actual: r.actual_cheapest,
       predicted: r.predicted_cheapest_for_today,
+      confidence_low: r.prediction_full?.ensemble?.confidence_low ?? null,
+      confidence_high: r.prediction_full?.ensemble?.confidence_high ?? null,
     };
   });
 
   if (!isCity && rows.length && tomorrow?.date && tomorrow?.value != null) {
+    const tomorrowConfidence = tomorrow.confidence_range || {};
     data.push({
       slot: `${tomorrow.date} 14`,
       date: tomorrow.date,
       hour: 14,
       tomorrow: tomorrow.value,
+      confidence_low: tomorrowConfidence.low ?? null,
+      confidence_high: tomorrowConfidence.high ?? null,
     });
   }
 
   const prices = data
     .flatMap((d) =>
-      isCity ? [d.cheapest, d.average] : [d.actual, d.predicted, d.tomorrow]
+      isCity
+        ? [d.cheapest, d.average]
+        : [d.actual, d.predicted, d.tomorrow, d.confidence_low, d.confidence_high]
     )
     .filter((v) => v !== null && v !== undefined);
 
@@ -95,6 +103,15 @@ export default function TrackingChart({
   }
   const min = Math.min(...prices) - 0.02;
   const max = Math.max(...prices) + 0.02;
+
+  // Determine confidence band color based on data quality
+  const getConfidenceBandColor = () => {
+    const totalPoints = rows.length;
+    if (totalPoints >= 14) return { fill: "#10B981", opacity: 0.15 }; // green (rich)
+    if (totalPoints >= 7) return { fill: "#F59E0B", opacity: 0.15 }; // yellow (sufficient)
+    return { fill: "#EF4444", opacity: 0.15 }; // red (thin)
+  };
+  const confidenceBandStyle = getConfidenceBandColor();
 
   return (
     <div className="w-full" style={{ height }} data-testid="tracking-chart">
@@ -159,6 +176,27 @@ export default function TrackingChart({
             </>
           ) : (
             <>
+              <Area
+                type="monotone"
+                dataKey="confidence_high"
+                name="Luottamusväli"
+                stroke="none"
+                fill={confidenceBandStyle.fill}
+                fillOpacity={confidenceBandStyle.opacity}
+                connectNulls
+                isAnimationActive
+              />
+              <Area
+                type="monotone"
+                dataKey="confidence_low"
+                name="confidence_low_hidden"
+                stroke="none"
+                fill="#ffffff"
+                fillOpacity={1}
+                connectNulls
+                isAnimationActive
+                legendType="none"
+              />
               <Line
                 type="monotone"
                 dataKey="actual"

@@ -7,6 +7,61 @@ export const api = axios.create({
   timeout: 90000,
 });
 
+/**
+ * API response types (for documentation):
+ *
+ * fetchCurrent response:
+ * {
+ *   fuel: string,
+ *   national_min: number,
+ *   cheap_sample_avg: number,
+ *   stations_count: number,
+ *   fetched_at: string (ISO),
+ *   stale: boolean,
+ *   by_city: {
+ *     [cityName]: {
+ *       min: number,
+ *       mean: number,
+ *       count: number,
+ *       sources: Array<{source: string, price: number, age_hours: number, station_count: number}>, // NEW
+ *       confidence_data: {agreement_level: "high"|"medium"|"low", spread_cents: number} // NEW
+ *     }
+ *   }
+ * }
+ *
+ * fetchLatestPrediction response:
+ * {
+ *   available: boolean,
+ *   fuel: string,
+ *   region: string,
+ *   generated_at: string (ISO),
+ *   target_date: string (ISO date),
+ *   current_price: number,
+ *   live_anchor: number,
+ *   ensemble: {value: number, spread: number, weights: object},
+ *   methods: {ai_llm: object, fundamental_anchor: object, ...},
+ *   brent: number,
+ *   eur_usd: number,
+ *   data_sources: object | null,
+ *   conflict_signal: boolean,
+ *   n_daily_points: number,
+ *   product_label: string,
+ *   product_usd_gal: number,
+ *   product_chg: number,
+ *   crack_eur_l: number,
+ *   tax_events: array,
+ *   tax_step_eur_l: number,
+ *   self_training: object,
+ *   news_headlines: array,
+ *   prediction_confidence: { // NEW
+ *     most_recent_scrape: string (ISO),
+ *     sources_count: number,
+ *     stations_count: number,
+ *     prediction_mae: number | null
+ *   }
+ * }
+ */
+
 export const fetchCurrent = (fuel) => api.get(`/prices/current`, { params: { fuel } });
 export const fetchHistory = (fuel, region, days) =>
   api.get(`/prices/history`, { params: { fuel, region, days } });

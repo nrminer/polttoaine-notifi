@@ -39,6 +39,16 @@ def _parse_price(text: str):
     return float(m.group(1).replace(",", "."))
 
 
+def _extract_chain(station_name: str) -> str:
+    """Extract chain name from station name."""
+    name_upper = station_name.upper()
+    chains = ["NESTE", "ABC", "ST1", "SHELL", "TEBOIL", "SEO", "ESSO", "CIRCLE K"]
+    for chain in chains:
+        if chain in name_upper:
+            return chain.capitalize() if chain not in ["ABC", "SEO"] else chain
+    return ""
+
+
 def _freshness_hours(date_text: str) -> float:
     """Arvioi tankille.fi:n päivitystekstistä iän tunteina.
 
@@ -111,6 +121,8 @@ def _scrape_city(city: str, fuel: str) -> list:
             "age_hours": _freshness_hours(cells[3]),
             "fuel": fuel,
             "source": "tankille.fi",
+            "chain": _extract_chain(station),
+            "raw_name": station,
         })
     return rows
 

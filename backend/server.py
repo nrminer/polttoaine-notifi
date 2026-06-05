@@ -131,29 +131,36 @@ def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
 
 
 async def _scrape_all(fuel: str) -> list[dict]:
-    """Hae nykyhinnat molemmista skrapereista taustasäikeessä.
+    """Hae nykyhinnat kolmesta skrapereista taustasäikeessä.
 
     tankille.fi on PRIMÄÄRINEN lähde (käyttäjäkokemuksen perusteella tarkempi
-    ja tuoreempi). polttoaine.net toimii vertailu/täydennyslähteenä. Molemmista
-    suodatetaan järjettömät hinnat (out-of-range tai >25% medianista poikkeavat)
-    ennen yhdistämistä."""
+    ja tuoreempi). hintatutka.net on SEKUNDÄÄRINEN (laajempi kattavuus).
+    polttoaine.net toimii vertailu/täydennyslähteenä (TERTIÄÄRINEN).
+    Kaikista suodatetaan järjettömät hinnat (out-of-range tai >25% medianista
+    poikkeavat) ennen yhdistämistä."""
     loop = asyncio.get_event_loop()
     t_task = loop.run_in_executor(executor, tankille.fetch_prices, fuel)
+    h_task = loop.run_in_executor(executor, hintatutka.fetch_prices, fuel)
     p_task = loop.run_in_executor(executor, polttoaine.fetch_prices, fuel)
     try:
-        t_rows, p_rows = await asyncio.gather(t_task, p_task, return_exceptions=True)
+        results = await asyncio.gather(t_task, h_task, p_task, return_exceptions=True)
+        t_rows, h_rows, p_rows = results
     except Exception as e:
         logger.warning("scrape error: %s", e)
         return []
     # filter each source independently against its own median first
     t_clean = _sanity_filter(t_rows if isinstance(t_rows, list) else [], "tankille")
+    h_clean = _sanity_filter(h_rows if isinstance(h_rows, list) else [], "hintatutka")
     p_clean = _sanity_filter(p_rows if isinstance(p_rows, list) else [], "polttoaine")
     if not isinstance(t_rows, list):
         logger.warning("tankille failed: %s", t_rows)
+    if not isinstance(h_rows, list):
+        logger.warning("hintatutka failed: %s", h_rows)
     if not isinstance(p_rows, list):
         logger.warning("polttoaine failed: %s", p_rows)
-    # tankille first → its rows are preferred when downstream picks "first match"
-    return t_clean + p_clean
+    # tankille first (PRIMARY) → hintatutka second (SECONDARY) → polttoaine last (TERTIARY)
+    # downstream picks "first match" when deduplicating by city/brand
+    return t_clean + h_clean + p_clean
 
 
 def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
@@ -265,6 +272,8 @@ async def current_prices(fuel: str = Query("95E10")):
     Palauttaa:
       cheap_sample_avg - skrapatun otoksen (~80 halvinta) keskiarvo
       national_min     - skrapatun otoksen halvin
+      confidence_data  - lähdetietokäsitys (lähdejako, tuoreus, hintaleveys)
+      by_city          - per-kaupunki halvin + keskiarvo + lähteet
     """
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
@@ -286,6 +295,7 @@ async def current_prices(fuel: str = Query("95E10")):
                 "by_city": last.get("by_city", {}),
                 "stations": [],
                 "stale": True,
+                "confidence_data": last.get("confidence_data"),
             }
         raise HTTPException(503, "no data: scrapers returned empty and no cache")
 
@@ -293,15 +303,98 @@ async def current_prices(fuel: str = Query("95E10")):
     cheap_avg = _national_average(rows)
     nat_min = min(r["price"] for r in rows)
 
+    # --- luottamustietojen laskenta ---
+    # ryhmittele lähteittäin
+    by_source: dict[str, list[dict]] = {}
+    for r in rows:
+        src = r.get("source", "unknown")
+        by_source.setdefault(src, []).append(r)
+
+    source_breakdown = []
+    source_prices = []
+    for src, src_rows in by_source.items():
+        prices = [r["price"] for r in src_rows]
+        ages = [r.get("age_hours", 999) for r in src_rows]
+        avg_price = sum(prices) / len(prices) if prices else None
+        avg_age = sum(ages) / len(ages) if ages else None
+        source_breakdown.append({
+            "source": src,
+            "price": round(avg_price, 3) if avg_price is not None else None,
+            "age_hours": round(avg_age, 1) if avg_age is not None else None,
+            "station_count": len(src_rows),
+        })
+        if avg_price is not None:
+            source_prices.append(avg_price)
+
+    # hintaleveys = max - min lähteiden keskiarvoista
+    price_spread = (round(max(source_prices) - min(source_prices), 3)
+                    if len(source_prices) >= 2 else 0.0)
+
+    # yksimielisyystaso: <1.5 ¢/L = high, 1.5–3.5 = medium, >3.5 = low
+    if price_spread < 0.015:
+        agreement_level = "high"
+    elif price_spread < 0.035:
+        agreement_level = "medium"
+    else:
+        agreement_level = "low"
+
+    # tuorein scrape-aika = nyt (live-scrape juuri tehty)
     ts = datetime.now(timezone.utc).isoformat()
+    most_recent_scrape = ts
+
+    confidence_data = {
+        "most_recent_scrape": most_recent_scrape,
+        "sources_count": len(by_source),
+        "stations_count": len(rows),
+        "source_breakdown": sorted(source_breakdown,
+                                   key=lambda x: x.get("price") or 999),
+        "price_spread": price_spread,
+        "agreement_level": agreement_level,
+    }
+
+    # --- per-city: lisää source_details ---
+    by_city_enhanced = {}
+    for city in ALLOWED_CITIES:
+        city_rows = [r for r in rows if r.get("city") == city]
+        if not city_rows:
+            continue
+        prices = [r["price"] for r in city_rows]
+        cheapest = min(city_rows, key=lambda x: x["price"])
+
+        # lähdejako kaupungissa
+        city_by_source: dict[str, list[dict]] = {}
+        for r in city_rows:
+            src = r.get("source", "unknown")
+            city_by_source.setdefault(src, []).append(r)
+
+        sources = []
+        for src, src_rows in city_by_source.items():
+            src_prices = [r["price"] for r in src_rows]
+            src_ages = [r.get("age_hours", 999) for r in src_rows]
+            sources.append({
+                "source": src,
+                "price": round(min(src_prices), 3),
+                "age_hours": round(sum(src_ages) / len(src_ages), 1) if src_ages else None,
+            })
+
+        by_city_enhanced[city] = {
+            "count": len(city_rows),
+            "min": round(min(prices), 4),
+            "mean": round(sum(prices) / len(prices), 4),
+            "station_min": cheapest.get("station", ""),
+            "address_min": cheapest.get("address", ""),
+            "sources": sorted(sources, key=lambda x: x["price"]),
+        }
+
     snap = {
         "ts": ts,
         "fuel": fuel,
         "region": "Suomi",
         "cheap_sample_avg": cheap_avg,
         "national_min": nat_min,
-        "by_city": by_city,
+        "by_city": by_city_enhanced,
         "stations_count": len(rows),
+        "confidence_data": confidence_data,
     }
     await db.snapshots.insert_one(snap.copy())
 
@@ -318,7 +411,7 @@ async def current_prices(fuel: str = Query("95E10")):
             }},
             upsert=True,
         )
-    for city, agg in by_city.items():
+    for city, agg in by_city_enhanced.items():
         if city in SUPPORTED_REGIONS:
             await db.history.update_one(
                 {"date": today, "fuel": fuel, "region": city},
@@ -335,7 +428,8 @@ async def current_prices(fuel: str = Query("95E10")):
         "stations_count": len(rows),
         "cheap_sample_avg": cheap_avg,
         "national_min": nat_min,
-        "by_city": by_city,
+        "by_city": by_city_enhanced,
+        "confidence_data": confidence_data,
         "stations": [
             {"city": r["city"], "station": r["station"], "address": r.get("address", ""),
              "price": r["price"], "source": r["source"]}
@@ -564,7 +658,77 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         sort=[("generated_at", -1)],
     )
     if not doc:
+
+    # Fetch hourly predictions from daily_tracker
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    
+    hourly_predictions = {}
+    best_window = None
+    
+    # Get today's captures with predictions for tomorrow
+    tracker_docs = await db.daily_tracker.find(
+        {"fuel": fuel, "region": region, "date": today_iso},
+        {"_id": 0, "hour": 1, "hourly_predictions": 1, "best_window": 1},
+    ).sort("hour", -1).to_list(length=10)
+    
+    if tracker_docs:
+        # Use most recent capture's hourly predictions
+        latest_capture = tracker_docs[0]
+        hourly_predictions = latest_capture.get("hourly_predictions") or {}
+        best_window = latest_capture.get("best_window")
+
+
         return {"available": False}
+
+    # Calculate historical MAE from realized method performance
+    method_mae = await tracker_mod.realized_method_mae(db, fuel, region)
+    ensemble_mae = method_mae.get("ensemble")
+
+    # Determine data quality based on point count
+    data_sources = doc.get("data_sources") or {}
+    combined_points = data_sources.get("combined_points", 0)
+    if combined_points < 7:
+        data_quality = "thin"
+    elif combined_points <= 20:
+        data_quality = "sufficient"
+    else:
+        data_quality = "rich"
+
+    # Add data_quality to data_sources
+    if data_sources:
+        data_sources["data_quality"] = data_quality
+
+    # Build prediction_confidence object
+    ensemble_full = doc.get("ensemble_full") or {"value": doc.get("ensemble")}
+    prediction_confidence = {
+        "historical_mae": ensemble_mae,
+        "confidence_range": {
+            "low": ensemble_full.get("confidence_low"),
+            "high": ensemble_full.get("confidence_high"),
+        },
+        "data_quality": data_quality,
+        "last_updated": doc.get("generated_at"),
+    }
+
+
+    # Fetch hourly predictions from daily_tracker
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    
+    hourly_predictions = {}
+    best_window = None
+    
+    # Get today's captures with predictions for tomorrow
+    tracker_docs = await db.daily_tracker.find(
+        {"fuel": fuel, "region": region, "date": today_iso},
+        {"_id": 0, "hour": 1, "hourly_predictions": 1, "best_window": 1},
+    ).sort("hour", -1).to_list(length=10)
+    
+    if tracker_docs:
+        # Use most recent capture's hourly predictions
+        latest_capture = tracker_docs[0]
+        hourly_predictions = latest_capture.get("hourly_predictions") or {}
+        best_window = latest_capture.get("best_window")
+
     return {
         "available": True,
         "fuel": doc.get("fuel"),
@@ -576,11 +740,14 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         "methods": doc.get("methods_full") or {
             k: {"value": v} for k, v in (doc.get("methods") or {}).items()
         },
-        "ensemble": doc.get("ensemble_full") or {"value": doc.get("ensemble")},
+        "ensemble": ensemble_full,
+        "prediction_confidence": prediction_confidence,
+        "hourly_predictions": hourly_predictions,
+        "best_window": best_window,
         "brent": doc.get("brent"),
         "eur_usd": doc.get("eur_usd"),
         "news_headlines": doc.get("news_headlines", []),
-        "data_sources": doc.get("data_sources"),
+        "data_sources": data_sources,
         # rikkaampi konteksti — taustamuuttujat & self-training (näytetään UI:ssa)
         "conflict_signal": doc.get("conflict_signal"),
         "n_daily_points": doc.get("n_daily_points"),

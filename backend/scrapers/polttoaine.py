@@ -30,6 +30,16 @@ def _parse_price(text: str):
     return float(m.group(1).replace(",", "."))
 
 
+def _extract_chain(station_name: str) -> str:
+    """Extract chain name from station name."""
+    name_upper = station_name.upper()
+    chains = ["NESTE", "ABC", "ST1", "SHELL", "TEBOIL", "SEO", "ESSO", "CIRCLE K"]
+    for chain in chains:
+        if chain in name_upper:
+            return chain.capitalize() if chain not in ["ABC", "SEO"] else chain
+    return ""
+
+
 def fetch_prices(fuel: str = "95E10") -> list:
     if fuel not in FUELS:
         raise ValueError(f"unknown fuel {fuel!r}; choose from {list(FUELS)}")
@@ -74,5 +84,7 @@ def fetch_prices(fuel: str = "95E10") -> list:
             "date": date_cell,
             "fuel": fuel,
             "source": "polttoaine.net",
+            "chain": _extract_chain(station),
+            "raw_name": station,
         })
     return results

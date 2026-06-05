@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { MapPin, Clock, ArrowUpDown } from "lucide-react";
+import { MapPin, Clock, ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardLabel } from "./Card";
+import SourceBreakdown from "./SourceBreakdown";
 
 const ALL_CITIES = ["Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti"];
 
@@ -34,6 +35,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
 
   const [sortDir, setSortDir] = useState("asc");
   const [selected, setSelected] = useState(() => new Set(ALL_CITIES));
+  const [expandedCity, setExpandedCity] = useState(null); // NEW: track which city's sources are expanded
 
   const toggleCity = (city) => {
     setSelected((prev) => {
@@ -55,6 +57,8 @@ export default function RegionalGrid({ data, fuel, cityData }) {
       ...row,
       mean: cityData?.[row.region]?.mean ?? null,
       count: cityData?.[row.region]?.count ?? null,
+      sources: cityData?.[row.region]?.sources ?? null, // NEW: multi-source data
+      confidence_data: cityData?.[row.region]?.confidence_data ?? null, // NEW: confidence metadata
     }));
   }, [rows, cityData]);
 
@@ -136,6 +140,9 @@ export default function RegionalGrid({ data, fuel, cityData }) {
           const isCheapest = row.price === cheapestPrice;
           const meanDiff =
             row.mean != null && row.price != null ? row.mean - row.price : null;
+          const hasSourceData = row.sources && row.sources.length > 0;
+          const isExpanded = expandedCity === row.region;
+
           return (
             <div
               key={row.region}
@@ -192,6 +199,38 @@ export default function RegionalGrid({ data, fuel, cityData }) {
                   {row.source}
                 </span>
               </div>
+
+              {/* NEW: Source breakdown toggle button */}
+              {hasSourceData && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedCity(isExpanded ? null : row.region)}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-mono font-semibold text-secondary hover:text-ink border border-line rounded-md hover:bg-surface/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
+                    data-testid={`source-toggle-${row.region}`}
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp size={12} />
+                        Piilota lähteet
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={12} />
+                        Näytä lähteet ({row.sources.length})
+                      </>
+                    )}
+                  </button>
+
+                  {/* NEW: Collapsible source breakdown */}
+                  {isExpanded && (
+                    <SourceBreakdown
+                      sources={row.sources}
+                      agreementLevel={row.confidence_data?.agreement_level || "medium"}
+                    />
+                  )}
+                </>
+              )}
             </div>
           );
         })}

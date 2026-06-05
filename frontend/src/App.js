@@ -20,10 +20,16 @@ import FuelToggle from "./components/FuelToggle";
 import TrackingChart from "./components/TrackingChart";
 import CityAverageChart from "./components/CityAverageChart";
 import MethodTable from "./components/MethodTable";
+import { RecommendationCard } from "./components/RecommendationCard";
+import { WeeklyCycleCard } from "./components/WeeklyCycleCard";
+import PriceDrivers from "./components/PriceDrivers";
+
 import AiAnalysis from "./components/AiAnalysis";
 import RegionalGrid from "./components/RegionalGrid";
 import AccuracyTracker from "./components/AccuracyTracker";
 import FactorsCard from "./components/FactorsCard";
+import { ConfidenceStrip } from "./components/ConfidenceStrip";
+import SourceBreakdown from "./components/SourceBreakdown";
 import {
   fetchCurrent,
   fetchHistory,
@@ -230,6 +236,8 @@ export default function App() {
             tax_step_eur_l: data.tax_step_eur_l,
             self_training: data.self_training,
             news_headlines: data.news_headlines,
+            // NEW: confidence metadata
+            prediction_confidence: data.prediction_confidence,
           });
         } else {
           setPrediction(null);
@@ -586,6 +594,19 @@ export default function App() {
                   </span>
                 )}
               </div>
+
+              {/* NEW: ConfidenceStrip below direction pill */}
+              {prediction?.prediction_confidence && (
+                <div className="mt-4">
+                  <ConfidenceStrip
+                    mostRecentScrape={prediction.prediction_confidence.most_recent_scrape}
+                    sourcesCount={prediction.prediction_confidence.sources_count}
+                    stationsCount={prediction.prediction_confidence.stations_count}
+                    predictionMAE={prediction.prediction_confidence.prediction_mae}
+                    className="text-slate-300"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="col-span-12 md:col-span-7 md:border-l md:border-slate-700/60 md:pl-8">
