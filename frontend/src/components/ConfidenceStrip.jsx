@@ -3,7 +3,7 @@ import { Clock, Database, Store, TrendingUp } from "lucide-react";
 import { cn } from "../lib/utils";
 
 /**
- * ConfidenceStrip — horizontal metadata strip showing data freshness and reliability
+ * ConfidenceStrip — horizontal metadata strip showing freshness and measured error
  * Props:
  *  - mostRecentScrape: ISO timestamp of last scrape
  *  - sourcesCount: number of data sources used
@@ -43,7 +43,7 @@ export function ConfidenceStrip({
       >
         <Clock size={14} className="text-secondary" strokeWidth={2.2} />
         <span className="font-medium text-ink">Päivitetty {timeSince} sitten</span>
-        <Tooltip text="Aika viimeisimmästä hintaskrapauksesta" />
+        <Tooltip text="Aika viimeisimmästä hintahausta" />
       </div>
 
       {/* Lähteet */}
@@ -70,14 +70,14 @@ export function ConfidenceStrip({
         <Tooltip text="Otoksessa mukana olevien asemien määrä" />
       </div>
 
-      {/* MAE (keskimääräinen ennustevirhe) */}
+      {/* MAE (keskimääräinen toteutunut poikkeama) */}
       <div
         className="flex items-center gap-1.5 group relative"
         data-testid="confidence-strip-mae"
       >
         <TrendingUp size={14} className="text-secondary" strokeWidth={2.2} />
         <span className="font-medium text-ink">{maeText}</span>
-        <Tooltip text="Historiallinen ennusteen keskimääräinen poikkeama (MAE)" />
+        <Tooltip text="Toteutuneisiin captureihin verrattu keskimääräinen poikkeama (MAE)" />
       </div>
     </div>
   );

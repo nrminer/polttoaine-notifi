@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, Activity, TrendingUp, Brain, Calculator, Anchor } from "lucide-react";
+import { Waves, Activity, TrendingUp, MessageSquareText, Calculator, Anchor } from "lucide-react";
 import { Card, CardLabel, DeltaBadge } from "./Card";
 import { fmtPrice, fmtDelta } from "../lib/utils";
 import { formatModelName } from "../lib/modelName";
@@ -15,19 +15,19 @@ const METHOD_COLORS = {
 const META = {
   moving_average: { label: "Liukuva keskiarvo", Icon: Activity, sub: "7 pv" },
   linear_regression: { label: "Lineaarinen regressio", Icon: TrendingUp, sub: "30 pv" },
-  exp_smoothing: { label: "Eksp. tasoitus", Icon: Sparkles, sub: "Holt α=0.4" },
+  exp_smoothing: { label: "Eksp. tasoitus", Icon: Waves, sub: "Holt α=0.4" },
   fundamental_anchor: { label: "Fundamenttiankkuri", Icon: Anchor, sub: "Brent+FX" },
-  ai_llm: { Icon: Brain },
+  ai_llm: { Icon: MessageSquareText },
 };
 
 function aiLabelFor(model) {
   const full = formatModelName(model);
-  if (!full) return { label: "AI", sub: "ei ajettu" };
+  if (!full) return { label: "LLM-arvio", sub: "ei ajettu" };
   const parts = full.split(" ");
   if (parts.length >= 3) {
-    return { label: `AI / ${parts[0]} ${parts[1]}`, sub: parts.slice(2).join(" ") };
+    return { label: `LLM / ${parts[0]} ${parts[1]}`, sub: parts.slice(2).join(" ") };
   }
-  return { label: `AI / ${full}`, sub: "" };
+  return { label: `LLM / ${full}`, sub: "" };
 }
 
 export default function MethodTable({ result }) {
@@ -77,7 +77,7 @@ export default function MethodTable({ result }) {
                 </p>
                 {lo != null && hi != null && (
                   <p className="font-mono text-[11px] text-muted mt-1 pl-[22px]">
-                    luottamus {fmtPrice(lo)} … {fmtPrice(hi)} €/L
+                    mallin väli {fmtPrice(lo)} … {fmtPrice(hi)} €/L
                   </p>
                 )}
                 {weightPct != null && (

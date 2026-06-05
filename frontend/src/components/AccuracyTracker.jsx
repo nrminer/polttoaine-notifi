@@ -7,7 +7,7 @@ const METHOD_LABEL = {
   linear_regression: "Lineaarinen regressio",
   exp_smoothing: "Eksponentiaalinen tasoitus",
   fundamental_anchor: "Fundamenttiankkuri",
-  ai_llm: "AI-analyysi",
+  ai_llm: "LLM-arvio",
   ensemble: "Yhdistelmä",
 };
 
@@ -21,10 +21,10 @@ export default function AccuracyTracker({ data }) {
       <Card testId="accuracy-card" className="p-6">
         <div className="flex items-center gap-2 mb-4">
           <Target size={14} className="text-brand" strokeWidth={2.4} />
-          <CardLabel>Ennusteen tarkkuus</CardLabel>
+          <CardLabel>Toteutunut ennustevirhe</CardLabel>
         </div>
         <div className="font-mono text-xs text-secondary py-8 text-center border border-dashed border-line rounded-lg">
-          Ei vielä tarpeeksi historiadataa tarkkuuden laskemiseen.
+          Ei vielä tarpeeksi toteutuneita vertailuja virheen laskemiseen.
         </div>
       </Card>
     );
@@ -42,7 +42,7 @@ export default function AccuracyTracker({ data }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Target size={14} className="text-brand" strokeWidth={2.4} />
-          <CardLabel>Ennusteen tarkkuus</CardLabel>
+          <CardLabel>Toteutunut ennustevirhe</CardLabel>
         </div>
         <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
           {days} pv
@@ -61,12 +61,12 @@ export default function AccuracyTracker({ data }) {
           <div className="text-3xl font-bold tnum text-accent mb-1" data-testid="accuracy-hit-rate">
             {hitRate}%
           </div>
-          <div className="text-sm text-secondary">Osumia ±2¢ sisällä</div>
+          <div className="text-sm text-secondary">Vertailuja ±2¢ sisällä</div>
         </div>
 
         <div className="text-sm text-secondary leading-relaxed max-w-md mx-auto">
-          Ennuste on keskimäärin <span className="font-semibold text-ink">±{maeCents} senttiä</span> oikeasta hinnasta.
-          <span className="font-semibold text-ink"> {hitRate}%</span> ennusteista osuu kahden sentin tarkkuudelle.
+          Ennuste on tähän mennessä poikennut keskimäärin <span className="font-semibold text-ink">±{maeCents} senttiä</span> toteutuneesta hinnasta.
+          <span className="font-semibold text-ink"> {hitRate}%</span> vertailuista on kahden sentin sisällä.
         </div>
       </div>
 
@@ -94,8 +94,7 @@ export default function AccuracyTracker({ data }) {
               Pienempi luku on parempi.
             </p>
             <p>
-              <span className="font-semibold text-ink">Osumia ±2¢ sisällä</span> kertoo, kuinka usein ennuste on alle kahden sentin päässä oikeasta hinnasta.
-              Korkeampi prosentti on parempi.
+              <span className="font-semibold text-ink">Vertailuja ±2¢ sisällä</span> kertoo, kuinka usein ennuste on alle kahden sentin päässä toteutuneesta hinnasta.
             </p>
           </div>
 
@@ -105,7 +104,7 @@ export default function AccuracyTracker({ data }) {
                 <tr className="border-b border-line bg-surface text-left">
                   <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3">Menetelmä</th>
                   <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">Keskivirhe</th>
-                  <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">≤2¢</th>
+                  <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">≤2¢ vertailut</th>
                 </tr>
               </thead>
               <tbody>

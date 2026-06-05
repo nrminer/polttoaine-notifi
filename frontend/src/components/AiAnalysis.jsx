@@ -1,5 +1,5 @@
 import React from "react";
-import { Brain, Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { MessageSquareText, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardLabel } from "./Card";
 import { formatModelName } from "../lib/modelName";
 
@@ -52,17 +52,17 @@ function CIBand({ lo, hi, value, anchor }) {
             title="live-ankkuri"
           />
         )}
-        <span
-          className="absolute -top-1 -bottom-1 w-0.5 bg-accent shadow-glow-accent"
-          style={{ left: `${valuePos}%` }}
-          title="AI-arvio"
+          <span
+            className="absolute -top-1 -bottom-1 w-0.5 bg-accent"
+            style={{ left: `${valuePos}%` }}
+          title="LLM-arvio"
         />
       </div>
       <div className="mt-1.5 flex justify-between font-mono text-[11px] text-slate-500 tnum">
         <span>{lo.toFixed(3)}</span>
         <span
           className="text-slate-400"
-          title="Mallin itse raportoima väli — kattavuutta ei ole kalibroitu toteumiin"
+          title="Mallin itse raportoima väli; kattavuutta ei ole kalibroitu toteumiin"
         >
           mallin antama väli
         </span>
@@ -73,7 +73,7 @@ function CIBand({ lo, hi, value, anchor }) {
 }
 
 export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
-  const explanation = ai?.explanation || "Aja ennuste saadaksesi AI-analyysin.";
+  const explanation = ai?.explanation || "Aja ennuste saadaksesi LLM-arvion.";
   const direction = ai?.direction;
   const value = ai?.value;
   const lo = ai?.confidence_low;
@@ -88,15 +88,15 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
         className="absolute inset-0 pointer-events-none rounded-xl"
         style={{
           background:
-            "radial-gradient(38rem 22rem at 110% -10%, rgba(253, 224, 71, 0.10), transparent 60%)",
+            "linear-gradient(180deg, rgba(15, 23, 42, 0.24), rgba(15, 23, 42, 0))",
         }}
       />
       <div className="relative z-10">
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Brain size={14} className="text-accent" strokeWidth={2.4} />
+            <MessageSquareText size={14} className="text-accent" strokeWidth={2.4} />
             <CardLabel className="text-accent" data-testid="ai-model-label">
-              AI-analyysi{modelLabel ? ` · ${modelLabel}` : ""}
+              LLM-arvio{modelLabel ? ` · ${modelLabel}` : ""}
             </CardLabel>
           </div>
           {direction && (
@@ -111,7 +111,7 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
           {value != null && (
             <div>
               <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
-                Mallin arvio
+                LLM-arvio
               </div>
               <div className="font-display font-black tnum text-4xl md:text-5xl text-white leading-none">
                 {Number(value).toFixed(3)}
@@ -197,8 +197,7 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
             </div>
           )}
           <div className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
-            <Sparkles size={11} className="text-accent shrink-0" />
-            forward-katsova; Brent-priced ei tuplalaskettu
+            markkinariskit käsitellään erikseen Brent-liikkeestä
           </div>
         </div>
       </div>

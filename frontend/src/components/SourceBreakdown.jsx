@@ -18,11 +18,11 @@ export default function SourceBreakdown({ sources, agreementLevel }) {
     ? ((Math.max(...prices) - Math.min(...prices)) * 100).toFixed(1)
     : "0.0";
 
-  // Agreement level mapping
+  // Agreement level mapping. This is source agreement, not a guarantee of accuracy.
   const agreementConfig = {
-    high: { label: "korkea luotettavuus", color: "text-emerald-600" },
-    medium: { label: "kohtalainen luotettavuus", color: "text-amber-600" },
-    low: { label: "matala luotettavuus", color: "text-red-600" }
+    high: { label: "lähteet lähellä toisiaan", color: "text-emerald-600" },
+    medium: { label: "lähteissä eroa", color: "text-amber-600" },
+    low: { label: "lähteissä suuri ero", color: "text-red-600" }
   };
 
   const agreement = agreementConfig[agreementLevel] || agreementConfig.medium;
@@ -74,10 +74,10 @@ export default function SourceBreakdown({ sources, agreementLevel }) {
 
       <div className="mt-2.5 pt-2 border-t border-line/50 flex items-center gap-2 text-[10px]">
         <span className="font-mono font-semibold text-secondary">
-          Hajonta:
+          Lähdeväli:
         </span>
         <span className="font-mono tnum font-bold text-ink">
-          ±{spread}¢
+          {spread} snt
         </span>
         <span className={`font-semibold ${agreement.color}`}>
           ({agreement.label})

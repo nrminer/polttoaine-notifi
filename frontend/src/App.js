@@ -90,11 +90,10 @@ function FilterBtn({ active, onClick, children, testId }) {
 }
 
 /* Method abbreviations used in the dark hero prediction card.
-   Kept short on purpose — the dark card needs to feel like a terminal,
-   not a marketing paragraph. */
+   Kept short so the card reads as an operator view, not marketing copy. */
 const DARK_METHODS = [
   { key: "fundamental_anchor", label: "ANKKURI" },
-  { key: "ai_llm",             label: "AI" },
+  { key: "ai_llm",             label: "LLM" },
   { key: "exp_smoothing",      label: "HOLT" },
   { key: "linear_regression",  label: "REGR." },
   { key: "moving_average",     label: "MA·7" },
@@ -134,8 +133,8 @@ const LANDING_SOURCES = [
   },
   {
     name: "daily_tracker",
-    label: "todelliset capturet",
-    detail: "14:00 + 21:00",
+    label: "toteumavertailu",
+    detail: "capture-ajat",
     accent: "slate",
   },
 ];
@@ -144,7 +143,7 @@ const PIPELINE_STEPS = [
   { icon: Radio, label: "Kerää", detail: "live HTML" },
   { icon: ShieldCheck, label: "Suodata", detail: "raja + mediaani" },
   { icon: Database, label: "Tallenna", detail: "daily_tracker" },
-  { icon: LineChart, label: "Arvioi", detail: "ankkuroitu ensemble" },
+  { icon: LineChart, label: "Arvioi", detail: "rajattu yhdistelmä" },
 ];
 
 function LandingMetric({ icon: Icon, label, value, detail, testId }) {
@@ -590,21 +589,21 @@ export default function App() {
           >
             <div className="landing-kicker">
               <span className="landing-kicker-dot" />
-              Live-skräpätty polttoainedata · ei synteettistä historiaa
+              Live-haettu polttoainedata · ei synteettistä historiaa
             </div>
             <h1 className="landing-title">
               BensaVahti
             </h1>
             <p className="landing-lead">
-              Tumma, operatiivinen näkymä Suomen pumppuhintoihin: lähteet,
-              sanity-filtterit, todelliset capturet ja huomisen arvio samassa
-              rytmissä.
+              Operatiivinen näkymä Suomen pumppuhintoihin: lähteet,
+              suodatus, toteutuneet capturet ja huomisen rajattu arvio yhdessä
+              rauhallisessa työpöydässä.
             </p>
 
             <div className="landing-actions">
               <a href="#dashboard" className="landing-primary-action">
                 <ArrowDown size={16} />
-                Katso dashboard
+                Avaa näkymä
               </a>
               <button
                 data-testid="landing-refresh-btn"
@@ -623,21 +622,21 @@ export default function App() {
                 icon={Database}
                 label="Otanta"
                 value={current?.stations_count != null ? `${current.stations_count} asemaa` : "odottaa"}
-                detail={sourceCount != null ? `${sourceCount} lähdettä mukana` : "live-lähteet"}
+                detail={sourceCount != null ? `${sourceCount} lähdettä käytössä` : "live-lähteet"}
                 testId="landing-sample-metric"
               />
               <LandingMetric
                 icon={Clock}
                 label="Viimeisin scrape"
                 value={scrapeTime}
-                detail={current?.stale ? "välimuistista" : "tuore live-haku"}
+                detail={current?.stale ? "välimuistista" : current?.fetched_at ? "live-haku valmis" : "odottaa live-hakua"}
                 testId="landing-scrape-metric"
               />
               <LandingMetric
                 icon={CheckCircle2}
-                label="Toteuma vs arvio"
+                label="Vertailudata"
                 value={accuracyBadge}
-                detail={`${comparedCount} todellista osumaa`}
+                detail={`${comparedCount} toteutunutta vertailua`}
                 testId="landing-accuracy-metric"
               />
             </div>
@@ -652,12 +651,12 @@ export default function App() {
           >
             <div className="landing-plane-top">
               <div>
-                <div className="landing-plane-eyebrow">Live-datan valvomo</div>
-                <div className="landing-plane-title">Lähteet ja tarkistusketju</div>
+                <div className="landing-plane-eyebrow">Datan tila</div>
+                <div className="landing-plane-title">Lähteet ja tarkistus</div>
               </div>
               <div className="landing-plane-status">
                 <span className="landing-status-light" />
-                {isLoading ? "päivittyy" : "online"}
+                {isLoading ? "päivittyy" : current?.fetched_at ? "tarkistettu" : "odottaa"}
               </div>
             </div>
 
@@ -710,9 +709,8 @@ export default function App() {
 
             <div className="landing-plane-footer">
               <span><Activity size={13} /> 14:00 + 21:00 Helsinki</span>
-              <span><ShieldCheck size={13} /> mediaanipoikkeamat suodatetaan</span>
+              <span><ShieldCheck size={13} /> poikkeamat suodatetaan</span>
             </div>
-            <span className="landing-scan-line" aria-hidden="true" />
           </motion.div>
         </div>
       </section>
@@ -726,7 +724,7 @@ export default function App() {
           <div className="col-span-12 lg:col-span-7">
             <CardLabel className="mb-3">Suomi · day-ahead pumppuhinta-arvio</CardLabel>
             <h2 className="font-display text-4xl md:text-5xl font-black tracking-normal leading-[1.02]">
-              Live dashboard
+              Operatiivinen näkymä
             </h2>
             <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
               Tuoreimmat hinnat, capture-historia ja mallien välinen vertailu
@@ -749,7 +747,7 @@ export default function App() {
               )}
               {prediction?.methods?.ai_llm?.model && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
-                  <span className="text-muted">ai</span>
+                  <span className="text-muted">llm</span>
                   <span className="text-ink font-semibold">{formatModelName(prediction.methods.ai_llm.model)}</span>
                 </span>
               )}
@@ -759,7 +757,7 @@ export default function App() {
                   className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-amber-50 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-400/30 text-amber-800 dark:text-amber-200 font-semibold"
                   title="Uutisista poimittu konflikti-/tarjontahäiriösignaali — leveämpi epävarmuusväli."
                 >
-                  ⚑ geopol. signaali
+                  geopol. signaali
                 </span>
               )}
             </div>
@@ -836,7 +834,7 @@ export default function App() {
             className="absolute inset-0 pointer-events-none rounded-xl"
             style={{
               background:
-                "radial-gradient(60rem 30rem at 110% -20%, rgba(0, 47, 167, 0.35), transparent 55%), radial-gradient(40rem 20rem at -10% 120%, rgba(253, 224, 71, 0.06), transparent 55%)",
+                "linear-gradient(180deg, rgba(15, 23, 42, 0.38), rgba(15, 23, 42, 0))",
             }}
           />
           <div className="relative z-10 grid grid-cols-12 gap-6 items-start">
@@ -875,7 +873,7 @@ export default function App() {
 
             <div className="col-span-12 md:col-span-7 md:border-l md:border-slate-700/60 md:pl-8">
               <div className="flex items-center justify-between mb-4">
-                <CardLabel className="text-slate-400">Mistä ennuste rakentuu</CardLabel>
+                <CardLabel className="text-slate-400">Mistä arvio rakentuu</CardLabel>
                 {prediction?.current_price != null && (
                   <span className="font-mono text-[11px] text-slate-500">
                     suhteessa live · <span className="tnum text-slate-300">{prediction.current_price.toFixed(3)}</span>
@@ -957,7 +955,7 @@ export default function App() {
 
               <div
                 data-testid="auto-info-pill"
-                className="mt-5 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-accent/15 text-accent border border-accent/30 font-semibold text-sm"
+                className="mt-5 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-white/5 text-slate-300 border border-slate-700/60 font-semibold text-sm"
               >
                 <Clock size={14} />
                 Päivittyy automaattisesti klo 14 ja 21 Helsingin aikaa
@@ -1156,7 +1154,7 @@ export default function App() {
             Datalähteet: polttoaine.net · tankille.fi · Yahoo Finance (Brent, EUR/USD)
           </div>
           <div>
-            <span className="text-muted">v2.0 · BensaVahti · ei takuuta tarkkuudesta</span>
+            <span className="text-muted">v2.0 · BensaVahti · tarkkuus ei ole taattu</span>
           </div>
           <div className="w-full text-muted" data-testid="privacy-notice">
             Tietosuoja: emme kerää sinusta tietoja itse — vain alustojen (Railway, Vercel) automaattisesti keräämät tiedot.{" "}
@@ -1227,7 +1225,7 @@ function TrackingFooter({ summary, fuel }) {
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          ≤2 snt tarkkuus
+          ≤2 snt vertailut
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">
           {within_2c_pct != null ? `${within_2c_pct.toFixed(0)}%` : "—"}

@@ -14,18 +14,18 @@ html {
   min-height: 100vh;
   min-height: 100dvh;
   background:
-    linear-gradient(180deg, rgba(245, 247, 251, 0.92), rgba(255, 255, 255, 1) 40%),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(247, 249, 252, 0.96), rgba(255, 255, 255, 1) 44%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
     #FFFFFF;
   background-size: auto, 48px 48px, 48px 48px;
 }
 
 html.dark .app-shell {
   background:
-    linear-gradient(180deg, rgba(7, 12, 23, 1), rgba(10, 15, 28, 1) 46%, rgba(12, 18, 32, 1)),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(8, 13, 24, 1), rgba(10, 15, 26, 1) 48%, rgba(11, 17, 29, 1)),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px),
     #0A0F1C;
   background-size: auto, 52px 52px, 52px 52px;
 }
@@ -34,9 +34,9 @@ html.dark .app-shell {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(6, 10, 19, 0.98), rgba(11, 19, 35, 0.96) 52%, rgba(20, 25, 31, 0.98)),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+    linear-gradient(135deg, rgba(8, 13, 24, 0.99), rgba(12, 19, 31, 0.98) 58%, rgba(15, 22, 33, 0.99)),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
   background-size: auto, 42px 42px, 42px 42px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
   color: #F8FAFC;
@@ -48,9 +48,9 @@ html.dark .app-shell {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(253, 224, 71, 0.12), transparent 22%, transparent 78%, rgba(16, 185, 129, 0.10)),
-    linear-gradient(180deg, transparent, rgba(10, 15, 28, 0.54));
-  opacity: 0.72;
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08), transparent 30%, transparent 75%, rgba(15, 23, 42, 0.1)),
+    linear-gradient(180deg, transparent, rgba(10, 15, 28, 0.42));
+  opacity: 0.64;
 }
 
 .landing-hero-inner {
@@ -108,7 +108,7 @@ html.dark .app-shell {
 .landing-lead {
   max-width: 42rem;
   margin-top: 1.35rem;
-  color: #C7D2FE;
+  color: #C9D3E0;
   font-size: clamp(1rem, 2.1vw, 1.25rem);
   line-height: 1.7;
 }
@@ -136,9 +136,9 @@ html.dark .app-shell {
 }
 
 .landing-primary-action {
-  color: #07111E;
-  background: #FDE047;
-  border: 1px solid rgba(253, 224, 71, 0.7);
+  color: #F8FAFC;
+  background: #1D4ED8;
+  border: 1px solid rgba(96, 165, 250, 0.55);
 }
 
 .landing-secondary-action {
@@ -180,9 +180,9 @@ html.dark .app-shell {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 7px;
-  color: #FDE047;
-  background: rgba(253, 224, 71, 0.09);
-  border: 1px solid rgba(253, 224, 71, 0.18);
+  color: #93C5FD;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(147, 197, 253, 0.18);
 }
 
 .landing-metric-label,
@@ -228,7 +228,7 @@ html.dark .app-shell {
     linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
     linear-gradient(0deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
   background-size: auto, 36px 36px, 36px 36px;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.28);
 }
 
 .landing-plane-top,
@@ -319,7 +319,7 @@ html.dark .app-shell {
 }
 
 .landing-price-value.is-accent {
-  color: #FDE047;
+  color: #93C5FD;
 }
 
 .landing-price-value span {
@@ -374,8 +374,8 @@ html.dark .app-shell {
   min-height: 18%;
   border-radius: 5px 5px 2px 2px;
   transform-origin: bottom;
-  background: linear-gradient(180deg, #FDE047, #22C55E);
-  box-shadow: 0 0 18px rgba(34, 197, 94, 0.16);
+  background: linear-gradient(180deg, #93C5FD, #64748B);
+  box-shadow: none;
 }
 
 .landing-bars span.is-muted {
@@ -494,24 +494,6 @@ html.dark .app-shell {
   gap: 0.35rem;
 }
 
-.landing-scan-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -20%;
-  height: 36%;
-  pointer-events: none;
-  background: linear-gradient(180deg, transparent, rgba(253, 224, 71, 0.08), transparent);
-  animation: landing-scan 5.4s ease-in-out infinite;
-}
-
-@keyframes landing-scan {
-  0%, 18% { transform: translateY(-45%); opacity: 0; }
-  35% { opacity: 1; }
-  72% { transform: translateY(350%); opacity: 0.7; }
-  100% { transform: translateY(350%); opacity: 0; }
-}
-
 @media (max-width: 1120px) {
   .landing-hero-inner {
     grid-template-columns: 1fr;
@@ -564,10 +546,6 @@ html.dark .app-shell {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-scan-line {
-    animation: none;
-    opacity: 0;
-  }
 }
 
 .hero-num {

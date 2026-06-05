@@ -23,13 +23,13 @@ export function RecommendationCard({
   // Calculate savings for 50L tank
   const savings = delta ? Math.abs(delta * 50) : null;
 
-  // Confidence level mapping
+  // Confidence-like score mapping. This should not be presented as certainty.
   const getConfidenceLabel = (conf) => {
-    if (!conf) return "Keskitaso";
-    if (conf >= 0.8) return "Korkea luotettavuus";
-    if (conf >= 0.6) return "Hyvä luotettavuus";
-    if (conf >= 0.4) return "Keskitaso";
-    return "Matala luotettavuus";
+    if (!conf) return "Ei kalibroitu";
+    if (conf >= 0.8) return "Vahva datatuki";
+    if (conf >= 0.6) return "Kohtalainen datatuki";
+    if (conf >= 0.4) return "Ohut datatuki";
+    return "Heikko datatuki";
   };
 
   const getConfidenceColor = (conf) => {
@@ -152,18 +152,18 @@ export function RecommendationCard({
                 data-testid="recommendation-title"
               >
                 {shouldWait
-                  ? "ODOTA HUOMISEEN"
+                  ? "HUOMENNA VOI OLLA EDULLISEMPI"
                   : shouldFillNow
-                  ? "TANKKAA NYT"
-                  : "VAKAA HINTA"}
+                  ? "NOUSUPAINETTA"
+                  : "EI SELVÄÄ SUUNTAA"}
               </h3>
 
               <p className="text-sm md:text-base text-slate-300 leading-relaxed">
                 {shouldWait
-                  ? `Hinta laskee ${Math.abs(delta).toFixed(3)} €/L. Säästät ${savings.toFixed(2)} € tankkaamalla huomenna.`
+                  ? `Arvio on ${Math.abs(delta).toFixed(3)} €/L tätä päivää alempana. 50 litran vaikutus olisi noin ${savings.toFixed(2)} €.`
                   : shouldFillNow
-                  ? `Hinta nousee ${delta.toFixed(3)} €/L. Säästät ${savings.toFixed(2)} € tankkaamalla tänään.`
-                  : "Hinnan odotetaan pysyvän vakaana. Voit tankata milloin tahansa."}
+                  ? `Arvio on ${delta.toFixed(3)} €/L tätä päivää korkeampi. 50 litran vaikutus olisi noin ${savings.toFixed(2)} €.`
+                  : "Arvio ei erotu selvästi tämän päivän hinnasta."}
               </p>
 
               {bestWindow && (
@@ -175,13 +175,13 @@ export function RecommendationCard({
           </div>
         </motion.div>
 
-        {/* Confidence indicator */}
+        {/* Data-support indicator */}
         {confidence !== null && confidence !== undefined && (
           <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
             <div className="flex items-center gap-3">
               <Activity size={16} className="text-slate-400" />
               <div>
-                <CardLabel className="text-slate-500 mb-0.5">Luotettavuus</CardLabel>
+                <CardLabel className="text-slate-500 mb-0.5">Datatuki</CardLabel>
                 <span
                   className={cn(
                     "text-sm font-semibold",
