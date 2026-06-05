@@ -7,7 +7,7 @@ const METHOD_LABEL = {
   linear_regression: "Lineaarinen regressio",
   exp_smoothing: "Eksponentiaalinen tasoitus",
   fundamental_anchor: "Fundamenttiankkuri",
-  ai_llm: "LLM-arvio",
+  ai_llm: "Uutis- ja malliarvio",
   ensemble: "Yhdistelmä",
 };
 

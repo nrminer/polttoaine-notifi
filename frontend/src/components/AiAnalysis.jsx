@@ -55,7 +55,7 @@ function CIBand({ lo, hi, value, anchor }) {
           <span
             className="absolute -top-1 -bottom-1 w-0.5 bg-accent"
             style={{ left: `${valuePos}%` }}
-          title="LLM-arvio"
+            title="kielimalliarvio"
         />
       </div>
       <div className="mt-1.5 flex justify-between font-mono text-[11px] text-slate-500 tnum">
@@ -73,7 +73,7 @@ function CIBand({ lo, hi, value, anchor }) {
 }
 
 export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
-  const explanation = ai?.explanation || "Aja ennuste saadaksesi LLM-arvion.";
+  const explanation = ai?.explanation || "Aja ennuste saadaksesi uutis- ja malliarvion.";
   const direction = ai?.direction;
   const value = ai?.value;
   const lo = ai?.confidence_low;
@@ -82,7 +82,7 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
   const drivers = (ai?.key_drivers || []).slice(0, 4);
 
   return (
-    <Card dark testId="ai-analysis-card" className="p-6 md:p-7 relative">
+    <Card dark testId="ai-analysis-card" className="instrument-card p-6 md:p-7 relative">
       <div
         aria-hidden
         className="absolute inset-0 pointer-events-none rounded-xl"
@@ -96,7 +96,7 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
           <div className="flex items-center gap-2">
             <MessageSquareText size={14} className="text-accent" strokeWidth={2.4} />
             <CardLabel className="text-accent" data-testid="ai-model-label">
-              LLM-arvio{modelLabel ? ` · ${modelLabel}` : ""}
+              Uutis- ja malliarvio{modelLabel ? ` · ${modelLabel}` : ""}
             </CardLabel>
           </div>
           {direction && (
@@ -111,7 +111,7 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
           {value != null && (
             <div>
               <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
-                LLM-arvio
+                Malliarvio
               </div>
               <div className="font-display font-black tnum text-4xl md:text-5xl text-white leading-none">
                 {Number(value).toFixed(3)}

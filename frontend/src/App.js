@@ -14,9 +14,7 @@ import {
   Activity,
   CheckCircle2,
   Database,
-  LineChart,
   MapPin,
-  Radio,
   ShieldCheck,
 } from "lucide-react";
 
@@ -93,7 +91,7 @@ function FilterBtn({ active, onClick, children, testId }) {
    Kept short so the card reads as an operator view, not marketing copy. */
 const DARK_METHODS = [
   { key: "fundamental_anchor", label: "ANKKURI" },
-  { key: "ai_llm",             label: "LLM" },
+  { key: "ai_llm",             label: "UUTISET" },
   { key: "exp_smoothing",      label: "HOLT" },
   { key: "linear_regression",  label: "REGR." },
   { key: "moving_average",     label: "MA·7" },
@@ -137,13 +135,6 @@ const LANDING_SOURCES = [
     detail: "capture-ajat",
     accent: "slate",
   },
-];
-
-const PIPELINE_STEPS = [
-  { icon: Radio, label: "Kerää", detail: "live HTML" },
-  { icon: ShieldCheck, label: "Suodata", detail: "raja + mediaani" },
-  { icon: Database, label: "Tallenna", detail: "daily_tracker" },
-  { icon: LineChart, label: "Arvioi", detail: "rajattu yhdistelmä" },
 ];
 
 function LandingMetric({ icon: Icon, label, value, detail, testId }) {
@@ -207,26 +198,6 @@ function LandingBars({ series }) {
         />
       ))}
     </div>
-  );
-}
-
-function PipelineStep({ step, index }) {
-  const Icon = step.icon;
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.18 + index * 0.08, duration: 0.42, ease: "easeOut" }}
-      className="landing-pipeline-step"
-    >
-      <div className="landing-pipeline-icon">
-        <Icon size={15} />
-      </div>
-      <div>
-        <div className="landing-pipeline-label">{step.label}</div>
-        <div className="landing-pipeline-detail">{step.detail}</div>
-      </div>
-    </motion.div>
   );
 }
 
@@ -524,7 +495,7 @@ export default function App() {
         Siirry pääsisältöön
       </a>
       {/* TOP BAR */}
-      <header className="border-b border-line bg-white/80 backdrop-blur-xl sticky top-0 z-30">
+      <header className="app-header backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-[1480px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-brand text-white flex items-center justify-center shadow-glow-brand">
@@ -587,17 +558,13 @@ export default function App() {
             transition={{ duration: 0.55, ease: "easeOut" }}
             className="landing-copy"
           >
-            <div className="landing-kicker">
-              <span className="landing-kicker-dot" />
-              Live-haettu polttoainedata · ei synteettistä historiaa
-            </div>
             <h1 className="landing-title">
               BensaVahti
             </h1>
             <p className="landing-lead">
-              Operatiivinen näkymä Suomen pumppuhintoihin: lähteet,
-              suodatus, toteutuneet capturet ja huomisen rajattu arvio yhdessä
-              rauhallisessa työpöydässä.
+              Halvimmat 95E10- ja dieselhinnat, kaupunkikeskiarvot,
+              toteutuneet mittaukset ja huomisen rajattu hinta-arvio yhdessä
+              näkymässä.
             </p>
 
             <div className="landing-actions">
@@ -652,11 +619,7 @@ export default function App() {
             <div className="landing-plane-top">
               <div>
                 <div className="landing-plane-eyebrow">Datan tila</div>
-                <div className="landing-plane-title">Lähteet ja tarkistus</div>
-              </div>
-              <div className="landing-plane-status">
-                <span className="landing-status-light" />
-                {isLoading ? "päivittyy" : current?.fetched_at ? "tarkistettu" : "odottaa"}
+                <div className="landing-plane-title">Lähteet ja viimeisin haku</div>
               </div>
             </div>
 
@@ -701,12 +664,6 @@ export default function App() {
               ))}
             </div>
 
-            <div className="landing-pipeline" aria-label="Dataputki">
-              {PIPELINE_STEPS.map((step, idx) => (
-                <PipelineStep key={step.label} step={step} index={idx} />
-              ))}
-            </div>
-
             <div className="landing-plane-footer">
               <span><Activity size={13} /> 14:00 + 21:00 Helsinki</span>
               <span><ShieldCheck size={13} /> poikkeamat suodatetaan</span>
@@ -743,12 +700,6 @@ export default function App() {
                 <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
                   <span className="text-muted">otanta</span>
                   <span className="text-ink font-semibold tnum">{current.stations_count} as.</span>
-                </span>
-              )}
-              {prediction?.methods?.ai_llm?.model && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
-                  <span className="text-muted">llm</span>
-                  <span className="text-ink font-semibold">{formatModelName(prediction.methods.ai_llm.model)}</span>
                 </span>
               )}
               {prediction?.conflict_signal && (
@@ -827,7 +778,7 @@ export default function App() {
         <Card
           testId="tomorrow-prediction-card"
           dark
-          className="p-7 md:p-10 relative"
+          className="instrument-card p-7 md:p-10 relative"
         >
           <div
             aria-hidden
@@ -889,7 +840,7 @@ export default function App() {
                   const w = prediction?.ensemble?.weights?.[key];
                   const sub =
                     key === "ai_llm"
-                      ? formatModelName(prediction?.methods?.ai_llm?.model) || "ei ajettu"
+                      ? "uutiset + kielimalliarvio"
                       : key === "fundamental_anchor"
                       ? "Brent + RBOB/HO + FX"
                       : null;
@@ -1109,7 +1060,7 @@ export default function App() {
         </Card>
       </section>
 
-      {/* LLM + NEWS */}
+      {/* NEWS CONTEXT */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7">

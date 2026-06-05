@@ -22,12 +22,8 @@ const META = {
 
 function aiLabelFor(model) {
   const full = formatModelName(model);
-  if (!full) return { label: "LLM-arvio", sub: "ei ajettu" };
-  const parts = full.split(" ");
-  if (parts.length >= 3) {
-    return { label: `LLM / ${parts[0]} ${parts[1]}`, sub: parts.slice(2).join(" ") };
-  }
-  return { label: `LLM / ${full}`, sub: "" };
+  if (!full) return { label: "Uutis- ja malliarvio", sub: "ei ajettu" };
+  return { label: "Uutis- ja malliarvio", sub: full };
 }
 
 export default function MethodTable({ result }) {

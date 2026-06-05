@@ -9,7 +9,7 @@
   /* Semantic colour tokens (R G B triplets — consumed by tailwind.config) */
   --c-ink: 10 10 10;
   --c-secondary: 71 85 105;
-  --c-muted: 148 163 184;
+  --c-muted: 100 116 139;
   --c-surface: 248 249 250;
   --c-line: 226 232 240;
 
@@ -29,7 +29,7 @@ html.dark {
 
   --c-ink: 226 232 240;
   --c-secondary: 148 163 184;
-  --c-muted: 100 116 139;
+  --c-muted: 125 141 165;
   --c-surface: 14 23 38;
   --c-line: 30 41 59;
 
