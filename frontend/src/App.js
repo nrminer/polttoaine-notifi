@@ -1109,7 +1109,7 @@ export default function App() {
         </Card>
       </section>
 
-      {/* AI + NEWS */}
+      {/* LLM + NEWS */}
       <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7">
