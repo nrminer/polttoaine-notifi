@@ -45,6 +45,7 @@ import {
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
 import { formatModelName } from "./lib/modelName";
 import NewsCard from "./components/NewsCard";
+import { useRealtimeUpdates } from "./hooks/useRealtimeUpdates";
 
 const CHART_CITIES = [
   "Suomi",
@@ -239,6 +240,39 @@ export default function App() {
     () => setTheme((t) => (t === "dark" ? "light" : "dark")),
     []
   );
+
+  // Real-time updates via SSE
+  const handleRealtimeUpdate = useCallback((update) => {
+    console.log('[App] Real-time update received:', update);
+    
+    if (update.type === 'prediction') {
+      // Prediction was updated - reload prediction and tracking data
+      const updatedFuel = update.data?.fuel;
+      if (updatedFuel === fuel) {
+        loadPrediction(fuel, false);
+        loadTracking(fuel);
+      }
+    } else if (update.type === 'correction') {
+      // Data was corrected - reload everything for affected fuel
+      const correctedFuel = update.data?.fuel || update.data?.fuels?.[0]?.fuel;
+      if (correctedFuel === fuel) {
+        loadCurrent(fuel);
+        loadHistory(fuel, HISTORY_RANGE_DAYS);
+        loadPrediction(fuel, false);
+        loadTracking(fuel);
+        loadAccuracy(fuel);
+      }
+    } else if (update.type === 'capture') {
+      // New capture - reload current prices and tracking
+      const capturedFuel = update.data?.fuel;
+      if (capturedFuel === fuel) {
+        loadCurrent(fuel);
+        loadTracking(fuel);
+      }
+    }
+  }, [fuel, loadPrediction, loadTracking, loadCurrent, loadHistory, loadAccuracy]);
+
+  const { isConnected } = useRealtimeUpdates(handleRealtimeUpdate);
 
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
 
