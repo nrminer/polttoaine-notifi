@@ -1470,29 +1470,32 @@ async def fix_capture(req: FixCaptureRequest,
 
 
 @app.post("/api/admin/reboot")
-async def reboot_system(x_admin_token: Optional[str] = Header(default=None)):
+async def reboot_system(recalculate: bool = Query(True),
+                       x_admin_token: Optional[str] = Header(default=None)):
     """Reboot system - clear all collections except graph data.
     
     Clears:
     - snapshots
     - history
-    - daily_tracker
     - predictions
     - price_observations
+    - daily_tracker captures AFTER reboot date
     
     Preserves:
-    - graph_nodes
-    - graph_edges
-    - graph_metadata
+    - graph_nodes, graph_edges, graph_metadata
+    - daily_tracker captures UP TO reboot date
     
-    System will start fresh but graph data remains intact.
+    If recalculate=true (default), reruns predictions for all fuels from remaining captures.
     """
     _check_admin(x_admin_token or "")
+    
+    # Get reboot timestamp
+    reboot_time = datetime.now(timezone.utc)
+    reboot_date = reboot_time.date().isoformat()
     
     collections_to_clear = [
         'snapshots',
         'history',
-        'daily_tracker',
         'predictions',
         'price_observations',
     ]
@@ -1502,6 +1505,15 @@ async def reboot_system(x_admin_token: Optional[str] = Header(default=None)):
     for coll_name in collections_to_clear:
         before_counts[coll_name] = await db[coll_name].count_documents({})
     
+    # Count daily_tracker splits
+    before_counts['daily_tracker_total'] = await db.daily_tracker.count_documents({})
+    before_counts['daily_tracker_future'] = await db.daily_tracker.count_documents(
+        {"date": {"$gt": reboot_date}}
+    )
+    before_counts['daily_tracker_kept'] = await db.daily_tracker.count_documents(
+        {"date": {"$lte": reboot_date}}
+    )
+    
     # Clear collections
     cleared_counts = {}
     for coll_name in collections_to_clear:
@@ -1509,20 +1521,63 @@ async def reboot_system(x_admin_token: Optional[str] = Header(default=None)):
         cleared_counts[coll_name] = result.deleted_count
         logger.warning("REBOOT: Cleared %s - %d documents", coll_name, result.deleted_count)
     
+    # Remove future captures from daily_tracker
+    future_result = await db.daily_tracker.delete_many({"date": {"$gt": reboot_date}})
+    cleared_counts['daily_tracker_future'] = future_result.deleted_count
+    logger.warning("REBOOT: Removed %d future captures (after %s)", 
+                   future_result.deleted_count, reboot_date)
+    
+    # Count remaining captures
+    remaining_captures = await db.daily_tracker.count_documents({})
+    
+    # Recalculate predictions from remaining captures
+    recalculated = []
+    if recalculate and remaining_captures > 0:
+        logger.info("REBOOT: Recalculating predictions from %d remaining captures", 
+                   remaining_captures)
+        for fuel in FUELS:
+            try:
+                pred_result = await run_prediction(
+                    PredictionRequest(fuel=fuel, region="Suomi")
+                )
+                recalculated.append({
+                    "fuel": fuel,
+                    "target_date": pred_result.get("target_date"),
+                    "ensemble": (pred_result.get("ensemble") or {}).get("value"),
+                    "data_points": pred_result.get("n_daily_points"),
+                })
+                logger.info("REBOOT: Recalculated prediction for %s", fuel)
+            except Exception as e:
+                recalculated.append({
+                    "fuel": fuel,
+                    "error": f"{type(e).__name__}: {str(e)[:200]}"
+                })
+                logger.warning("REBOOT: Failed to recalculate %s: %s", fuel, e)
+    
     # Notify subscribers
     await notify_update("reboot", {
         "cleared": cleared_counts,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "remaining_captures": remaining_captures,
+        "reboot_date": reboot_date,
+        "timestamp": reboot_time.isoformat(),
     })
     
     return {
         "ok": True,
+        "reboot_date": reboot_date,
+        "reboot_timestamp": reboot_time.isoformat(),
         "before_counts": before_counts,
         "cleared_counts": cleared_counts,
         "total_cleared": sum(cleared_counts.values()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "preserved": ["graph_nodes", "graph_edges", "graph_metadata"],
-        "message": "System rebooted. Data cleared. Graph preserved. Next capture will start fresh."
+        "remaining_captures": remaining_captures,
+        "recalculated_predictions": recalculated if recalculate else None,
+        "preserved": [
+            "graph_nodes", 
+            "graph_edges", 
+            "graph_metadata",
+            f"daily_tracker (up to {reboot_date})"
+        ],
+        "message": f"System rebooted. Data cleared. {remaining_captures} captures preserved up to {reboot_date}. Graph intact."
     }
 
 
