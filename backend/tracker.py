@@ -374,13 +374,14 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         # Self-training: aiempien ennusteiden vs. toteumien track record
         track_rec = await learn_mod.track_record(db, fuel, region, days=30)
         
-        # Check for breaking news (within last 6 hours)
-        breaking_news_detected = news_mod.has_breaking_news(headlines, max_age_hours=6.0)
-        if breaking_news_detected:
-            logger.warning("⚠️  BREAKING NEWS detected - relaxing price clamp to ±0.15 EUR/L")
+        # Check for breaking news severity (within last 6 hours)
+        breaking_severity = news_mod.get_max_severity(headlines, max_age_hours=6.0)
+        if breaking_severity > 0:
+            logger.warning("⚠️  BREAKING NEWS detected (severity=%d) - adjusting price clamp", breaking_severity)
             breaking_items = news_mod.get_breaking_news_items(headlines, max_age_hours=6.0)
             for item in breaking_items:
-                logger.warning("   • %s (%s, %.1fh ago)", 
+                logger.warning("   • [%d] %s (%s, %.1fh ago)", 
+                              item.get("severity", 0),
                               item.get("title", "")[:80], 
                               item.get("source", ""),
                               item.get("age_hours", 0))
@@ -404,7 +405,7 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
             tax_events=tax_upcoming,
             tax_step_eur_l=tax_step_eur_l,
             track_record=track_rec,
-            breaking_news=breaking_news_detected,
+            breaking_news_severity=breaking_severity,
         )
         
         full = hourly_result["base_prediction"]

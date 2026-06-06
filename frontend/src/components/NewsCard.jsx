@@ -35,6 +35,9 @@ function BreakingBadge() {
 export default function NewsCard({ items = [], fetchedAt }) {
   const breakingItems = items.filter(it => it.breaking && (it.age_hours || 999) <= 6);
   const hasBreaking = breakingItems.length > 0;
+  const maxSeverity = hasBreaking ? Math.max(...breakingItems.map(it => it.severity || 0)) : 0;
+  const severityLabel = maxSeverity >= 7 ? 'CRITICAL' : maxSeverity >= 4 ? 'MAJOR' : 'MODERATE';
+  const severityColor = maxSeverity >= 7 ? 'red' : maxSeverity >= 4 ? 'orange' : 'yellow';
 
   return (
     <Card testId="news-card" className="p-6">
@@ -43,8 +46,11 @@ export default function NewsCard({ items = [], fetchedAt }) {
           <Newspaper size={14} className="text-brand" strokeWidth={2.4} />
           <CardLabel>Markkinauutiset · FI + EN</CardLabel>
           {hasBreaking && (
-            <span className="ml-2 font-mono text-[10px] font-bold text-red-600 uppercase tracking-wider">
-              {breakingItems.length} kriittistä
+            <span className={`ml-2 font-mono text-[10px] font-bold uppercase tracking-wider ${
+              severityColor === 'red' ? 'text-red-600' : 
+              severityColor === 'orange' ? 'text-orange-600' : 'text-yellow-600'
+            }`}>
+              {breakingItems.length} {severityLabel}
             </span>
           )}
         </div>
@@ -54,13 +60,30 @@ export default function NewsCard({ items = [], fetchedAt }) {
       </div>
 
       {hasBreaking && (
-        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+        <div className={`mb-3 p-3 border rounded-lg ${
+          severityColor === 'red' ? 'bg-red-50 border-red-200' :
+          severityColor === 'orange' ? 'bg-orange-50 border-orange-200' : 'bg-yellow-50 border-yellow-200'
+        }`}>
           <div className="flex items-start gap-2">
-            <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" strokeWidth={2.4} />
-            <div className="text-xs text-red-800">
-              <p className="font-semibold">Kriittinen uutinen havaittu</p>
-              <p className="text-red-700 mt-0.5">
-                Ennuste päivitetty automaattisesti. Hintaraja nostettu ±0.15 €/L.
+            <AlertTriangle size={14} className={`mt-0.5 shrink-0 ${
+              severityColor === 'red' ? 'text-red-600' :
+              severityColor === 'orange' ? 'text-orange-600' : 'text-yellow-600'
+            }`} strokeWidth={2.4} />
+            <div className="text-xs">
+              <p className={`font-semibold ${
+                severityColor === 'red' ? 'text-red-800' :
+                severityColor === 'orange' ? 'text-orange-800' : 'text-yellow-800'
+              }`}>
+                {severityLabel} uutinen havaittu
+              </p>
+              <p className={`mt-0.5 ${
+                severityColor === 'red' ? 'text-red-700' :
+                severityColor === 'orange' ? 'text-orange-700' : 'text-yellow-700'
+              }`}>
+                Ennuste päivitetty automaattisesti. Hintaraja {
+                  maxSeverity >= 7 ? '±0.15 €/L' :
+                  maxSeverity >= 4 ? '±0.10 €/L' : '±0.08 €/L'
+                }.
               </p>
             </div>
           </div>

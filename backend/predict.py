@@ -63,8 +63,27 @@ def _daily_tail(dates, prices, max_gap: int = 3, min_len: int = 4):
 # Suomen pumppuhinta liikkuu päivässä käytännössä alle tämän
 # (poikkeus: tunnettu veromuutos voimaan → clamppia laajennetaan steppin verran)
 _MAX_DAILY_MOVE = 0.06
-# Breaking news (geopolitical crisis, supply disruption) → laajempi clamp
-_MAX_DAILY_MOVE_BREAKING = 0.15
+# Breaking news → severity-based multiplier:
+# severity 1-3 (moderate): 1.33x = ±0.08 EUR/L
+# severity 4-6 (major):     1.67x = ±0.10 EUR/L
+# severity 7-10 (critical): 2.50x = ±0.15 EUR/L
+def _breaking_news_multiplier(severity: int) -> float:
+    """Return clamp multiplier based on breaking news severity (0-10).
+    
+    Calibrated to avoid over-reaction while allowing material moves:
+    - 0: 1.0x (no breaking news)
+    - 1-3: 1.33x (moderate events)
+    - 4-6: 1.67x (major supply/geopolitical events)
+    - 7-10: 2.50x (critical market-moving events)
+    """
+    if severity >= 7:
+        return 2.50
+    elif severity >= 4:
+        return 1.67
+    elif severity >= 1:
+        return 1.33
+    else:
+        return 1.0
 # 1 tynnyri = 159 L
 _BBL_LITRES = 159.0
 # 1 US gallon = 3.785… L (RBOB / HO -futuurit hinnoitellaan USD/gallona)
@@ -907,15 +926,15 @@ def _calibrated_weights(fixed: dict, method_mae: dict | None):
 
 def ensemble(predictions: dict, live_anchor: float | None = None,
              n_daily: int = 0, method_mae: dict | None = None,
-             breaking_news: bool = False) -> dict:
+             breaking_news_severity: int = 0) -> dict:
     """Datalaatutietoinen painotettu yhdistelmä.
 
     Kun aitoa päivädataa on vähän (kuukausidata hallitsee), tilastomenetelmät
     ylisovittavat → painotetaan ankkuripohjaista fundamental_anchoria ja AI:ta.
     `method_mae` (valinnainen): menetelmäkohtainen toteutunut MAE aidoista
     captureista → painot itsekalibroituvat tarkimpien menetelmien suuntaan.
-    Lopputulos rajataan ±0.06 €/L live-hinnasta, paitsi jos `breaking_news=True`
-    → ±0.15 €/L (geopoliittiset kriisit, toimitushäiriöt)."""
+    Lopputulos rajataan ±0.06 €/L live-hinnasta, paitsi jos `breaking_news_severity > 0`
+    → clamp kerrotaan severity-perusteisella multiplikaattorilla (1.33x-2.50x)."""
     if n_daily >= 14:
         weights = {
             "fundamental_anchor": 0.28,
@@ -953,8 +972,9 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
     weighted = sum(v * w for v, w in values) / total_w
 
     clamped = False
+    clamp_multiplier = _breaking_news_multiplier(breaking_news_severity)
     if live_anchor is not None:
-        clamp_limit = _MAX_DAILY_MOVE_BREAKING if breaking_news else _MAX_DAILY_MOVE
+        clamp_limit = _MAX_DAILY_MOVE * clamp_multiplier
         lo, hi = live_anchor - clamp_limit, live_anchor + clamp_limit
         if weighted < lo or weighted > hi:
             weighted = max(lo, min(hi, weighted))
@@ -963,7 +983,14 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
     spread = max(v for v, _ in values) - min(v for v, _ in values)
     expl = f"{len(values)} menetelmää ({mode}), hajonta {spread:.4f} €/L"
     if clamped:
-        limit_text = "±0.15 €/L (BREAKING NEWS)" if breaking_news else "±0.06 €/L"
+        if breaking_news_severity >= 7:
+            limit_text = f"±{clamp_limit:.3f} €/L (CRITICAL severity={breaking_news_severity})"
+        elif breaking_news_severity >= 4:
+            limit_text = f"±{clamp_limit:.3f} €/L (MAJOR severity={breaking_news_severity})"
+        elif breaking_news_severity >= 1:
+            limit_text = f"±{clamp_limit:.3f} €/L (MODERATE severity={breaking_news_severity})"
+        else:
+            limit_text = "±0.06 €/L"
         expl += f" · rajattu {limit_text} live-hinnasta"
     return {
         "value": round(weighted, 4),
@@ -971,7 +998,7 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
         "n_methods": len(values),
         "weights": {k: round(v, 4) for k, v in weights.items()},
         "explanation": expl + ".",
-        "breaking_news": breaking_news,
+        "breaking_news_severity": breaking_news_severity,
     }
 
 
@@ -995,7 +1022,7 @@ async def predict_tomorrow(fuel: str,
                            tax_events: list[dict] | None = None,
                            tax_step_eur_l: float | None = None,
                            track_record: dict | None = None,
-                           breaking_news: bool = False) -> dict:
+                           breaking_news_severity: int = 0) -> dict:
     """Aja kaikki menetelmät ja palauta ennusteet + datalaatutietoinen ensemble.
 
     `brent_chg` / `eur_usd_chg` = murto-osamuutos (esim. 0.03 = +3 %) viim.
@@ -1009,8 +1036,8 @@ async def predict_tomorrow(fuel: str,
     Jos live-hinta on annettu, se on ankkuri sekä historian viimeisenä
     pisteenä että ensemble-rajauksessa. `method_mae` = menetelmäkohtainen
     toteutunut MAE aidoista captureista → ensemble itsekalibroituu
-    (None = kiinteät painot). `breaking_news` = True jos havaittu breaking news
-    viim. 6h sisällä → ensemble-clamp laajennetaan ±0.06 → ±0.15 €/L."""
+    (None = kiinteät painot). `breaking_news_severity` = 0-10 severity score
+    from news (0=none, 1-3=moderate, 4-6=major, 7-10=critical) → clamp multiplier."""
     if live_today_price is not None and prices:
         prices = list(prices)
         prices[-1] = float(live_today_price)
@@ -1055,7 +1082,7 @@ async def predict_tomorrow(fuel: str,
         "weekly_cycle": wc,
     }
     ens = ensemble(predictions, live_anchor=live_today_price, n_daily=n_daily,
-                   method_mae=method_mae, breaking_news=breaking_news)
+                   method_mae=method_mae, breaking_news_severity=breaking_news_severity)
     return {
         "fuel": fuel,
         "region": region,
@@ -1122,7 +1149,7 @@ async def predict_by_hour(fuel: str,
                           tax_events: list[dict] | None = None,
                           tax_step_eur_l: float | None = None,
                           track_record: dict | None = None,
-                          breaking_news: bool = False) -> dict:
+                          breaking_news_severity: int = 0) -> dict:
     """Predict fuel price for specific hours of tomorrow.
     
     Returns:
@@ -1150,7 +1177,7 @@ async def predict_by_hour(fuel: str,
         tax_events=tax_events,
         tax_step_eur_l=tax_step_eur_l,
         track_record=track_record,
-        breaking_news=breaking_news,
+        breaking_news_severity=breaking_news_severity,
     )
     
     base_value = base["ensemble"].get("value")

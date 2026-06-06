@@ -63,25 +63,73 @@ KEYWORDS = re.compile(
 )
 
 # Breaking news patterns - events that can cause significant price spikes
-# These trigger immediate predictor re-runs with relaxed price limits
+# Calibrated to avoid over-reaction: only MAJOR supply/geopolitical events
+# that have historically moved oil markets by >5%
 BREAKING_NEWS_PATTERNS = re.compile(
     r"("
-    # Supply disruptions
-    r"OPEC.*cuts?.*production|OPEC.*emergency|OPEC\+.*agrees|"
-    r"refinery.*explosion|refinery.*fire|refinery.*shutdown|"
-    r"pipeline.*attack|pipeline.*sabotage|pipeline.*explosion|"
-    # Geopolitical escalations
-    r"war.*declared|military.*strike|invasion|attack.*oil|"
-    r"Middle\s+East.*war|Iran.*attack|Israel.*strike|"
-    r"sanctions.*Russia|embargo.*oil|blockade|"
-    # Major announcements
-    r"emergency.*meeting|crisis.*summit|price.*surge|"
-    r"supply.*crisis|shortage|rationing|"
-    # Finnish specific
-    r"valmistevero.*nousee|bensiinivero|polttoainevero.*korotus"
+    # Supply disruptions (MAJOR only - actual cuts/shutdowns)
+    r"OPEC.*cut.*million|OPEC.*emergency.*meeting|OPEC.*production.*cut|"
+    r"refinery.*explosion|refinery.*fire.*shutdown|refinery.*closed|"
+    r"pipeline.*attack|pipeline.*sabotage|pipeline.*shut|"
+    r"supply.*disruption|production.*halt|"
+    # Geopolitical escalations (WAR/ATTACK only, not threats)
+    r"\bwar\s+declared|\bwar\s+breaks|military.*strike.*oil|invasion.*oil|"
+    r"attack.*oil.*facility|attack.*tanker|missile.*strike.*refinery|"
+    r"Iran.*attack.*Israel|Israel.*strike.*Iran|"
+    r"Russia.*halt.*export|embargo.*imposed|blockade.*oil|"
+    # Major market-moving announcements (DECISIONS not discussions)
+    r"sanctions.*approved|emergency.*reserve.*release|"
+    r"price.*surge.*percent|oil.*spike|crude.*jump|"
+    r"shortage.*declared|rationing.*begins|"
+    # Finnish specific (TAX INCREASE CONFIRMED)
+    r"valmistevero.*korotus.*hyväksytty|bensiinivero.*nousee|polttoainevero.*vahvistettu"
     r")",
     re.IGNORECASE,
 )
+
+# Filter out non-material news (discussions, proposals, threats that don't materialize)
+IGNORE_PATTERNS = re.compile(
+    r"("
+    r"could|might|may|plan.*to|consider|discuss|proposal|threat|warning|"
+    r"analyst.*predict|forecast|expect|possible|potential|risk.*of"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _calculate_severity(title: str, desc: str) -> int:
+    """Calculate severity score (0-10) for breaking news.
+    
+    Used to calibrate the price clamp multiplier:
+    - 7-10: Critical (±0.15 EUR/L)
+    - 4-6: Major (±0.10 EUR/L)
+    - 1-3: Moderate (±0.08 EUR/L)
+    """
+    score = 0
+    text = f"{title} {desc}".lower()
+    
+    # Critical events (+3 each)
+    if any(word in text for word in ["war declared", "invasion", "explosion", "attack on"]):
+        score += 3
+    if any(word in text for word in ["million barrel", "production cut", "emergency meeting"]):
+        score += 3
+    
+    # Major events (+2 each)
+    if any(word in text for word in ["strike", "shutdown", "halt", "closed"]):
+        score += 2
+    if any(word in text for word in ["sanctions approved", "embargo", "blockade"]):
+        score += 2
+    
+    # Material indicators (+1 each)
+    if any(word in text for word in ["surge", "spike", "jump"]):
+        score += 1
+    if any(word in text for word in ["shortage", "disruption"]):
+        score += 1
+    
+    # Recency boost (fresher = more severe)
+    # This is set during item creation
+    
+    return min(score, 10)
 
 
 def _sanitize_text(text: str) -> str:
@@ -115,8 +163,24 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
             pub_dt = None
         
         # Check if this is breaking news
-        is_breaking = bool(BREAKING_NEWS_PATTERNS.search(title) or 
-                          BREAKING_NEWS_PATTERNS.search(desc))
+        # First: must match BREAKING pattern
+        # Second: must NOT match IGNORE pattern (filters speculation/proposals)
+        title_desc = f"{title} {desc}"
+        is_breaking = (
+            bool(BREAKING_NEWS_PATTERNS.search(title_desc)) and
+            not bool(IGNORE_PATTERNS.search(title_desc))
+        )
+        
+        # Calculate severity score for breaking news
+        severity = _calculate_severity(title, desc) if is_breaking else 0
+        
+        # Recency boost: <1h = +2, <3h = +1
+        if is_breaking and pub_dt:
+            age_h = (datetime.now(timezone.utc) - pub_dt).total_seconds() / 3600.0
+            if age_h < 1:
+                severity = min(severity + 2, 10)
+            elif age_h < 3:
+                severity = min(severity + 1, 10)
         
         out.append({
             "title": title,
@@ -129,6 +193,7 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
                 if pub_dt else None
             ),
             "breaking": is_breaking,
+            "severity": severity,
         })
     return out
 
@@ -169,15 +234,18 @@ def fetch_news(queries=None, max_age_days: int = 14, limit: int = 8) -> list[dic
     return matched[:limit]
 
 
-def has_breaking_news(items: list[dict], max_age_hours: float = 6.0) -> bool:
-    """Check if there are any breaking news items within the last N hours.
+def has_breaking_news(items: list[dict], max_age_hours: float = 6.0, min_severity: int = 4) -> bool:
+    """Check if there are any breaking news items within the last N hours with sufficient severity.
     
     Used by tracker to determine if predictor should run with relaxed limits.
+    min_severity: 4-6 = Major, 7-10 = Critical (default: 4 = Major+)
     """
     if not items:
         return False
     for item in items:
-        if item.get("breaking") and (item.get("age_hours") or 999) <= max_age_hours:
+        if (item.get("breaking") and 
+            (item.get("age_hours") or 999) <= max_age_hours and
+            (item.get("severity", 0) >= min_severity)):
             return True
     return False
 
@@ -188,3 +256,15 @@ def get_breaking_news_items(items: list[dict], max_age_hours: float = 6.0) -> li
         item for item in items
         if item.get("breaking") and (item.get("age_hours") or 999) <= max_age_hours
     ]
+
+
+def get_max_severity(items: list[dict], max_age_hours: float = 6.0) -> int:
+    """Get the maximum severity score from recent breaking news.
+    
+    Returns 0 if no breaking news, 1-10 otherwise.
+    Used to calibrate the price clamp multiplier.
+    """
+    breaking = get_breaking_news_items(items, max_age_hours)
+    if not breaking:
+        return 0
+    return max(item.get("severity", 0) for item in breaking)

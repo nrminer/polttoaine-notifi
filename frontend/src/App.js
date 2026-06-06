@@ -842,10 +842,17 @@ export default function App() {
                     hajonta ±{prediction.ensemble.spread.toFixed(3)} €/L
                   </span>
                 )}
-                {prediction?.ensemble?.breaking_news && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-900/40 border border-red-700/50 text-red-200 font-mono text-[10px] font-bold uppercase tracking-wider">
+                {prediction?.ensemble?.breaking_news_severity > 0 && (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-mono text-[10px] font-bold uppercase tracking-wider ${
+                    prediction.ensemble.breaking_news_severity >= 7 
+                      ? 'bg-red-900/40 border border-red-700/50 text-red-200'
+                      : prediction.ensemble.breaking_news_severity >= 4
+                      ? 'bg-orange-900/40 border border-orange-700/50 text-orange-200'
+                      : 'bg-yellow-900/40 border border-yellow-700/50 text-yellow-200'
+                  }`}>
                     <Activity size={10} strokeWidth={2.8} />
-                    BREAKING NEWS
+                    {prediction.ensemble.breaking_news_severity >= 7 ? 'CRITICAL' : 
+                     prediction.ensemble.breaking_news_severity >= 4 ? 'MAJOR' : 'MODERATE'}
                   </span>
                 )}
               </div>
