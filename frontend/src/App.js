@@ -515,8 +515,11 @@ export default function App() {
     }));
   }, [tracking, history]);
   const comparedCount = tracking?.summary?.n_compared ?? 0;
-  const sourceCount =
-    current?.sources_count ?? prediction?.prediction_confidence?.sources_count ?? null;
+  const sourceCount = useMemo(() => {
+    if (!current?.stations || current.stations.length === 0) return null;
+    const uniqueSources = new Set(current.stations.map(s => s.source));
+    return uniqueSources.size;
+  }, [current]);
   const scrapeTime = current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "odottaa dataa";
   const accuracyBadge =
     tracking?.summary?.mae != null
@@ -843,13 +846,13 @@ export default function App() {
               </div>
 
               {/* NEW: ConfidenceStrip below direction pill */}
-              {prediction?.prediction_confidence && (
+              {current && (
                 <div className="mt-4">
                   <ConfidenceStrip
-                    mostRecentScrape={prediction.prediction_confidence.most_recent_scrape}
-                    sourcesCount={prediction.prediction_confidence.sources_count}
-                    stationsCount={prediction.prediction_confidence.stations_count}
-                    predictionMAE={prediction.prediction_confidence.prediction_mae}
+                    mostRecentScrape={current.fetched_at}
+                    sourcesCount={sourceCount}
+                    stationsCount={current.stations_count}
+                    predictionMAE={tracking?.summary?.mae}
                     className="text-slate-300"
                   />
                 </div>
