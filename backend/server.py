@@ -1134,6 +1134,7 @@ def _check_admin(password: str) -> None:
 
 @app.post("/api/admin/run")
 async def admin_run(req: AdminRequest,
+                    request: Request,
                     x_admin_token: Optional[str] = Header(default=None)):
     """Salasanasuojattu manuaalinen liipaisin (Postman/curl).
 
@@ -1204,7 +1205,7 @@ async def admin_run(req: AdminRequest,
         for f in fuels:
             try:
                 res = await run_prediction(
-                    PredictionRequest(fuel=f, region=req.region))
+                    PredictionRequest(fuel=f, region=req.region), request)
                 preds.append({
                     "fuel": f,
                     "target_date": res.get("target_date"),

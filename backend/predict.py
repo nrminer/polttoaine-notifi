@@ -489,8 +489,12 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     dt = _daily_tail(dates, prices, max_gap=3, min_len=4)
     if len(dt) >= 4:
         seg = [x[1] for x in dt][-7:]
-        slope_val = (seg[-1] - seg[0]) / max(1, len(seg) - 1) * 1000
-        slope_str = f"{slope_val:+.2f} m€/L/pv (aito päivähäntä, {len(seg)} pv)"
+        # Safety check: ensure seg has at least 1 element
+        if len(seg) >= 1:
+            slope_val = (seg[-1] - seg[0]) / max(1, len(seg) - 1) * 1000
+            slope_str = f"{slope_val:+.2f} m€/L/pv (aito päivähäntä, {len(seg)} pv)"
+        else:
+            slope_str = "ei laskettavissa (tyhjä segmentti)"
     elif len(p) >= 2:
         slope_str = "ei vielä luotettavaa trendiä (liian vähän päivähavaintoja)"
 
