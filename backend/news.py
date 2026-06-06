@@ -34,11 +34,25 @@ FEEDS = [
     ("https://www.is.fi/rss/taloussanomat.xml", "Taloussanomat"),
     ("https://www.is.fi/rss/autot.xml", "IS · Autot"),
     ("https://www.mtvuutiset.fi/api/feed/rss/uutiset_uusimmat", "MTV Uutiset"),
-    # English sources - oil/gas/energy
+    
+    # Major English sources - oil/gas/energy/geopolitics
     ("https://feeds.reuters.com/reuters/businessNews", "Reuters · Business"),
-    ("https://feeds.bbci.co.uk/news/business/rss.xml", "BBC · Business"),
+    ("https://feeds.reuters.com/Reuters/worldNews", "Reuters · World"),
     ("https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera"),
     ("https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "NYT · World"),
+    ("https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "NYT · Business"),
+    ("https://feeds.bbci.co.uk/news/business/rss.xml", "BBC · Business"),
+    ("https://feeds.bbci.co.uk/news/world/rss.xml", "BBC · World"),
+    ("https://feeds.bbci.co.uk/news/world/middle_east/rss.xml", "BBC · Middle East"),
+    
+    # Financial/Energy specialized
+    ("https://www.ft.com/rss/world", "Financial Times · World"),
+    ("https://www.cnbc.com/id/100727362/device/rss/rss.html", "CNBC · Energy"),
+    ("https://www.bloomberg.com/feed/podcast/bloomberg-commodities-edge.xml", "Bloomberg · Commodities"),
+    
+    # Energy-specific
+    ("https://www.oilprice.com/rss/main", "OilPrice.com"),
+    ("https://www.rigzone.com/news/feeds/oil_gas.rss", "Rigzone · Oil & Gas"),
 ]
 
 # Avainsanat: polttoaine, raakaöljy-hinta, vero, OPEC, Brent, asemaketjut
