@@ -1,5 +1,5 @@
 import React from "react";
-import { Newspaper, ExternalLink, Clock } from "lucide-react";
+import { Newspaper, ExternalLink, Clock, AlertTriangle } from "lucide-react";
 import { Card, CardLabel } from "./Card";
 
 function ageLabel(h) {
@@ -23,18 +23,49 @@ function AgeBadge({ h }) {
   );
 }
 
+function BreakingBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2 py-1 rounded-md bg-red-100 text-red-700 border border-red-200 animate-pulse">
+      <AlertTriangle size={10} strokeWidth={2.8} />
+      BREAKING
+    </span>
+  );
+}
+
 export default function NewsCard({ items = [], fetchedAt }) {
+  const breakingItems = items.filter(it => it.breaking && (it.age_hours || 999) <= 6);
+  const hasBreaking = breakingItems.length > 0;
+
   return (
     <Card testId="news-card" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Newspaper size={14} className="text-brand" strokeWidth={2.4} />
-          <CardLabel>Markkinauutiset · Iltalehti · HS · IS · MTV</CardLabel>
+          <CardLabel>Markkinauutiset · FI + EN</CardLabel>
+          {hasBreaking && (
+            <span className="ml-2 font-mono text-[10px] font-bold text-red-600 uppercase tracking-wider">
+              {breakingItems.length} kriittistä
+            </span>
+          )}
         </div>
         <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
           {items.length} otsikkoa
         </span>
       </div>
+
+      {hasBreaking && (
+        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" strokeWidth={2.4} />
+            <div className="text-xs text-red-800">
+              <p className="font-semibold">Kriittinen uutinen havaittu</p>
+              <p className="text-red-700 mt-0.5">
+                Ennuste päivitetty automaattisesti. Hintaraja nostettu ±0.15 €/L.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="font-mono text-xs text-secondary py-8 text-center border border-dashed border-line rounded-lg">
@@ -51,15 +82,22 @@ export default function NewsCard({ items = [], fetchedAt }) {
                 href={it.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex gap-3 items-start p-2.5 rounded-lg hover:bg-surface transition-colors -mx-1"
+                className={`group flex gap-3 items-start p-2.5 rounded-lg hover:bg-surface transition-colors -mx-1 ${
+                  it.breaking && (it.age_hours || 999) <= 6 ? 'bg-red-50 border border-red-100' : ''
+                }`}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-ink leading-snug line-clamp-2 group-hover:text-brand transition-colors">
-                    {it.title}
-                  </p>
+                  <div className="flex items-start gap-2 mb-1">
+                    <p className={`text-sm font-semibold leading-snug line-clamp-2 group-hover:text-brand transition-colors flex-1 ${
+                      it.breaking && (it.age_hours || 999) <= 6 ? 'text-red-900' : 'text-ink'
+                    }`}>
+                      {it.title}
+                    </p>
+                    {it.breaking && (it.age_hours || 999) <= 6 && <BreakingBadge />}
+                  </div>
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                      {it.source || "Google News"}
+                      {it.source || "News"}
                     </span>
                     <span className="text-muted">·</span>
                     <AgeBadge h={it.age_hours} />
@@ -76,7 +114,7 @@ export default function NewsCard({ items = [], fetchedAt }) {
       )}
 
       <div className="mt-3 pt-3 border-t border-line text-[10px] text-muted font-mono">
-        Otsikot syötetään huomisen arvion kontekstiksi. Suora RSS-pohjainen syöte.
+        Otsikot syötetään huomisen arvion kontekstiksi. Suora RSS-pohjainen syöte (FI + EN).
       </div>
     </Card>
   );

@@ -63,6 +63,8 @@ def _daily_tail(dates, prices, max_gap: int = 3, min_len: int = 4):
 # Suomen pumppuhinta liikkuu päivässä käytännössä alle tämän
 # (poikkeus: tunnettu veromuutos voimaan → clamppia laajennetaan steppin verran)
 _MAX_DAILY_MOVE = 0.06
+# Breaking news (geopolitical crisis, supply disruption) → laajempi clamp
+_MAX_DAILY_MOVE_BREAKING = 0.15
 # 1 tynnyri = 159 L
 _BBL_LITRES = 159.0
 # 1 US gallon = 3.785… L (RBOB / HO -futuurit hinnoitellaan USD/gallona)
@@ -904,14 +906,16 @@ def _calibrated_weights(fixed: dict, method_mae: dict | None):
 
 
 def ensemble(predictions: dict, live_anchor: float | None = None,
-             n_daily: int = 0, method_mae: dict | None = None) -> dict:
+             n_daily: int = 0, method_mae: dict | None = None,
+             breaking_news: bool = False) -> dict:
     """Datalaatutietoinen painotettu yhdistelmä.
 
     Kun aitoa päivädataa on vähän (kuukausidata hallitsee), tilastomenetelmät
     ylisovittavat → painotetaan ankkuripohjaista fundamental_anchoria ja AI:ta.
     `method_mae` (valinnainen): menetelmäkohtainen toteutunut MAE aidoista
     captureista → painot itsekalibroituvat tarkimpien menetelmien suuntaan.
-    Lopputulos rajataan ±0.06 €/L live-hinnasta."""
+    Lopputulos rajataan ±0.06 €/L live-hinnasta, paitsi jos `breaking_news=True`
+    → ±0.15 €/L (geopoliittiset kriisit, toimitushäiriöt)."""
     if n_daily >= 14:
         weights = {
             "fundamental_anchor": 0.28,
@@ -950,7 +954,8 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
 
     clamped = False
     if live_anchor is not None:
-        lo, hi = live_anchor - _MAX_DAILY_MOVE, live_anchor + _MAX_DAILY_MOVE
+        clamp_limit = _MAX_DAILY_MOVE_BREAKING if breaking_news else _MAX_DAILY_MOVE
+        lo, hi = live_anchor - clamp_limit, live_anchor + clamp_limit
         if weighted < lo or weighted > hi:
             weighted = max(lo, min(hi, weighted))
             clamped = True
@@ -958,13 +963,15 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
     spread = max(v for v, _ in values) - min(v for v, _ in values)
     expl = f"{len(values)} menetelmää ({mode}), hajonta {spread:.4f} €/L"
     if clamped:
-        expl += " · rajattu ±0.06 €/L live-hinnasta"
+        limit_text = "±0.15 €/L (BREAKING NEWS)" if breaking_news else "±0.06 €/L"
+        expl += f" · rajattu {limit_text} live-hinnasta"
     return {
         "value": round(weighted, 4),
         "spread": round(spread, 4),
         "n_methods": len(values),
         "weights": {k: round(v, 4) for k, v in weights.items()},
         "explanation": expl + ".",
+        "breaking_news": breaking_news,
     }
 
 
@@ -987,7 +994,8 @@ async def predict_tomorrow(fuel: str,
                            crack_eur_l: float | None = None,
                            tax_events: list[dict] | None = None,
                            tax_step_eur_l: float | None = None,
-                           track_record: dict | None = None) -> dict:
+                           track_record: dict | None = None,
+                           breaking_news: bool = False) -> dict:
     """Aja kaikki menetelmät ja palauta ennusteet + datalaatutietoinen ensemble.
 
     `brent_chg` / `eur_usd_chg` = murto-osamuutos (esim. 0.03 = +3 %) viim.
@@ -1001,7 +1009,8 @@ async def predict_tomorrow(fuel: str,
     Jos live-hinta on annettu, se on ankkuri sekä historian viimeisenä
     pisteenä että ensemble-rajauksessa. `method_mae` = menetelmäkohtainen
     toteutunut MAE aidoista captureista → ensemble itsekalibroituu
-    (None = kiinteät painot)."""
+    (None = kiinteät painot). `breaking_news` = True jos havaittu breaking news
+    viim. 6h sisällä → ensemble-clamp laajennetaan ±0.06 → ±0.15 €/L."""
     if live_today_price is not None and prices:
         prices = list(prices)
         prices[-1] = float(live_today_price)
@@ -1046,7 +1055,7 @@ async def predict_tomorrow(fuel: str,
         "weekly_cycle": wc,
     }
     ens = ensemble(predictions, live_anchor=live_today_price, n_daily=n_daily,
-                   method_mae=method_mae)
+                   method_mae=method_mae, breaking_news=breaking_news)
     return {
         "fuel": fuel,
         "region": region,
@@ -1112,7 +1121,8 @@ async def predict_by_hour(fuel: str,
                           crack_eur_l: float | None = None,
                           tax_events: list[dict] | None = None,
                           tax_step_eur_l: float | None = None,
-                          track_record: dict | None = None) -> dict:
+                          track_record: dict | None = None,
+                          breaking_news: bool = False) -> dict:
     """Predict fuel price for specific hours of tomorrow.
     
     Returns:
@@ -1140,6 +1150,7 @@ async def predict_by_hour(fuel: str,
         tax_events=tax_events,
         tax_step_eur_l=tax_step_eur_l,
         track_record=track_record,
+        breaking_news=breaking_news,
     )
     
     base_value = base["ensemble"].get("value")

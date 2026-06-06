@@ -6,6 +6,9 @@ so links are canonical — no Google News opaque redirect tokens — and they
 open the actual article when clicked.
 
 We filter by fuel/oil keywords client-side.
+
+ENHANCED: Now includes English-language oil/gas/war RSS feeds for global events
+that can impact fuel prices (OPEC decisions, Middle East conflicts, sanctions, etc.)
 """
 from __future__ import annotations
 import re
@@ -20,6 +23,7 @@ TIMEOUT = 12
 
 # Lähde-feedit + kanavanimet näytettäväksi UI:ssa
 FEEDS = [
+    # Finnish sources
     ("https://www.iltalehti.fi/rss/uutiset.xml", "Iltalehti"),
     ("https://www.iltalehti.fi/rss/talous.xml", "Iltalehti · Talous"),
     ("https://www.iltalehti.fi/rss/autot.xml", "Iltalehti · Autot"),
@@ -30,6 +34,11 @@ FEEDS = [
     ("https://www.is.fi/rss/taloussanomat.xml", "Taloussanomat"),
     ("https://www.is.fi/rss/autot.xml", "IS · Autot"),
     ("https://www.mtvuutiset.fi/api/feed/rss/uutiset_uusimmat", "MTV Uutiset"),
+    # English sources - oil/gas/energy
+    ("https://feeds.reuters.com/reuters/businessNews", "Reuters · Business"),
+    ("https://feeds.bbci.co.uk/news/business/rss.xml", "BBC · Business"),
+    ("https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera"),
+    ("https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "NYT · World"),
 ]
 
 # Avainsanat: polttoaine, raakaöljy-hinta, vero, OPEC, Brent, asemaketjut
@@ -42,10 +51,47 @@ KEYWORDS = re.compile(
     r"raakaöljy|öljyn\s+hin|öljymarkkin|"
     r"polttoaineverot|valmistevero|"
     r"\bOPEC|\bBrent\b|"
-    r"Neste\s+(Oil|Express|huoltoasem)|Teboil|huoltoasem|tankkau"
+    r"Neste\s+(Oil|Express|huoltoasem)|Teboil|huoltoasem|tankkau|"
+    # English keywords
+    r"\boil\s+price|\bcrude\s+oil|\bpetroleum|"
+    r"\bgas\s+price|\bgasoline|\bfuel\s+price|"
+    r"\bOPEC\+|Saudi\s+Arabia|Russia.*oil|Iran.*oil|"
+    r"\benergy\s+crisis|\brefinery|\bpipeline|"
+    r"Middle\s+East.*conflict|Ukraine.*war|sanctions.*oil"
     r")",
     re.IGNORECASE,
 )
+
+# Breaking news patterns - events that can cause significant price spikes
+# These trigger immediate predictor re-runs with relaxed price limits
+BREAKING_NEWS_PATTERNS = re.compile(
+    r"("
+    # Supply disruptions
+    r"OPEC.*cuts?.*production|OPEC.*emergency|OPEC\+.*agrees|"
+    r"refinery.*explosion|refinery.*fire|refinery.*shutdown|"
+    r"pipeline.*attack|pipeline.*sabotage|pipeline.*explosion|"
+    # Geopolitical escalations
+    r"war.*declared|military.*strike|invasion|attack.*oil|"
+    r"Middle\s+East.*war|Iran.*attack|Israel.*strike|"
+    r"sanctions.*Russia|embargo.*oil|blockade|"
+    # Major announcements
+    r"emergency.*meeting|crisis.*summit|price.*surge|"
+    r"supply.*crisis|shortage|rationing|"
+    # Finnish specific
+    r"valmistevero.*nousee|bensiinivero|polttoainevero.*korotus"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_text(text: str) -> str:
+    """Remove control characters and escape HTML to prevent prompt injection."""
+    # Remove control characters, keep only printable
+    text = "".join(c for c in text if c.isprintable() or c.isspace())
+    # Escape HTML entities
+    text = html.escape(text)
+    # Limit length
+    return text[:200]
 
 
 def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
@@ -67,6 +113,11 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
             pub_dt = parsedate_to_datetime(pub_raw).astimezone(timezone.utc)
         except Exception:
             pub_dt = None
+        
+        # Check if this is breaking news
+        is_breaking = bool(BREAKING_NEWS_PATTERNS.search(title) or 
+                          BREAKING_NEWS_PATTERNS.search(desc))
+        
         out.append({
             "title": title,
             "description": re.sub(r"<[^>]+>", "", desc)[:240],
@@ -77,23 +128,17 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
                 (datetime.now(timezone.utc) - pub_dt).total_seconds() / 3600.0
                 if pub_dt else None
             ),
+            "breaking": is_breaking,
         })
     return out
 
 
-def _sanitize_text(text: str) -> str:
-    """Remove control characters and escape HTML to prevent prompt injection."""
-    # Remove control characters, keep only printable
-    text = "".join(c for c in text if c.isprintable() or c.isspace())
-    # Escape HTML entities
-    text = html.escape(text)
-    # Limit length
-    return text[:200]
-
-
 def fetch_news(queries=None, max_age_days: int = 14, limit: int = 8) -> list[dict]:
-    """queries argumentti säilytetty allekirjoituksen yhteensopivuuden vuoksi
-    mutta filtteröinti tehdään aina KEYWORDS-patternilla."""
+    """queries argumentti säilytetään allekirjoituksen yhteensopivuuden vuoksi
+    mutta filtteröinti tehdään aina KEYWORDS-patternilla.
+    
+    Returns list of news items with 'breaking' field indicating breaking news.
+    """
     all_items: list[dict] = []
     for url, label in FEEDS:
         try:
@@ -122,3 +167,24 @@ def fetch_news(queries=None, max_age_days: int = 14, limit: int = 8) -> list[dic
 
     matched.sort(key=lambda x: x["age_hours"])
     return matched[:limit]
+
+
+def has_breaking_news(items: list[dict], max_age_hours: float = 6.0) -> bool:
+    """Check if there are any breaking news items within the last N hours.
+    
+    Used by tracker to determine if predictor should run with relaxed limits.
+    """
+    if not items:
+        return False
+    for item in items:
+        if item.get("breaking") and (item.get("age_hours") or 999) <= max_age_hours:
+            return True
+    return False
+
+
+def get_breaking_news_items(items: list[dict], max_age_hours: float = 6.0) -> list[dict]:
+    """Return only breaking news items within the last N hours."""
+    return [
+        item for item in items
+        if item.get("breaking") and (item.get("age_hours") or 999) <= max_age_hours
+    ]

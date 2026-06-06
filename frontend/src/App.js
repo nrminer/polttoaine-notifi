@@ -842,6 +842,12 @@ export default function App() {
                     hajonta ±{prediction.ensemble.spread.toFixed(3)} €/L
                   </span>
                 )}
+                {prediction?.ensemble?.breaking_news && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-900/40 border border-red-700/50 text-red-200 font-mono text-[10px] font-bold uppercase tracking-wider">
+                    <Activity size={10} strokeWidth={2.8} />
+                    BREAKING NEWS
+                  </span>
+                )}
               </div>
 
               {/* NEW: ConfidenceStrip below direction pill */}

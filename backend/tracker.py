@@ -374,6 +374,17 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         # Self-training: aiempien ennusteiden vs. toteumien track record
         track_rec = await learn_mod.track_record(db, fuel, region, days=30)
         
+        # Check for breaking news (within last 6 hours)
+        breaking_news_detected = news_mod.has_breaking_news(headlines, max_age_hours=6.0)
+        if breaking_news_detected:
+            logger.warning("⚠️  BREAKING NEWS detected - relaxing price clamp to ±0.15 EUR/L")
+            breaking_items = news_mod.get_breaking_news_items(headlines, max_age_hours=6.0)
+            for item in breaking_items:
+                logger.warning("   • %s (%s, %.1fh ago)", 
+                              item.get("title", "")[:80], 
+                              item.get("source", ""),
+                              item.get("age_hours", 0))
+        
         # Call predict_by_hour instead of predict_tomorrow
         hourly_result = await predict_mod.predict_by_hour(
             fuel, dates, prices,
@@ -393,6 +404,7 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
             tax_events=tax_upcoming,
             tax_step_eur_l=tax_step_eur_l,
             track_record=track_rec,
+            breaking_news=breaking_news_detected,
         )
         
         full = hourly_result["base_prediction"]
@@ -560,6 +572,7 @@ async def news_watch_loop(db, executor, fuels, predict_fn,
     loop = asyncio.get_event_loop()
     applied_sig: frozenset | None = None
     last_rerun = 0.0
+    last_breaking_sig: frozenset | None = None
 
     while True:
         try:
@@ -567,17 +580,51 @@ async def news_watch_loop(db, executor, fuels, predict_fn,
                 executor, news_mod.fetch_news, None, 14, 12
             )
             sig = _news_signature(items)
+            
+            # Check for breaking news (separate from regular news changes)
+            has_breaking = news_mod.has_breaking_news(items, max_age_hours=6.0)
+            breaking_items = news_mod.get_breaking_news_items(items, max_age_hours=6.0)
+            breaking_sig = frozenset(
+                (it.get("title") or "").strip().lower()
+                for it in breaking_items
+            ) if breaking_items else frozenset()
 
             # Ensimmäinen kierros: aseta perustaso, ÄLÄ aja uudelleen
             # (vältetään rerun-ryöppy joka uudelleenkäynnistyksessä).
             if applied_sig is None:
                 applied_sig = sig
-                logger.info("news-watch baseline set (%d headlines)", len(sig))
+                last_breaking_sig = breaking_sig
+                logger.info("news-watch baseline set (%d headlines, %d breaking)", 
+                           len(sig), len(breaking_sig))
                 await asyncio.sleep(poll_seconds)
                 continue
 
             now = asyncio.get_event_loop().time()
-            if sig != applied_sig and (now - last_rerun) >= min_rerun_seconds:
+            
+            # PRIORITY 1: Breaking news triggers immediate rerun (ignores throttle)
+            if has_breaking and breaking_sig != last_breaking_sig:
+                new_breaking = len(breaking_sig - (last_breaking_sig or frozenset()))
+                logger.warning("🚨 BREAKING NEWS detected (%d new) → immediate prediction rerun!", 
+                              new_breaking)
+                for item in breaking_items:
+                    if (item.get("title") or "").strip().lower() not in (last_breaking_sig or frozenset()):
+                        logger.warning("   • %s (%s)", 
+                                      item.get("title", "")[:100], 
+                                      item.get("source", ""))
+                
+                for fuel in fuels:
+                    try:
+                        await predict_fn(fuel)
+                        logger.info("news-watch reran prediction for %s (BREAKING NEWS)", fuel)
+                    except Exception as e:
+                        logger.warning("news-watch predict failed for %s: %s", fuel, e)
+                
+                applied_sig = sig
+                last_breaking_sig = breaking_sig
+                last_rerun = now
+                
+            # PRIORITY 2: Regular news change (throttled)
+            elif sig != applied_sig and (now - last_rerun) >= min_rerun_seconds:
                 new_n = len(sig - applied_sig)
                 logger.info("news changed (%d new headlines) → rerun AI/predict",
                             new_n)
@@ -589,6 +636,7 @@ async def news_watch_loop(db, executor, fuels, predict_fn,
                         logger.warning("news-watch predict failed for %s: %s",
                                         fuel, e)
                 applied_sig = sig
+                last_breaking_sig = breaking_sig
                 last_rerun = now
             elif sig != applied_sig:
                 logger.info("news changed but throttled (min %ds gap) — "

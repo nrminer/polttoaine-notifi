@@ -650,6 +650,11 @@ async def run_prediction(req: PredictionRequest, request: Request):
     # (signed bias per menetelmä, viim. rivit AI:n näkyväksi).
     track_record = await learn_mod.track_record(db, fuel, region, days=30)
 
+    # Check for breaking news (within last 6 hours)
+    breaking_news_detected = news_mod.has_breaking_news(headlines, max_age_hours=6.0)
+    if breaking_news_detected:
+        logger.warning("⚠️  BREAKING NEWS detected - relaxing price clamp to ±0.15 EUR/L")
+
     result = await predict_tomorrow(
         fuel, dates, prices, brent_val, fx_val,
         live_today_price=live_anchor,
@@ -665,6 +670,7 @@ async def run_prediction(req: PredictionRequest, request: Request):
         tax_events=tax_upcoming,
         tax_step_eur_l=tax_step_eur_l,
         track_record=track_record,
+        breaking_news=breaking_news_detected,
     )
 
     # data source provenance — vain live-kerätty data
