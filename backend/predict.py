@@ -290,6 +290,12 @@ def exp_smoothing(prices: list[float], alpha: float = 0.4, beta: float = 0.2,
         if len(dt) >= 4:
             seg = [x[1] for x in dt]
             tag = ", päivätason häntä"
+    
+    # Safety check: ensure seg has at least 2 elements
+    if len(seg) < 2:
+        return {"value": None, "confidence_low": None, "confidence_high": None,
+                "explanation": "Liian vähän dataa eksponentiaaliseen tasoitukseen."}
+    
     level = seg[0]
     trend = seg[1] - seg[0]
     errors = []
@@ -1149,7 +1155,8 @@ async def predict_by_hour(fuel: str,
         spread = (base_high - base_low) / 2
         hourly_spread = spread * 1.15  # 15% wider for intra-day uncertainty
         
-        hourly[hour] = {
+        # MongoDB requires string keys
+        hourly[str(hour)] = {
             "value": round(val, 4),
             "confidence_low": round(val - hourly_spread, 4),
             "confidence_high": round(val + hourly_spread, 4),
@@ -1166,7 +1173,7 @@ def find_best_window(hourly_predictions: dict, current_price: float | None = Non
     """Find the hour with minimum predicted price.
     
     Args:
-        hourly_predictions: {hour: {"value": float, ...}}
+        hourly_predictions: {hour_str: {"value": float, ...}} (string keys from MongoDB)
         current_price: current live price for savings calculation
     
     Returns:
@@ -1188,7 +1195,13 @@ def find_best_window(hourly_predictions: dict, current_price: float | None = Non
     # Find hour with minimum value
     best_hour = None
     best_price = None
-    for hour, pred in hourly_predictions.items():
+    for hour_key, pred in hourly_predictions.items():
+        # Convert string key back to int for comparisons
+        try:
+            hour = int(hour_key)
+        except (ValueError, TypeError):
+            continue
+        
         val = pred.get("value")
         if val is not None:
             if best_price is None or val < best_price:
