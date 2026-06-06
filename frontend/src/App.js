@@ -43,7 +43,6 @@ import {
   seedHistory,
 } from "./lib/api";
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
-import { formatModelName } from "./lib/modelName";
 import NewsCard from "./components/NewsCard";
 import { useRealtimeUpdates } from "./hooks/useRealtimeUpdates";
 
@@ -414,7 +413,7 @@ export default function App() {
     }
   }, [fuel, loadPrediction, loadTracking, loadCurrent, loadHistory, loadAccuracy]);
 
-  const { isConnected } = useRealtimeUpdates(handleRealtimeUpdate);
+  useRealtimeUpdates(handleRealtimeUpdate);
 
   useEffect(() => {
     (async () => {

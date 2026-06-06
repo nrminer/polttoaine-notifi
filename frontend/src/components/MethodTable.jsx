@@ -1,7 +1,7 @@
 import React from "react";
 import { Waves, Activity, TrendingUp, MessageSquareText, Calculator, Anchor } from "lucide-react";
 import { Card, CardLabel, DeltaBadge } from "./Card";
-import { fmtPrice, fmtDelta } from "../lib/utils";
+import { fmtPrice } from "../lib/utils";
 import { formatModelName } from "../lib/modelName";
 
 const METHOD_COLORS = {

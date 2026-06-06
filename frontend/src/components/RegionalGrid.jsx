@@ -30,7 +30,6 @@ function FreshBadge({ ageHours }) {
 }
 
 export default function RegionalGrid({ data, fuel, cityData }) {
-  const rows = data?.rows || [];
   const maxAge = data?.max_age_hours || 24;
 
   const [sortDir, setSortDir] = useState("asc");
@@ -53,6 +52,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
   const allSelected = selected.size === ALL_CITIES.length;
 
   const enriched = useMemo(() => {
+    const rows = data?.rows || [];
     return rows.map((row) => ({
       ...row,
       mean: cityData?.[row.region]?.mean ?? null,
@@ -60,7 +60,7 @@ export default function RegionalGrid({ data, fuel, cityData }) {
       sources: cityData?.[row.region]?.sources ?? null, // NEW: multi-source data
       confidence_data: cityData?.[row.region]?.confidence_data ?? null, // NEW: confidence metadata
     }));
-  }, [rows, cityData]);
+  }, [data?.rows, cityData]);
 
   const filtered = useMemo(() => {
     let r = enriched.filter((row) => selected.has(row.region));
