@@ -18,7 +18,6 @@ Status: experimental helper. This module is not currently wired into
 run_prediction() or predict_tomorrow(), so API responses and UI labels must not
 claim traffic-adjusted predictions until that integration exists.
 """
-from __future__ import annotations
 import requests
 from datetime import datetime, timezone, timedelta
 from typing import List, Tuple

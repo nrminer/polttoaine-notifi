@@ -24,7 +24,6 @@ weather-adjusted predictions until that integration exists.
 
 Error handling: returns neutral values (None / 1.0) on API failure.
 """
-from __future__ import annotations
 import logging
 import requests
 from datetime import datetime, timedelta, timezone

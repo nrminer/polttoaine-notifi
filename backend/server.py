@@ -36,6 +36,7 @@ import notify as notify_mod
 import tax_events as tax_events_mod
 import learn as learn_mod
 from predict import predict_tomorrow
+from validation import validate_scraped_data, PRICE_MIN_SANITY, PRICE_MAX_SANITY
 
 # ---------------- konfiguraatio ----------------
 
@@ -56,6 +57,14 @@ SUPPORTED_REGIONS = [
 ]
 # Set jotka kuuluvat suodatukseen (ei Suomi-aggregaatti)
 ALLOWED_CITIES = {r for r in SUPPORTED_REGIONS if r != "Suomi"}
+
+# API Configuration Constants
+CACHE_TTL_REGIONAL_SECONDS = 90  # Regional prices cache duration
+CACHE_TTL_CURRENT_PRICES_SECONDS = 300  # Current prices cache (5 minutes)
+MAX_TRACKER_ROWS = 400  # Maximum historical tracker rows to fetch
+MAX_BACKFILL_POINTS = 1000  # Maximum points per backfill request
+FACTOR_CHANGE_DAYS = 5  # Days for Brent/FX percentage change calculation
+HISTORY_BUFFER_DAYS = 5  # Extra days buffer when fetching history
 
 executor = ThreadPoolExecutor(max_workers=12)
 
@@ -91,6 +100,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS - tightened to Vercel origin (can be overridden via env)
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "https://polttoaine-notifi.vercel.app").split(",")
+
+# SECURITY: Reject wildcard CORS in production
+if "*" in CORS_ORIGINS and os.environ.get("ENV", "production") == "production":
+    raise ValueError("CORS wildcard (*) not allowed in production environment")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -102,52 +116,17 @@ app.add_middleware(
 
 # ---------------- skrapaus-apurit ----------------
 
-# Realistic Finnish fuel price bounds (€/L). Anything outside is almost certainly
-# a parsing error or stale junk from a scraper.
-PRICE_MIN_SANITY = 1.10
-PRICE_MAX_SANITY = 3.50
-# Per-batch outlier threshold: drop rows whose price deviates more than this
-# fraction from the batch median.
-PRICE_MEDIAN_DEV = 0.25
-
+# NOTE: Price validation constants now imported from validation.py
+# PRICE_MIN_SANITY = 1.10
+# PRICE_MAX_SANITY = 3.50
 
 def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
-    """Drop obviously-wrong prices.
-    1. Hard bounds (1.10 .. 3.50 EUR/L)
-    2. IQR-based outlier detection (1.5×IQR rule)
+    """Drop obviously-wrong prices using shared validation module.
+    
+    DEPRECATED: Use validation.validate_scraped_data() directly.
+    This wrapper maintained for backward compatibility.
     """
-    if not rows:
-        return rows
-    kept_hard: list[dict] = []
-    for r in rows:
-        p = r.get("price")
-        if not isinstance(p, (int, float)):
-            continue
-        if p < PRICE_MIN_SANITY or p > PRICE_MAX_SANITY:
-            logger.warning("sanity[%s] drop hard %.3f at %s/%s",
-                           label, p, r.get("city"), r.get("station"))
-            continue
-        kept_hard.append(r)
-    if len(kept_hard) < 3:
-        return kept_hard
-    # IQR-based outlier detection
-    prices = sorted(r["price"] for r in kept_hard)
-    n = len(prices)
-    q1_idx = n // 4
-    q3_idx = (3 * n) // 4
-    q1 = prices[q1_idx]
-    q3 = prices[q3_idx]
-    iqr = q3 - q1
-    lower = q1 - 1.5 * iqr
-    upper = q3 + 1.5 * iqr
-    kept = []
-    for r in kept_hard:
-        if lower <= r["price"] <= upper:
-            kept.append(r)
-        else:
-            logger.warning("sanity[%s] drop IQR %.3f (bounds [%.3f, %.3f]) at %s",
-                           label, r["price"], lower, upper, r.get("station"))
-    return kept
+    return validate_scraped_data(rows, source=label)
 
 
 async def _scrape_all(fuel: str) -> list[dict]:
@@ -196,7 +175,15 @@ async def _scrape_all(fuel: str) -> list[dict]:
 
 
 def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
-    """{ city: { count, min, mean, station_min } } — vain ALLOWED_CITIES."""
+    """Aggregate price data by city for ALLOWED_CITIES only.
+    
+    Args:
+        rows: List of scraped price records with 'city' and 'price' fields
+        
+    Returns:
+        Dict mapping city name to aggregated stats:
+        {city: {count, min, mean, station_min, address_min}}
+    """
     by_city: dict[str, list[dict]] = {}
     for r in rows:
         c = r.get("city") or "?"
@@ -218,12 +205,26 @@ def _city_aggregate(rows: list[dict]) -> dict[str, dict]:
 
 
 def _filter_to_allowed(rows: list[dict]) -> list[dict]:
-    """Suodata kaikki rivit ALLOWED_CITIES -joukkoon."""
+    """Filter scraped rows to only include ALLOWED_CITIES.
+    
+    Args:
+        rows: List of scraped price records
+        
+    Returns:
+        Filtered list containing only rows from allowed cities
+    """
     return [r for r in rows if (r.get("city") or "") in ALLOWED_CITIES]
 
 
 def _national_average(rows: list[dict]) -> Optional[float]:
-    """Otoskeskiarvo, suodatettu ALLOWED_CITIES -kaupunkeihin."""
+    """Calculate national average price from allowed cities only.
+    
+    Args:
+        rows: List of scraped price records
+        
+    Returns:
+        Average price across all allowed cities, or None if no valid prices
+    """
     rows = _filter_to_allowed(rows)
     prices = [r["price"] for r in rows if r.get("price")]
     if not prices:
@@ -482,7 +483,7 @@ async def history(fuel: str = Query("95E10"),
         {"fuel": fuel, "region": region, "date": {"$gte": cutoff}},
         {"_id": 0},
     ).sort("date", 1)
-    rows = await cur.to_list(length=days + 5)
+    rows = await cur.to_list(length=days + HISTORY_BUFFER_DAYS)
     return {"fuel": fuel, "region": region, "days": days, "rows": rows}
 
 
@@ -581,7 +582,7 @@ async def run_prediction(req: PredictionRequest, request: Request):
     tracker_rows = await db.daily_tracker.find(
         {"fuel": fuel, "region": "Suomi"},
         {"_id": 0, "date": 1, "hour": 1, "actual_cheapest": 1},
-    ).sort([("date", 1), ("hour", 1)]).to_list(length=400)
+    ).sort([("date", 1), ("hour", 1)]).to_list(length=MAX_TRACKER_ROWS)
     by_date: dict[str, float] = {}
     for r in tracker_rows:
         if r.get("actual_cheapest") is None:
@@ -625,12 +626,12 @@ async def run_prediction(req: PredictionRequest, request: Request):
     )
     brent_val = factors_mod.latest_value(brent_series)
     fx_val = factors_mod.latest_value(fx_series)
-    brent_chg = factors_mod.change_frac(brent_series, 5)
-    fx_chg = factors_mod.change_frac(fx_series, 5)
+    brent_chg = factors_mod.change_frac(brent_series, FACTOR_CHANGE_DAYS)
+    fx_chg = factors_mod.change_frac(fx_series, FACTOR_CHANGE_DAYS)
 
     product_series, product_label = product_pair
     product_val = factors_mod.latest_value(product_series)
-    product_chg = factors_mod.change_frac(product_series, 5)
+    product_chg = factors_mod.change_frac(product_series, FACTOR_CHANGE_DAYS)
     crack_val = factors_mod.crack_spread_eur_per_l(product_val, brent_val, fx_val)
 
     # Tunnetut veromuutokset — askel huomiselle (jos osuu väliin), plus
@@ -848,7 +849,7 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     today_short = f"{today_d.day}.{today_d.month:02d}."
     yesterday_short = f"{(today_d - timedelta(days=1)).day}.{(today_d - timedelta(days=1)).month:02d}."
     cached = _regional_cache.get(cache_key)
-    if cached and (now_ts - cached["ts"]).total_seconds() < 90:
+    if cached and (now_ts - cached["ts"]).total_seconds() < CACHE_TTL_REGIONAL_SECONDS:
         return cached["payload"]
 
     # tankille.fi tarjoaa per-kaupunki sivut vain näille
@@ -997,7 +998,7 @@ async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
         {"fuel": fuel, "region": region, "target_date": {"$gte": cutoff}},
         {"_id": 0},
     ).sort("target_date", 1)
-    preds = await cur.to_list(length=days + 5)
+    preds = await cur.to_list(length=days + HISTORY_BUFFER_DAYS)
 
     # hae toteutuneet
     method_errors: dict[str, list[float]] = {
@@ -1133,6 +1134,7 @@ def _check_admin(password: str) -> None:
 
 
 @app.post("/api/admin/run")
+@limiter.limit("10/minute")  # Rate limit: max 10 admin operations per minute
 async def admin_run(req: AdminRequest,
                     request: Request,
                     x_admin_token: Optional[str] = Header(default=None)):
@@ -1245,7 +1247,10 @@ class TrackBackfillPoint(BaseModel):
 
 
 @app.post("/api/track/backfill")
-async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(False),
+@limiter.limit("5/hour")  # Rate limit: max 5 backfill operations per hour (expensive operation)
+async def track_backfill(points: list[TrackBackfillPoint], 
+                         request: Request,
+                         clear: bool = Query(False),
                          rerun_prediction: bool = Query(True),
                          x_admin_token: Optional[str] = Header(default=None)):
     """Bulk-upsert historical daily_tracker rows from external sources
@@ -1254,8 +1259,8 @@ async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(F
     If clear=true, wipe daily_tracker first (use to reset bad / fake data).
     If rerun_prediction=true (default), automatically rerun predictions for affected fuels."""
     _check_admin(x_admin_token or "")
-    if len(points) > 1000:
-        raise HTTPException(400, "max 1000 points per request")
+    if len(points) > MAX_BACKFILL_POINTS:
+        raise HTTPException(400, f"max {MAX_BACKFILL_POINTS} points per request")
     cleared = 0
     if clear:
         res = await db.daily_tracker.delete_many({})
@@ -1268,6 +1273,16 @@ async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(F
         if p.fuel not in FUELS:
             skipped.append({"date": p.date, "fuel": p.fuel, "reason": "unknown fuel"})
             continue
+        
+        # SECURITY: Validate backfilled prices are within realistic bounds
+        if not (PRICE_MIN_SANITY <= p.actual_cheapest <= PRICE_MAX_SANITY):
+            skipped.append({
+                "date": p.date, 
+                "fuel": p.fuel, 
+                "reason": f"price {p.actual_cheapest} outside bounds [{PRICE_MIN_SANITY}, {PRICE_MAX_SANITY}]"
+            })
+            continue
+        
         doc = {
             "date": p.date,
             "hour": p.hour,
@@ -1346,7 +1361,7 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
         {"fuel": fuel, "date": {"$gte": cutoff}},
         {"_id": 0, "prediction_full": 0},
     ).sort([("date", 1), ("hour", 1)])
-    rows = await cur.to_list(length=days * 2 + 5)
+    rows = await cur.to_list(length=days * 2 + HISTORY_BUFFER_DAYS)
     # tarkkuusyhteenveto
     errs = [
         abs(r["predicted_cheapest_for_today"] - r["actual_cheapest"])
@@ -1379,7 +1394,9 @@ class FixCaptureRequest(BaseModel):
 
 
 @app.post("/api/admin/fix-capture")
+@limiter.limit("20/minute")  # Rate limit: max 20 fixes per minute
 async def fix_capture(req: FixCaptureRequest,
+                     request: Request,
                      rerun_prediction: bool = Query(True),
                      x_admin_token: Optional[str] = Header(default=None)):
     """Fix a bad capture by replacing the price with a corrected value.
