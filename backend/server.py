@@ -1469,6 +1469,63 @@ async def fix_capture(req: FixCaptureRequest,
     }
 
 
+@app.post("/api/admin/reboot")
+async def reboot_system(x_admin_token: Optional[str] = Header(default=None)):
+    """Reboot system - clear all collections except graph data.
+    
+    Clears:
+    - snapshots
+    - history
+    - daily_tracker
+    - predictions
+    - price_observations
+    
+    Preserves:
+    - graph_nodes
+    - graph_edges
+    - graph_metadata
+    
+    System will start fresh but graph data remains intact.
+    """
+    _check_admin(x_admin_token or "")
+    
+    collections_to_clear = [
+        'snapshots',
+        'history',
+        'daily_tracker',
+        'predictions',
+        'price_observations',
+    ]
+    
+    # Get counts before clearing
+    before_counts = {}
+    for coll_name in collections_to_clear:
+        before_counts[coll_name] = await db[coll_name].count_documents({})
+    
+    # Clear collections
+    cleared_counts = {}
+    for coll_name in collections_to_clear:
+        result = await db[coll_name].delete_many({})
+        cleared_counts[coll_name] = result.deleted_count
+        logger.warning("REBOOT: Cleared %s - %d documents", coll_name, result.deleted_count)
+    
+    # Notify subscribers
+    await notify_update("reboot", {
+        "cleared": cleared_counts,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+    
+    return {
+        "ok": True,
+        "before_counts": before_counts,
+        "cleared_counts": cleared_counts,
+        "total_cleared": sum(cleared_counts.values()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "preserved": ["graph_nodes", "graph_edges", "graph_metadata"],
+        "message": "System rebooted. Data cleared. Graph preserved. Next capture will start fresh."
+    }
+
+
 @app.on_event("startup")
 async def on_startup():
     # indeksit
