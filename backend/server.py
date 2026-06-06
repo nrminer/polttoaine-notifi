@@ -21,11 +21,13 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import json
 
 from scrapers import polttoaine, tankille
 import factors as factors_mod
@@ -60,6 +62,26 @@ executor = ThreadPoolExecutor(max_workers=12)
 
 # in-memory cache for the /api/regional endpoint (90s TTL)
 _regional_cache: dict = {}
+
+# Real-time update notification system
+_update_subscribers: set = set()
+
+async def notify_update(event_type: str, data: dict):
+    """Notify all SSE subscribers of a data update."""
+    if not _update_subscribers:
+        return
+    
+    message = json.dumps({"type": event_type, "data": data})
+    dead_subscribers = set()
+    
+    for queue in _update_subscribers:
+        try:
+            await queue.put(message)
+        except Exception:
+            dead_subscribers.add(queue)
+    
+    # Clean up dead connections
+    _update_subscribers.difference_update(dead_subscribers)
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -463,6 +485,52 @@ async def history(fuel: str = Query("95E10"),
     ).sort("date", 1)
     rows = await cur.to_list(length=days + 5)
     return {"fuel": fuel, "region": region, "days": days, "rows": rows}
+
+
+@app.get("/api/updates/stream")
+async def updates_stream(request: Request):
+    """Server-Sent Events endpoint for real-time data updates.
+    
+    Streams events when:
+    - New captures are stored
+    - Predictions are updated
+    - Prices are fixed/corrected
+    
+    Event format: {"type": "capture|prediction|correction", "data": {...}}
+    """
+    async def event_generator():
+        queue = asyncio.Queue()
+        _update_subscribers.add(queue)
+        
+        try:
+            # Send initial connection confirmation
+            yield f"data: {json.dumps({'type': 'connected', 'data': {'timestamp': datetime.now(timezone.utc).isoformat()}})}\n\n"
+            
+            # Keep connection alive and send updates
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
+                
+                try:
+                    # Wait for updates with timeout for keep-alive
+                    message = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield f"data: {message}\n\n"
+                except asyncio.TimeoutError:
+                    # Send keep-alive ping every 30 seconds
+                    yield f": ping\n\n"
+        finally:
+            _update_subscribers.discard(queue)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 @app.get("/api/factors")
@@ -1240,6 +1308,14 @@ async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(F
                     "ensemble": (pred_result.get("ensemble") or {}).get("value"),
                 })
                 logger.info("Auto-reran prediction for %s/%s after backfill", fuel, region)
+                
+                # Notify real-time subscribers
+                await notify_update("prediction", {
+                    "fuel": fuel,
+                    "region": region,
+                    "target_date": pred_result.get("target_date"),
+                    "ensemble": (pred_result.get("ensemble") or {}).get("value"),
+                })
             except Exception as e:
                 predictions_rerun.append({
                     "fuel": fuel,
@@ -1247,6 +1323,14 @@ async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(F
                     "error": f"{type(e).__name__}: {str(e)[:200]}"
                 })
                 logger.warning("Failed to rerun prediction for %s/%s: %s", fuel, region, e)
+    
+    # Notify about the correction
+    if updated > 0 or inserted > 0:
+        await notify_update("correction", {
+            "inserted": inserted,
+            "updated": updated,
+            "fuels": [{"fuel": f, "region": r} for f, r in affected_fuels]
+        })
     
     return {"cleared": cleared, "inserted": inserted, "updated": updated,
             "skipped": skipped, "total": len(points),
@@ -1350,9 +1434,28 @@ async def fix_capture(req: FixCaptureRequest,
                 "ensemble": (pred.get("ensemble") or {}).get("value"),
             }
             logger.info("Auto-reran prediction for %s/%s after fixing capture", req.fuel, req.region)
+            
+            # Notify real-time subscribers
+            await notify_update("prediction", {
+                "fuel": req.fuel,
+                "region": req.region,
+                "target_date": pred.get("target_date"),
+                "ensemble": (pred.get("ensemble") or {}).get("value"),
+            })
         except Exception as e:
             prediction_result = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
             logger.warning("Failed to rerun prediction for %s/%s: %s", req.fuel, req.region, e)
+    
+    # Notify about the correction
+    if result.modified_count > 0:
+        await notify_update("correction", {
+            "date": req.date,
+            "hour": req.hour,
+            "fuel": req.fuel,
+            "region": req.region,
+            "original_price": original_price,
+            "corrected_price": req.corrected_price,
+        })
     
     return {
         "ok": result.modified_count > 0,
