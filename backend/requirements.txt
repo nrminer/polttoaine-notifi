@@ -8,6 +8,6 @@ python-dotenv==1.0.1
 requests==2.32.3
 beautifulsoup4==4.12.3
 numpy==1.26.4
-emergentintegrations==1.0.0
+emergentintegrations==0.2.0
 defusedxml==0.7.1
 slowapi==0.1.9
