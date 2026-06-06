@@ -1178,11 +1178,13 @@ class TrackBackfillPoint(BaseModel):
 
 @app.post("/api/track/backfill")
 async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(False),
+                         rerun_prediction: bool = Query(True),
                          x_admin_token: Optional[str] = Header(default=None)):
     """Bulk-upsert historical daily_tracker rows from external sources
     (e.g. previous version's notification archive). Idempotent on
     (date, hour, fuel, region).
-    If clear=true, wipe daily_tracker first (use to reset bad / fake data)."""
+    If clear=true, wipe daily_tracker first (use to reset bad / fake data).
+    If rerun_prediction=true (default), automatically rerun predictions for affected fuels."""
     _check_admin(x_admin_token or "")
     if len(points) > 1000:
         raise HTTPException(400, "max 1000 points per request")
@@ -1193,6 +1195,7 @@ async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(F
     inserted = 0
     updated = 0
     skipped = []
+    affected_fuels = set()
     for p in points:
         if p.fuel not in FUELS:
             skipped.append({"date": p.date, "fuel": p.fuel, "reason": "unknown fuel"})
@@ -1220,8 +1223,34 @@ async def track_backfill(points: list[TrackBackfillPoint], clear: bool = Query(F
             inserted += 1
         else:
             updated += 1
+        affected_fuels.add((p.fuel, p.region))
+    
+    # Automatically rerun predictions for affected fuels
+    predictions_rerun = []
+    if rerun_prediction and (inserted > 0 or updated > 0):
+        for fuel, region in affected_fuels:
+            try:
+                pred_result = await run_prediction(
+                    PredictionRequest(fuel=fuel, region=region)
+                )
+                predictions_rerun.append({
+                    "fuel": fuel,
+                    "region": region,
+                    "target_date": pred_result.get("target_date"),
+                    "ensemble": (pred_result.get("ensemble") or {}).get("value"),
+                })
+                logger.info("Auto-reran prediction for %s/%s after backfill", fuel, region)
+            except Exception as e:
+                predictions_rerun.append({
+                    "fuel": fuel,
+                    "region": region,
+                    "error": f"{type(e).__name__}: {str(e)[:200]}"
+                })
+                logger.warning("Failed to rerun prediction for %s/%s: %s", fuel, region, e)
+    
     return {"cleared": cleared, "inserted": inserted, "updated": updated,
-            "skipped": skipped, "total": len(points)}
+            "skipped": skipped, "total": len(points),
+            "predictions_rerun": predictions_rerun if rerun_prediction else None}
 
 
 @app.get("/api/track/history")
@@ -1267,9 +1296,11 @@ class FixCaptureRequest(BaseModel):
 
 @app.post("/api/admin/fix-capture")
 async def fix_capture(req: FixCaptureRequest,
+                     rerun_prediction: bool = Query(True),
                      x_admin_token: Optional[str] = Header(default=None)):
     """Fix a bad capture by replacing the price with a corrected value.
-    Stores the original scraped price for audit trail."""
+    Stores the original scraped price for audit trail.
+    If rerun_prediction=true (default), automatically reruns prediction for the affected fuel."""
     _check_admin(x_admin_token or "")
     
     if req.fuel not in FUELS:
@@ -1309,6 +1340,20 @@ async def fix_capture(req: FixCaptureRequest,
         }
     )
     
+    # Automatically rerun prediction
+    prediction_result = None
+    if rerun_prediction and result.modified_count > 0:
+        try:
+            pred = await run_prediction(PredictionRequest(fuel=req.fuel, region=req.region))
+            prediction_result = {
+                "target_date": pred.get("target_date"),
+                "ensemble": (pred.get("ensemble") or {}).get("value"),
+            }
+            logger.info("Auto-reran prediction for %s/%s after fixing capture", req.fuel, req.region)
+        except Exception as e:
+            prediction_result = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+            logger.warning("Failed to rerun prediction for %s/%s: %s", req.fuel, req.region, e)
+    
     return {
         "ok": result.modified_count > 0,
         "date": req.date,
@@ -1316,7 +1361,8 @@ async def fix_capture(req: FixCaptureRequest,
         "fuel": req.fuel,
         "original_price": original_price,
         "corrected_price": req.corrected_price,
-        "reason": req.reason
+        "reason": req.reason,
+        "prediction_rerun": prediction_result if rerun_prediction else None
     }
 
 
