@@ -1,0 +1,29 @@
+{
+  "description": "Admin command to trigger full reboot (capture + predict + notify)",
+  "endpoint": "https://polttoaine-notifi-production-fc06.up.railway.app/api/admin/run",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Admin-Token": "syDOHgw2R5HvzHxG1NPHIhIYSWy9U6zvUTqxt5Jk1U2UOwrr"
+  },
+  "body": {
+    "password": "syDOHgw2R5HvzHxG1NPHIhIYSWy9U6zvUTqxt5Jk1U2UOwrr",
+    "action": "all",
+    "fuel": "all",
+    "notify": true
+  },
+  "curl_command": "curl -X POST \"https://polttoaine-notifi-production-fc06.up.railway.app/api/admin/run\" -H \"Content-Type: application/json\" -H \"X-Admin-Token: syDOHgw2R5HvzHxG1NPHIhIYSWy9U6zvUTqxt5Jk1U2UOwrr\" -d '{\"password\":\"syDOHgw2R5HvzHxG1NPHIhIYSWy9U6zvUTqxt5Jk1U2UOwrr\",\"action\":\"all\",\"fuel\":\"all\",\"notify\":true}'",
+  "powershell_command": "Invoke-WebRequest -Uri \"https://polttoaine-notifi-production-fc06.up.railway.app/api/admin/run\" -Method POST -Headers @{\"Content-Type\"=\"application/json\"; \"X-Admin-Token\"=\"syDOHgw2R5HvzHxG1NPHIhIYSWy9U6zvUTqxt5Jk1U2UOwrr\"} -Body '{\"password\":\"syDOHgw2R5HvzHxG1NPHIhIYSWy9U6zvUTqxt5Jk1U2UOwrr\",\"action\":\"all\",\"fuel\":\"all\",\"notify\":true}'",
+  "actions": {
+    "all": "Capture both fuels + run predictions + send notification",
+    "capture": "Capture prices only (no prediction)",
+    "predict": "Run prediction only (no capture)",
+    "notify": "Send notification only",
+    "ping": "Health check"
+  },
+  "notes": [
+    "The 'all' action captures both 95E10 and diesel, runs fresh predictions, and sends ntfy notification",
+    "Use this to manually trigger a full system update outside scheduled times (14:00/21:00 Helsinki)",
+    "Response includes captured prices and prediction results"
+  ]
+}
