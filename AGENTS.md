@@ -83,8 +83,10 @@ The backend has NO frontend assets — pure API.
 │   ├── notify.py          … ntfy.sh publisher (multi-fuel summary)
 │   ├── factors.py         … Brent + EUR/USD via Yahoo Finance (+ change_frac)
 │   ├── news.py            … RSS aggregator (Iltalehti, HS, IS, MTV)
+│   ├── price_verification.py … safety system: verify prices before storing (historical deviation, hard bounds, cross-fuel checks)
 │   ├── capture_now.py     … standalone: manual capture NOW → daily_tracker
 │   ├── purge_captures.py  … standalone: delete daily_tracker rows (dry-run unless --yes)
+│   ├── fix_diesel_via_api.py … standalone: fix bad capture via /api/admin/fix-capture endpoint
 │   ├── scrapers/
 │   │   ├── polttoaine.py  … polttoaine.net scraper (top-N cheapest)
 │   │   └── tankille.py    … tankille.fi scraper (per-city pages) — PRIMARY source
@@ -165,6 +167,7 @@ Grouped logically. All routes are prefixed `/api`.
 
 ### Admin (password-protected — Postman/curl)
 | POST | `/api/admin/run` | Body `{password, action, fuel, region, hour, notify}` (or `X-Admin-Token` header). Auth = env `ADMIN_TOKEN` (constant-time; 503 if unset, 401 on mismatch). `action`: `ping`/`capture`/`predict`/`all`/`notify`. `predict`/`all` write `predictions` → fixes a stale UI. |
+| POST | `/api/admin/fix-capture` | Body `{date, hour, fuel, region, corrected_price, reason}` + `X-Admin-Token` header. Manually fix a bad capture by replacing the price. Stores original price for audit trail. |
 
 ### Seed (DISABLED — no-op)
 | POST | `/api/seed` | Historical/synthetic seeding **disabled** (Tilastokeskus removed: too old). Now only **purges** legacy modeled rows from `history`; never writes data. `days`/`force` are no-ops. |
@@ -248,12 +251,51 @@ Model returns strict JSON; the function strips markdown fences, finds the first
 If Opus 4.7 fails (rate-limit / budget / network), it falls through to 4.6,
 then Sonnet 4.5, then Haiku 4.5. Each gets 3 attempts.
 
-## 8. Scrapers
+## 8. Scrapers & Price Verification
+
+### Scrapers
 
 Both scrapers return a list of dicts with the same shape:
 ```py
 {"city": "Helsinki", "station": "Neste Oil Express - Viikki",
  "address": "Viikinportti 1", "price": 1.922, "fuel": "95E10",
+ "source": "polttoaine.net" | "tankille.fi", "age_hours": 9.0, ...}
+```
+
+**Sanity filter** (in `server.py` `_sanity_filter` and `notify.py`):
+- Hard bounds: 1.10 €/L ≤ price ≤ 3.50 €/L (handles parsing errors)
+- IQR-based outlier detection: drop rows where price is outside 1.5×IQR range
+- Applied independently to each scraper batch before merging
+
+**Source priority** (`server.py:_scrape_all`, `notify.py:_format_city_block`):
+- `tankille.fi` is PRIMARY (user preference; tested as more accurate/fresh)
+- `polttoaine.net` is SECONDARY (cross-check; shown in "Lähteet:" line)
+- If tankille >10% higher than polttoaine for the same city → fall back to polttoaine
+
+### Price Verification Safety System
+
+**NEW**: Every capture is verified before storage (`price_verification.py` + `tracker.py:capture_daily`):
+
+**Verification checks** (run in order):
+1. **Hard bounds**: 1.10 - 3.50 EUR/L
+2. **Historical deviation**: >20% from recent 10-day average → REJECT
+3. **Daily change limit**: >0.15 EUR/L change from previous day → REJECT
+4. **Cross-fuel check**: diesel vs 95E10 must differ by -0.30 to +0.30 EUR/L
+
+**When verification fails**:
+- Error logged with full context (scraped price, station, historical avg)
+- Suggested alternative used (from historical context) OR last known good price
+- Metadata stored: `verification_override: true`, `original_scraped_price: 0.543`
+- If no fallback: `verification_failed: true`, `actual_cheapest: null`
+
+**Manual fix endpoint** (`/api/admin/fix-capture`):
+```bash
+curl -X POST "$BACKEND/api/admin/fix-capture" \
+  -H "X-Admin-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-06","hour":14,"fuel":"diesel","corrected_price":2.0,"reason":"outlier"}'
+```
+
+See `PRICE_VERIFICATION.md` for full documentation.
  "source": "polttoaine.net" | "tankille.fi", "age_hours": 9.0, ...}
 ```
 

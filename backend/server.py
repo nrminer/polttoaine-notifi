@@ -1256,6 +1256,70 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
     return {"fuel": fuel, "days": days, "rows": rows, "summary": summary}
 
 
+class FixCaptureRequest(BaseModel):
+    date: str  # ISO date YYYY-MM-DD
+    hour: int
+    fuel: str
+    region: str = "Suomi"
+    corrected_price: float
+    reason: str = "Manual correction"
+
+
+@app.post("/api/admin/fix-capture")
+async def fix_capture(req: FixCaptureRequest,
+                     x_admin_token: Optional[str] = Header(default=None)):
+    """Fix a bad capture by replacing the price with a corrected value.
+    Stores the original scraped price for audit trail."""
+    _check_admin(x_admin_token or "")
+    
+    if req.fuel not in FUELS:
+        raise HTTPException(400, f"unknown fuel {req.fuel}")
+    if req.region not in SUPPORTED_REGIONS:
+        raise HTTPException(400, f"unknown region {req.region}")
+    
+    # Find the existing capture
+    existing = await db.daily_tracker.find_one({
+        "date": req.date,
+        "hour": req.hour,
+        "fuel": req.fuel,
+        "region": req.region
+    })
+    
+    if not existing:
+        raise HTTPException(404, f"No capture found for {req.fuel} on {req.date} @{req.hour:02d}h")
+    
+    original_price = existing.get("actual_cheapest")
+    
+    # Update with corrected price
+    result = await db.daily_tracker.update_one(
+        {
+            "date": req.date,
+            "hour": req.hour,
+            "fuel": req.fuel,
+            "region": req.region
+        },
+        {
+            "$set": {
+                "actual_cheapest": round(req.corrected_price, 3),
+                "fixed_at": datetime.now(timezone.utc).isoformat(),
+                "original_scraped_price": original_price,
+                "fix_reason": req.reason,
+                "manually_corrected": True
+            }
+        }
+    )
+    
+    return {
+        "ok": result.modified_count > 0,
+        "date": req.date,
+        "hour": req.hour,
+        "fuel": req.fuel,
+        "original_price": original_price,
+        "corrected_price": req.corrected_price,
+        "reason": req.reason
+    }
+
+
 @app.on_event("startup")
 async def on_startup():
     # indeksit

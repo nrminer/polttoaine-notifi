@@ -28,6 +28,7 @@ import news as news_mod
 import notify as notify_mod
 import tax_events as tax_events_mod
 import learn as learn_mod
+import price_verification as verification_mod
 from scrapers import polttoaine, tankille
 
 logger = logging.getLogger("bensavahti.tracker")
@@ -265,6 +266,49 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
 
     # 1) skraapaa
     cheapest = await _scrape_cheapest(fuel, executor)
+    
+    # 1b) SAFETY: Verify the scraped price before accepting it
+    if cheapest["price"] is not None:
+        verification = await verification_mod.verify_price(
+            cheapest["price"], fuel, db, region, date_iso=today_iso
+        )
+        
+        if not verification.is_valid:
+            logger.error(
+                "⚠️  PRICE VERIFICATION FAILED for %s on %s @%02dh: %s",
+                fuel, today_iso, hour, verification.reason
+            )
+            logger.error("   Scraped price: %.3f EUR/L", cheapest["price"])
+            logger.error("   Station: %s (%s)", 
+                        cheapest.get("station"), cheapest.get("city"))
+            
+            # Get historical context for logging
+            context = await verification_mod.get_verification_context(db, fuel, region)
+            logger.error("   Historical context: recent_avg=%.3f, last=%.3f, count=%d",
+                        context.get("recent_avg") or 0,
+                        context.get("last_price") or 0,
+                        context.get("capture_count", 0))
+            
+            # Use suggested alternative if available, otherwise use last known good price
+            if verification.suggested_alternative:
+                logger.warning("   → Using suggested alternative: %.3f EUR/L", 
+                              verification.suggested_alternative)
+                cheapest["price"] = verification.suggested_alternative
+                cheapest["verification_override"] = True
+                cheapest["original_scraped_price"] = cheapest["price"]
+            elif context.get("last_price"):
+                logger.warning("   → Using last known good price: %.3f EUR/L", 
+                              context["last_price"])
+                cheapest["price"] = context["last_price"]
+                cheapest["verification_override"] = True
+                cheapest["original_scraped_price"] = cheapest["price"]
+            else:
+                logger.error("   → No fallback available, setting price to None")
+                cheapest["price"] = None
+                cheapest["verification_failed"] = True
+        else:
+            logger.info("✓ Price verification passed for %s: %.3f EUR/L", 
+                       fuel, cheapest["price"])
 
     # 2) load chronological tracker history (one row per slot)
     tracker_hist = await db.daily_tracker.find(
@@ -383,6 +427,10 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         "prediction_full": prediction_full,
         "hourly_predictions": hourly_predictions,
         "best_window": best_window,
+        # Verification metadata (if price was overridden)
+        "verification_override": cheapest.get("verification_override", False),
+        "original_scraped_price": cheapest.get("original_scraped_price"),
+        "verification_failed": cheapest.get("verification_failed", False),
     }
     await db.daily_tracker.update_one(
         {"date": today_iso, "hour": hour, "fuel": fuel, "region": region},
