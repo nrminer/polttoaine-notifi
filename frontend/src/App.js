@@ -361,7 +361,7 @@ export default function App() {
   const loadNews = useCallback(async () => {
     setLoad("news", true);
     try {
-      const { data } = await fetchNews(30, 8);
+      const { data } = await fetchNews(30, 15);
       setNews(data.items || []);
     } catch (e) {
       console.warn("news failed", e);

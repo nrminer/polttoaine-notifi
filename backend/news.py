@@ -252,7 +252,7 @@ def _parse_rss(xml_text: str, source_label: str) -> list[dict]:
     return out
 
 
-def fetch_news(queries=None, max_age_days: int = 14, limit: int = 8) -> list[dict]:
+def fetch_news(queries=None, max_age_days: int = 14, limit: int = 15) -> list[dict]:
     """queries argumentti säilytetään allekirjoituksen yhteensopivuuden vuoksi
     mutta filtteröinti tehdään aina KEYWORDS-patternilla.
     

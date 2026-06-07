@@ -722,7 +722,7 @@ async def run_prediction(req: PredictionRequest, request: Request):
 
 
 @app.get("/api/news")
-async def get_news(max_age_days: int = 14, limit: int = 8):
+async def get_news(max_age_days: int = 14, limit: int = 15):
     """Hae viimeisimmät polttoaine- ja öljymarkkinauutiset."""
     loop = asyncio.get_event_loop()
     items = await loop.run_in_executor(

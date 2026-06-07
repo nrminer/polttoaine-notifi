@@ -73,7 +73,7 @@ export const fetchLatestPrediction = (fuel, region) =>
 export const fetchRegional = (fuel) => api.get(`/regional`, { params: { fuel } });
 export const fetchAccuracy = (fuel, region, days) =>
   api.get(`/accuracy`, { params: { fuel, region, days } });
-export const fetchNews = (maxAgeDays = 14, limit = 8) =>
+export const fetchNews = (maxAgeDays = 14, limit = 15) =>
   api.get(`/news`, { params: { max_age_days: maxAgeDays, limit } });
 export const fetchTrackHistory = (fuel, days = 60) =>
   api.get(`/track/history`, { params: { fuel, days } });
