@@ -199,7 +199,7 @@ html.dark .instrument-card {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.78rem;
   font-weight: 800;
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  transition: border-color 180ms ease, background 180ms ease;
 }
 
 .landing-primary-action {
@@ -216,12 +216,11 @@ html.dark .instrument-card {
 
 .landing-primary-action:hover,
 .landing-secondary-action:hover {
-  transform: translateY(-1px);
+  /* No transform animation */
 }
 
 .landing-secondary-action:disabled {
   opacity: 0.62;
-  transform: none;
 }
 
 .landing-metrics {
