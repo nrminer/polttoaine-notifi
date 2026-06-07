@@ -1,0 +1,363 @@
+{
+  "nodes": [
+    {
+      "id": "frontend/src/index.js",
+      "type": "file",
+      "name": "index.js",
+      "description": "React app entry point - renders App component into root DOM element"
+    },
+    {
+      "id": "frontend/src/components/AccuracyTracker.jsx",
+      "type": "file",
+      "name": "AccuracyTracker.jsx",
+      "description": "Displays historical prediction accuracy metrics (MAE, hit rate) with collapsible per-method breakdown table"
+    },
+    {
+      "id": "frontend/src/components/AiAnalysis.jsx",
+      "type": "file",
+      "name": "AiAnalysis.jsx",
+      "description": "Dark hero card showing Claude AI prediction with confidence interval band, direction badge, key drivers, and macro factors"
+    },
+    {
+      "id": "frontend/src/components/Card.jsx",
+      "type": "file",
+      "name": "Card.jsx",
+      "description": "Design system primitives: Card container with dark mode support, CardLabel, StatNumber, DeltaBadge with framer-motion animations"
+    },
+    {
+      "id": "frontend/src/components/CityAverageChart.jsx",
+      "type": "file",
+      "name": "CityAverageChart.jsx",
+      "description": "Recharts composed chart showing per-city averages + all-cities average + tomorrow's market-move projection"
+    },
+    {
+      "id": "frontend/src/components/ConfidenceStrip.jsx",
+      "type": "file",
+      "name": "ConfidenceStrip.jsx",
+      "description": "Horizontal metadata strip displaying freshness timestamp, source count, station count, and prediction MAE"
+    },
+    {
+      "id": "frontend/src/components/CycleIndicator.jsx",
+      "type": "file",
+      "name": "CycleIndicator.jsx",
+      "description": "Weekly cycle phase indicator with jump timing estimates (currently unused - cycle detection not integrated)"
+    },
+    {
+      "id": "frontend/src/components/FactorsCard.jsx",
+      "type": "file",
+      "name": "FactorsCard.jsx",
+      "description": "Displays refined product (RBOB/ULSD), crack spread, Brent crude, EUR/USD with delta percentages and sensitivity calculations"
+    },
+    {
+      "id": "frontend/src/components/FuelToggle.jsx",
+      "type": "file",
+      "name": "FuelToggle.jsx",
+      "description": "Two-button toggle for switching between 95E10 and Diesel with icons"
+    },
+    {
+      "id": "frontend/src/components/MethodTable.jsx",
+      "type": "file",
+      "name": "MethodTable.jsx",
+      "description": "Comparison table of 5 prediction methods (MA, LR, ES, fundamental_anchor, AI) with ensemble weights and confidence ranges"
+    },
+    {
+      "id": "frontend/src/components/NewsCard.jsx",
+      "type": "file",
+      "name": "NewsCard.jsx",
+      "description": "RSS news feed with breaking news detection, severity badges (CRITICAL/MAJOR/MODERATE), and freshness indicators"
+    },
+    {
+      "id": "frontend/src/components/RangeToggle.jsx",
+      "type": "file",
+      "name": "RangeToggle.jsx",
+      "description": "Generic multi-option toggle button group (currently unused - 30/90/365 day range selector)"
+    },
+    {
+      "id": "frontend/src/components/RegionalGrid.jsx",
+      "type": "file",
+      "name": "RegionalGrid.jsx",
+      "description": "Per-city price cards with cheapest + average, city filters, sort controls, source breakdown toggle with multi-source confidence"
+    },
+    {
+      "id": "frontend/src/components/TrackingChart.jsx",
+      "type": "file",
+      "name": "TrackingChart.jsx",
+      "description": "Recharts line chart with actual vs predicted prices, confidence bands (color-coded by data quality), and tomorrow's forecast"
+    },
+    {
+      "id": "frontend/src/lib/api.js",
+      "type": "file",
+      "name": "api.js",
+      "description": "Axios-based API client with all backend route wrappers and comprehensive JSDoc response type documentation"
+    },
+    {
+      "id": "frontend/src/lib/modelName.js",
+      "type": "file",
+      "name": "modelName.js",
+      "description": "Converts Claude model IDs (claude-opus-4-7) to human-readable labels (Claude Opus 4.7), strips date suffixes"
+    },
+    {
+      "id": "frontend/src/lib/utils.js",
+      "type": "file",
+      "name": "utils.js",
+      "description": "Utility functions: cn (classname merge), fmtPrice, fmtDelta, fmtPct, fmtDateFi, fmtDateTimeFi, fuelLabel"
+    },
+    {
+      "id": "frontend/tailwind.config.js",
+      "type": "file",
+      "name": "tailwind.config.js",
+      "description": "Tailwind config with CSS custom properties for theme colors, signal colors, font families (Cabinet Grotesk, IBM Plex, JetBrains Mono)"
+    },
+    {
+      "id": "scrapers/polttoaine.py",
+      "type": "file",
+      "name": "polttoaine.py",
+      "description": "Scraper for polttoaine.net top-20 cheapest stations, latin1-encoded HTML table parser"
+    },
+    {
+      "id": "scrapers/tankille.py",
+      "type": "file",
+      "name": "tankille.py",
+      "description": "Scraper for tankille.fi per-city pages (Helsinki, Vantaa, Espoo), parses fuel-95 and fuel-dsl tab panes"
+    },
+    {
+      "id": "component:SourceBreakdown",
+      "type": "component",
+      "name": "SourceBreakdown",
+      "description": "Multi-source price comparison component (imported in RegionalGrid but not present in chunk)"
+    }
+  ],
+  "edges": [
+    {
+      "source": "frontend/src/index.js",
+      "target": "App.js",
+      "type": "imports",
+      "label": "renders"
+    },
+    {
+      "source": "frontend/src/components/AccuracyTracker.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel"
+    },
+    {
+      "source": "frontend/src/components/AiAnalysis.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel"
+    },
+    {
+      "source": "frontend/src/components/AiAnalysis.jsx",
+      "target": "frontend/src/lib/modelName.js",
+      "type": "imports",
+      "label": "formats model names"
+    },
+    {
+      "source": "frontend/src/components/CityAverageChart.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses fmtDateFi"
+    },
+    {
+      "source": "frontend/src/components/ConfidenceStrip.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses cn"
+    },
+    {
+      "source": "frontend/src/components/CycleIndicator.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel"
+    },
+    {
+      "source": "frontend/src/components/FactorsCard.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel, DeltaBadge"
+    },
+    {
+      "source": "frontend/src/components/FuelToggle.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses cn"
+    },
+    {
+      "source": "frontend/src/components/MethodTable.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel, DeltaBadge"
+    },
+    {
+      "source": "frontend/src/components/MethodTable.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses fmtPrice"
+    },
+    {
+      "source": "frontend/src/components/MethodTable.jsx",
+      "target": "frontend/src/lib/modelName.js",
+      "type": "imports",
+      "label": "formats AI model names"
+    },
+    {
+      "source": "frontend/src/components/NewsCard.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel"
+    },
+    {
+      "source": "frontend/src/components/RangeToggle.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses cn"
+    },
+    {
+      "source": "frontend/src/components/RegionalGrid.jsx",
+      "target": "frontend/src/components/Card.jsx",
+      "type": "imports",
+      "label": "uses Card, CardLabel"
+    },
+    {
+      "source": "frontend/src/components/RegionalGrid.jsx",
+      "target": "component:SourceBreakdown",
+      "type": "imports",
+      "label": "renders source comparison"
+    },
+    {
+      "source": "frontend/src/components/TrackingChart.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses fmtDateFi"
+    },
+    {
+      "source": "frontend/src/components/Card.jsx",
+      "target": "frontend/src/lib/utils.js",
+      "type": "imports",
+      "label": "uses cn"
+    },
+    {
+      "source": "frontend/src/lib/api.js",
+      "target": "backend/server.py",
+      "type": "calls",
+      "label": "HTTP requests to all /api/* endpoints"
+    },
+    {
+      "source": "scrapers/polttoaine.py",
+      "target": "external:polttoaine.net",
+      "type": "scrapes",
+      "label": "fetches top 20 cheapest"
+    },
+    {
+      "source": "scrapers/tankille.py",
+      "target": "external:tankille.fi",
+      "type": "scrapes",
+      "label": "fetches per-city prices"
+    }
+  ],
+  "concepts": [
+    {
+      "id": "concept:frontend_ui_components",
+      "type": "concept",
+      "name": "Frontend UI Components",
+      "description": "React component library with design system primitives, charts, cards, and data visualization",
+      "related_nodes": [
+        "frontend/src/components/Card.jsx",
+        "frontend/src/components/AccuracyTracker.jsx",
+        "frontend/src/components/AiAnalysis.jsx",
+        "frontend/src/components/CityAverageChart.jsx",
+        "frontend/src/components/FactorsCard.jsx",
+        "frontend/src/components/MethodTable.jsx",
+        "frontend/src/components/NewsCard.jsx",
+        "frontend/src/components/RegionalGrid.jsx",
+        "frontend/src/components/TrackingChart.jsx"
+      ]
+    },
+    {
+      "id": "concept:data_visualization",
+      "type": "concept",
+      "name": "Data Visualization with Recharts",
+      "description": "Line charts, composed charts, confidence bands, and multi-series time-series rendering",
+      "related_nodes": [
+        "frontend/src/components/TrackingChart.jsx",
+        "frontend/src/components/CityAverageChart.jsx"
+      ]
+    },
+    {
+      "id": "concept:web_scraping",
+      "type": "concept",
+      "name": "Web Scraping Infrastructure",
+      "description": "Python-based scrapers for polttoaine.net and tankille.fi with price parsing and error handling",
+      "related_nodes": [
+        "scrapers/polttoaine.py",
+        "scrapers/tankille.py"
+      ]
+    },
+    {
+      "id": "concept:utility_functions",
+      "type": "concept",
+      "name": "Utility Functions",
+      "description": "Formatting helpers for prices, dates, percentages, model names, and CSS classnames",
+      "related_nodes": [
+        "frontend/src/lib/utils.js",
+        "frontend/src/lib/modelName.js"
+      ]
+    },
+    {
+      "id": "concept:theme_design_system",
+      "type": "concept",
+      "name": "Theme and Design System",
+      "description": "Tailwind-based design tokens with CSS custom properties for light/dark themes, signal colors, typography",
+      "related_nodes": [
+        "frontend/tailwind.config.js",
+        "frontend/src/components/Card.jsx"
+      ]
+    },
+    {
+      "id": "concept:api_client",
+      "type": "concept",
+      "name": "API Client Layer",
+      "description": "Axios-based HTTP client with route wrappers for all backend endpoints and TypeScript-style JSDoc types",
+      "related_nodes": [
+        "frontend/src/lib/api.js"
+      ]
+    },
+    {
+      "id": "concept:confidence_metadata",
+      "type": "concept",
+      "name": "Confidence and Data Quality Indicators",
+      "description": "Multi-source agreement levels, prediction MAE, freshness timestamps, station counts",
+      "related_nodes": [
+        "frontend/src/components/ConfidenceStrip.jsx",
+        "frontend/src/components/RegionalGrid.jsx",
+        "frontend/src/components/TrackingChart.jsx",
+        "frontend/src/components/AccuracyTracker.jsx"
+      ]
+    },
+    {
+      "id": "concept:breaking_news_detection",
+      "type": "concept",
+      "name": "Breaking News Detection",
+      "description": "Severity-based news classification (CRITICAL/MAJOR/MODERATE) with animated alerts and price impact estimates",
+      "related_nodes": [
+        "frontend/src/components/NewsCard.jsx"
+      ]
+    }
+  ],
+  "tags": [
+    "frontend",
+    "react",
+    "components",
+    "charts",
+    "scrapers",
+    "utilities",
+    "design-system",
+    "tailwind",
+    "api-client",
+    "data-visualization",
+    "recharts",
+    "web-scraping",
+    "python",
+    "beautifulsoup"
+  ]
+}

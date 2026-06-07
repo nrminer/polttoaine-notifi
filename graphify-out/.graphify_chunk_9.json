@@ -1,0 +1,701 @@
+{
+  "entities": [
+    {
+      "id": "utils.js",
+      "type": "file",
+      "name": "frontend/src/lib/utils.js",
+      "attributes": {
+        "language": "javascript",
+        "purpose": "utility_functions",
+        "functions": ["cn", "fmtPrice", "fmtDelta", "fmtPct", "fmtDateFi", "fmtDateTimeFi", "fuelLabel"]
+      }
+    },
+    {
+      "id": "polttoaine.py",
+      "type": "file",
+      "name": "scrapers/polttoaine.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "web_scraper",
+        "source": "polttoaine.net",
+        "encoding": "latin1",
+        "top_results": 20
+      }
+    },
+    {
+      "id": "tankille.py",
+      "type": "file",
+      "name": "scrapers/tankille.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "web_scraper",
+        "source": "tankille.fi",
+        "cities": ["Helsinki", "Vantaa", "Espoo"]
+      }
+    },
+    {
+      "id": "server.py",
+      "type": "file",
+      "name": "backend/server.py",
+      "attributes": {
+        "language": "python",
+        "framework": "FastAPI",
+        "lines": 1342,
+        "purpose": "api_server"
+      }
+    },
+    {
+      "id": "predict.py",
+      "type": "file",
+      "name": "backend/predict.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "prediction_engine",
+        "methods": ["moving_average", "linear_regression", "exp_smoothing", "fundamental_anchor", "ai_llm", "weekly_cycle"],
+        "lines": 1137
+      }
+    },
+    {
+      "id": "factors.py",
+      "type": "file",
+      "name": "backend/factors.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "market_data_fetcher",
+        "sources": ["Yahoo Finance"],
+        "symbols": ["BZ=F", "EURUSD=X", "RB=F", "HO=F"]
+      }
+    },
+    {
+      "id": "news.py",
+      "type": "file",
+      "name": "backend/news.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "news_aggregator",
+        "sources": ["Iltalehti", "HS", "IS", "MTV", "Reuters", "Al Jazeera", "NYT", "BBC", "Guardian"],
+        "features": ["breaking_news_detection", "severity_scoring", "ai_relevance"]
+      }
+    },
+    {
+      "id": "notify.py",
+      "type": "file",
+      "name": "backend/notify.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "push_notifications",
+        "service": "ntfy.sh",
+        "cities_watched": ["Helsinki", "Vantaa", "Espoo"]
+      }
+    },
+    {
+      "id": "tracker.py",
+      "type": "module",
+      "name": "tracker",
+      "attributes": {
+        "purpose": "daily_capture_scheduler",
+        "scheduled_hours": [14, 21],
+        "timezone": "Europe/Helsinki"
+      }
+    },
+    {
+      "id": "price_verification.py",
+      "type": "file",
+      "name": "backend/price_verification.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "data_validation",
+        "checks": ["hard_bounds", "historical_deviation", "daily_change_limit", "cross_fuel_check"],
+        "min_price": 1.1,
+        "max_price": 3.5
+      }
+    },
+    {
+      "id": "capture_now.py",
+      "type": "file",
+      "name": "backend/capture_now.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "manual_capture_script",
+        "type": "standalone"
+      }
+    },
+    {
+      "id": "purge_captures.py",
+      "type": "file",
+      "name": "backend/purge_captures.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "data_cleanup_script",
+        "type": "standalone",
+        "safety": "dry_run_by_default"
+      }
+    },
+    {
+      "id": "learn.py",
+      "type": "file",
+      "name": "backend/learn.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "self_training_layer",
+        "metrics": ["mae", "bias", "rmse"]
+      }
+    },
+    {
+      "id": "tax_events.py",
+      "type": "file",
+      "name": "backend/tax_events.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "tax_event_tracker",
+        "note": "tracks known excise and VAT changes"
+      }
+    },
+    {
+      "id": "Procfile",
+      "type": "file",
+      "name": "backend/Procfile",
+      "attributes": {
+        "platform": "Railway",
+        "command": "uvicorn server:app --host 0.0.0.0 --port $PORT"
+      }
+    },
+    {
+      "id": "railway.json",
+      "type": "file",
+      "name": "backend/railway.json",
+      "attributes": {
+        "platform": "Railway",
+        "builder": "RAILPACK",
+        "healthcheck": "/api/factors"
+      }
+    },
+    {
+      "id": "fix_diesel_capture.py",
+      "type": "file",
+      "name": "backend/fix_diesel_capture.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "data_correction_script",
+        "type": "standalone"
+      }
+    },
+    {
+      "id": "check_captures.py",
+      "type": "file",
+      "name": "backend/check_captures.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "inspection_script",
+        "type": "standalone"
+      }
+    },
+    {
+      "id": "fix_diesel_via_api.py",
+      "type": "file",
+      "name": "backend/fix_diesel_via_api.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "remote_correction_script",
+        "endpoint": "/api/admin/fix-capture"
+      }
+    },
+    {
+      "id": "Claude_Opus_4.7",
+      "type": "ai_model",
+      "name": "Claude Opus 4.7",
+      "attributes": {
+        "provider": "emergentintegrations",
+        "fallback_chain": ["Opus 4.6", "Sonnet 4.5", "Haiku 4.5"]
+      }
+    },
+    {
+      "id": "moving_average",
+      "type": "prediction_method",
+      "name": "Moving Average",
+      "attributes": {
+        "window": 7,
+        "type": "statistical"
+      }
+    },
+    {
+      "id": "linear_regression",
+      "type": "prediction_method",
+      "name": "Linear Regression",
+      "attributes": {
+        "lookback": 30,
+        "type": "statistical"
+      }
+    },
+    {
+      "id": "exp_smoothing",
+      "type": "prediction_method",
+      "name": "Exponential Smoothing (Holt)",
+      "attributes": {
+        "alpha": 0.4,
+        "beta": 0.2,
+        "type": "statistical"
+      }
+    },
+    {
+      "id": "fundamental_anchor",
+      "type": "prediction_method",
+      "name": "Fundamental Anchor",
+      "attributes": {
+        "type": "fundamental",
+        "inputs": ["live_price", "brent", "eur_usd", "weekday", "momentum"],
+        "max_daily_move": 0.06
+      }
+    },
+    {
+      "id": "ai_llm",
+      "type": "prediction_method",
+      "name": "AI LLM",
+      "attributes": {
+        "model": "Claude Opus 4.7",
+        "type": "ai",
+        "features": ["geopolitical_risk", "news_analysis"]
+      }
+    },
+    {
+      "id": "weekly_cycle",
+      "type": "prediction_method",
+      "name": "Weekly Cycle",
+      "attributes": {
+        "type": "cyclic"
+      }
+    },
+    {
+      "id": "ensemble",
+      "type": "prediction_method",
+      "name": "Ensemble",
+      "attributes": {
+        "type": "meta",
+        "weight_strategy": "data_quality_aware",
+        "self_calibrating": true
+      }
+    },
+    {
+      "id": "daily_tracker",
+      "type": "mongodb_collection",
+      "name": "daily_tracker",
+      "attributes": {
+        "purpose": "capture_storage",
+        "unique_index": ["fuel", "region", "date", "hour"],
+        "fields": ["actual_cheapest", "by_city", "prediction_for_tomorrow"]
+      }
+    },
+    {
+      "id": "snapshots",
+      "type": "mongodb_collection",
+      "name": "snapshots",
+      "attributes": {
+        "purpose": "live_scrape_cache"
+      }
+    },
+    {
+      "id": "predictions",
+      "type": "mongodb_collection",
+      "name": "predictions",
+      "attributes": {
+        "purpose": "prediction_storage",
+        "fields": ["target_date", "methods_full", "ensemble_full"]
+      }
+    },
+    {
+      "id": "VerificationResult",
+      "type": "class",
+      "name": "VerificationResult",
+      "attributes": {
+        "module": "price_verification",
+        "fields": ["is_valid", "price", "reason", "confidence", "suggested_alternative"]
+      }
+    },
+    {
+      "id": "ntfy_sh",
+      "type": "external_service",
+      "name": "ntfy.sh",
+      "attributes": {
+        "purpose": "push_notifications",
+        "topic": "polttoaine"
+      }
+    },
+    {
+      "id": "Yahoo_Finance",
+      "type": "external_service",
+      "name": "Yahoo Finance",
+      "attributes": {
+        "purpose": "market_data",
+        "api": "v8_chart"
+      }
+    },
+    {
+      "id": "polttoaine_net",
+      "type": "external_service",
+      "name": "polttoaine.net",
+      "attributes": {
+        "purpose": "price_scraping",
+        "priority": "secondary"
+      }
+    },
+    {
+      "id": "tankille_fi",
+      "type": "external_service",
+      "name": "tankille.fi",
+      "attributes": {
+        "purpose": "price_scraping",
+        "priority": "primary"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "from": "server.py",
+      "to": "polttoaine.py",
+      "type": "imports",
+      "label": "uses scraper"
+    },
+    {
+      "from": "server.py",
+      "to": "tankille.py",
+      "type": "imports",
+      "label": "uses scraper"
+    },
+    {
+      "from": "server.py",
+      "to": "predict.py",
+      "type": "imports",
+      "label": "calls predict_tomorrow"
+    },
+    {
+      "from": "server.py",
+      "to": "factors.py",
+      "type": "imports",
+      "label": "fetches market data"
+    },
+    {
+      "from": "server.py",
+      "to": "news.py",
+      "type": "imports",
+      "label": "fetches news"
+    },
+    {
+      "from": "server.py",
+      "to": "tracker.py",
+      "type": "imports",
+      "label": "uses capture_daily"
+    },
+    {
+      "from": "server.py",
+      "to": "notify.py",
+      "type": "imports",
+      "label": "sends notifications"
+    },
+    {
+      "from": "server.py",
+      "to": "tax_events.py",
+      "type": "imports",
+      "label": "checks tax events"
+    },
+    {
+      "from": "server.py",
+      "to": "learn.py",
+      "type": "imports",
+      "label": "retrieves track record"
+    },
+    {
+      "from": "server.py",
+      "to": "daily_tracker",
+      "type": "reads_writes",
+      "label": "stores captures"
+    },
+    {
+      "from": "server.py",
+      "to": "snapshots",
+      "type": "reads_writes",
+      "label": "caches live data"
+    },
+    {
+      "from": "server.py",
+      "to": "predictions",
+      "type": "reads_writes",
+      "label": "stores predictions"
+    },
+    {
+      "from": "predict.py",
+      "to": "moving_average",
+      "type": "implements",
+      "label": "prediction method"
+    },
+    {
+      "from": "predict.py",
+      "to": "linear_regression",
+      "type": "implements",
+      "label": "prediction method"
+    },
+    {
+      "from": "predict.py",
+      "to": "exp_smoothing",
+      "type": "implements",
+      "label": "prediction method"
+    },
+    {
+      "from": "predict.py",
+      "to": "fundamental_anchor",
+      "type": "implements",
+      "label": "prediction method"
+    },
+    {
+      "from": "predict.py",
+      "to": "ai_llm",
+      "type": "implements",
+      "label": "prediction method"
+    },
+    {
+      "from": "predict.py",
+      "to": "weekly_cycle",
+      "type": "implements",
+      "label": "prediction method"
+    },
+    {
+      "from": "predict.py",
+      "to": "ensemble",
+      "type": "implements",
+      "label": "meta prediction"
+    },
+    {
+      "from": "predict.py",
+      "to": "Claude_Opus_4.7",
+      "type": "uses",
+      "label": "AI inference"
+    },
+    {
+      "from": "factors.py",
+      "to": "Yahoo_Finance",
+      "type": "fetches_from",
+      "label": "market data"
+    },
+    {
+      "from": "polttoaine.py",
+      "to": "polttoaine_net",
+      "type": "scrapes",
+      "label": "top 20 cheapest"
+    },
+    {
+      "from": "tankille.py",
+      "to": "tankille_fi",
+      "type": "scrapes",
+      "label": "per-city pages"
+    },
+    {
+      "from": "notify.py",
+      "to": "ntfy_sh",
+      "type": "publishes_to",
+      "label": "push notifications"
+    },
+    {
+      "from": "notify.py",
+      "to": "polttoaine.py",
+      "type": "imports",
+      "label": "scrapes for summary"
+    },
+    {
+      "from": "notify.py",
+      "to": "tankille.py",
+      "type": "imports",
+      "label": "scrapes for summary"
+    },
+    {
+      "from": "price_verification.py",
+      "to": "daily_tracker",
+      "type": "validates_before",
+      "label": "price checks"
+    },
+    {
+      "from": "tracker.py",
+      "to": "price_verification.py",
+      "type": "uses",
+      "label": "validates captures"
+    },
+    {
+      "from": "learn.py",
+      "to": "daily_tracker",
+      "type": "reads",
+      "label": "gets actuals"
+    },
+    {
+      "from": "learn.py",
+      "to": "predictions",
+      "type": "reads",
+      "label": "gets predictions"
+    },
+    {
+      "from": "fundamental_anchor",
+      "to": "learn.py",
+      "type": "uses",
+      "label": "bias correction"
+    },
+    {
+      "from": "ai_llm",
+      "to": "learn.py",
+      "type": "uses",
+      "label": "self-calibration"
+    },
+    {
+      "from": "ensemble",
+      "to": "learn.py",
+      "type": "uses",
+      "label": "method weighting"
+    },
+    {
+      "from": "capture_now.py",
+      "to": "tracker.py",
+      "type": "calls",
+      "label": "manual trigger"
+    },
+    {
+      "from": "purge_captures.py",
+      "to": "daily_tracker",
+      "type": "deletes_from",
+      "label": "cleanup"
+    },
+    {
+      "from": "check_captures.py",
+      "to": "daily_tracker",
+      "type": "reads",
+      "label": "inspection"
+    },
+    {
+      "from": "fix_diesel_capture.py",
+      "to": "daily_tracker",
+      "type": "updates",
+      "label": "corrects outliers"
+    },
+    {
+      "from": "fix_diesel_via_api.py",
+      "to": "server.py",
+      "type": "calls",
+      "label": "/api/admin/fix-capture"
+    },
+    {
+      "from": "news.py",
+      "to": "Claude_Opus_4.7",
+      "type": "uses",
+      "label": "AI relevance scoring (optional)"
+    },
+    {
+      "from": "fundamental_anchor",
+      "to": "factors.py",
+      "type": "uses",
+      "label": "Brent + EUR/USD pass-through"
+    }
+  ],
+  "patterns": [
+    {
+      "type": "architectural_pattern",
+      "name": "Three-Layer Prediction Stack",
+      "description": "Statistical methods (MA, LR, ES) + Fundamental model (crude oil, FX, weekday) + AI (geopolitical risk) combined via data-quality-aware ensemble"
+    },
+    {
+      "type": "data_flow",
+      "name": "Live-Only Data Pipeline",
+      "description": "All data is live-scraped from today forward; no synthetic/interpolated/historical data; daily_tracker is ground truth"
+    },
+    {
+      "type": "safety_pattern",
+      "name": "Multi-Layer Price Verification",
+      "description": "Hard bounds (1.10-3.50 EUR/L) + historical deviation check (20% threshold) + daily change limit (0.15 EUR/L) + cross-fuel reasonableness"
+    },
+    {
+      "type": "scraper_strategy",
+      "name": "Dual-Source with Priority",
+      "description": "tankille.fi is PRIMARY (per-city, tested accurate); polttoaine.net is SECONDARY (top-20 national, cross-check); fall back if >10% price divergence"
+    },
+    {
+      "type": "prediction_clamp",
+      "name": "Breaking News Severity Multiplier",
+      "description": "Base clamp ±0.06 EUR/L; severity 1-3 → 1.33x, severity 4-6 → 1.67x, severity 7-10 → 2.50x; prevents over-reaction to speculation"
+    },
+    {
+      "type": "self_training",
+      "name": "Bias-Aware Calibration",
+      "description": "Each method tracks signed prediction error (bias); fundamental_anchor applies damped correction (-bias * min(n/25, 1), max ±0.02); ensemble weights by 1/MAE"
+    },
+    {
+      "type": "notification_format",
+      "name": "Multi-Fuel City Summary",
+      "description": "ASCII title for HTTP header compatibility; UTF-8 body with fuel sections, city blocks, station details, source comparison (polttoaine.net vs tankille.fi)"
+    },
+    {
+      "type": "cold_start_tolerance",
+      "name": "Graceful Degradation",
+      "description": "Predictions work from 0 data points: live anchor + fundamental model; statistical methods degrade to simpler forms; ensemble shifts weight to anchor + AI"
+    },
+    {
+      "type": "ai_prompt_structure",
+      "name": "9-Principle Uncalibrated Prior System",
+      "description": "AI system message explicitly labels all priors as UNCALIBRATED; includes lag-pikes (t-1, t-2, t-3, t-7), refined product > Brent priority, geopolitics split (priced vs forward risk)"
+    },
+    {
+      "type": "date_awareness",
+      "name": "Calendar-Day Projections",
+      "description": "All methods project +1 calendar day (not index); MA/LR/ES use daily_tail (max 3-day gap); prevents month-boundary artifacts"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "PRICE_MIN_SANITY",
+      "value": 1.10,
+      "unit": "EUR/L",
+      "purpose": "scraper validation lower bound"
+    },
+    {
+      "name": "PRICE_MAX_SANITY",
+      "value": 3.50,
+      "unit": "EUR/L",
+      "purpose": "scraper validation upper bound"
+    },
+    {
+      "name": "_MAX_DAILY_MOVE",
+      "value": 0.06,
+      "unit": "EUR/L",
+      "purpose": "ensemble clamp base limit"
+    },
+    {
+      "name": "HISTORICAL_DEVIATION_THRESHOLD",
+      "value": 0.20,
+      "unit": "fraction",
+      "purpose": "verification 10-day average deviation limit"
+    },
+    {
+      "name": "_BRENT_PASSTHROUGH_FRAC",
+      "value": 0.25,
+      "unit": "fraction",
+      "purpose": "uncalibrated Brent pass-through coefficient"
+    },
+    {
+      "name": "_REFINED_PASSTHROUGH_FRAC",
+      "value": 0.30,
+      "unit": "fraction",
+      "purpose": "uncalibrated refined product pass-through coefficient"
+    },
+    {
+      "name": "CACHE_TTL_REGIONAL_SECONDS",
+      "value": 90,
+      "unit": "seconds",
+      "purpose": "regional prices cache duration"
+    },
+    {
+      "name": "CACHE_TTL_CURRENT_PRICES_SECONDS",
+      "value": 300,
+      "unit": "seconds",
+      "purpose": "current prices cache (5 minutes)"
+    },
+    {
+      "name": "SCHEDULED_HOURS",
+      "value": [14, 21],
+      "unit": "hours_helsinki_time",
+      "purpose": "daily capture times"
+    }
+  ]
+}

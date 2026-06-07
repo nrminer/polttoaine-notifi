@@ -1,0 +1,432 @@
+{
+  "entities": [
+    {
+      "id": "tracker.py",
+      "type": "module",
+      "name": "tracker.py",
+      "description": "Daily prediction-vs-actual tracker for fuel prices. Captures cheapest prices at scheduled hours (14:00, 21:00 Helsinki), runs predictions, stores to daily_tracker collection, and sends notifications. Includes unified scheduler for both notification captures and silent scrapes.",
+      "metadata": {
+        "path": "backend/tracker.py",
+        "lines": 652,
+        "key_functions": ["capture_daily", "silent_scrape", "unified_scheduler_loop", "news_watch_loop", "realized_method_mae"],
+        "scheduled_hours": [14, 21],
+        "tracked_cities": ["Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti"]
+      }
+    },
+    {
+      "id": "tankille_scraper",
+      "type": "scraper",
+      "name": "tankille.py",
+      "description": "Scraper for tankille.fi per-city fuel price data. PRIMARY data source for per-city cheapest and average prices. Parses HTML tables with fuel tabs (fuel-95, fuel-dsl) and extracts station names, prices, and freshness.",
+      "metadata": {
+        "path": "backend/scrapers/tankille.py",
+        "base_url": "https://www.tankille.fi",
+        "cities": ["Helsinki", "Vantaa", "Espoo", "Tampere", "Turku", "Oulu", "Jyväskylä", "Kuopio", "Lahti"],
+        "lines": 140,
+        "priority": "PRIMARY"
+      }
+    },
+    {
+      "id": "polttoaine_scraper",
+      "type": "scraper",
+      "name": "polttoaine.py",
+      "description": "Scraper for polttoaine.net '20 cheapest' national page. SECONDARY data source used for cross-checking. Parses Latin-1 encoded HTML table with top 20 cheapest stations nationwide.",
+      "metadata": {
+        "path": "backend/scrapers/polttoaine.py",
+        "base_url": "https://polttoaine.net",
+        "lines": 90,
+        "priority": "SECONDARY"
+      }
+    },
+    {
+      "id": "hintatutka_scraper",
+      "type": "scraper",
+      "name": "hintatutka.py",
+      "description": "EXPERIMENTAL scraper for hintatutka.fi. Not part of production scrape path unless ENABLE_HINTATUTKA_EXPERIMENTAL=1. Needs verification against live site HTML.",
+      "metadata": {
+        "path": "backend/scrapers/hintatutka.py",
+        "base_url": "https://hintatutka.fi",
+        "lines": 262,
+        "status": "experimental"
+      }
+    },
+    {
+      "id": "validation_module",
+      "type": "module",
+      "name": "validation.py",
+      "description": "Shared validation utilities for scraped fuel price data. Provides hard bounds checking (1.10-3.50 EUR/L), IQR-based outlier detection, and cross-fuel price relationship validation.",
+      "metadata": {
+        "path": "backend/validation.py",
+        "lines": 164,
+        "price_min": 1.10,
+        "price_max": 3.50,
+        "outlier_threshold": 0.25
+      }
+    },
+    {
+      "id": "weather_module",
+      "type": "module",
+      "name": "weather.py",
+      "description": "Weather and road condition data for Finnish fuel demand modeling. Fetches from FMI Open Data and Digitraffic. EXPERIMENTAL - not currently wired into predictions. Provides winter severity index and demand adjustment calculations.",
+      "metadata": {
+        "path": "backend/weather.py",
+        "lines": 423,
+        "status": "experimental",
+        "data_sources": ["FMI Open Data", "Digitraffic"],
+        "cache_ttl": 10800
+      }
+    },
+    {
+      "id": "traffic_module",
+      "type": "module",
+      "name": "traffic.py",
+      "description": "Fintraffic Digitraffic traffic volume data as fuel demand proxy. Uses LAM (Automatic Traffic Measurement) station data to calculate national traffic index. EXPERIMENTAL - not wired into predictions yet.",
+      "metadata": {
+        "path": "backend/traffic.py",
+        "lines": 205,
+        "status": "experimental",
+        "data_source": "Digitraffic",
+        "cache_ttl": 21600
+      }
+    },
+    {
+      "id": "weekly_cycle_module",
+      "type": "module",
+      "name": "weekly_cycle.py",
+      "description": "Weekly fuel pricing cycle detection and prediction. Identifies price jump patterns (typical ti-ke rise, su-ma drop), calculates average cycle length, and predicts next jump timing. Requires minimum 21 daily points.",
+      "metadata": {
+        "path": "backend/weekly_cycle.py",
+        "lines": 325,
+        "min_daily_points": 21,
+        "jump_threshold": 0.010,
+        "phases": ["ennen_nousua", "nousu", "vakaa", "lasku"]
+      }
+    },
+    {
+      "id": "frontend_app",
+      "type": "component",
+      "name": "App.js",
+      "description": "Main React frontend application component. Single-file 1273-line component with landing hero, dark prediction card, tracking charts, city averages, regional grid, and real-time SSE updates. Dark theme by default.",
+      "metadata": {
+        "path": "frontend/src/App.js",
+        "lines": 1273,
+        "framework": "React 18",
+        "key_features": ["real-time updates", "dark theme default", "landing hero", "tracking charts", "SSE"]
+      }
+    },
+    {
+      "id": "tailwind_config",
+      "type": "config",
+      "name": "tailwind.config.js",
+      "description": "Tailwind CSS configuration with custom design tokens for dark/light themes. Defines color system (ink, muted, secondary, surface, line), cycle phase colors, recommendation colors, custom fonts, and animations.",
+      "metadata": {
+        "path": "frontend/tailwind.config.js",
+        "lines": 72,
+        "dark_mode": "class",
+        "custom_colors": ["brand", "accent", "cycleStable", "cycleRising", "cyclePeak", "cycleFalling"]
+      }
+    },
+    {
+      "id": "index_css",
+      "type": "stylesheet",
+      "name": "index.css",
+      "description": "Global CSS with Tailwind imports, CSS custom properties for light/dark themes, dark mode retargeting rules for Recharts, grain texture, scrollbar styling, and accessibility (skip-link, reduced-motion).",
+      "metadata": {
+        "path": "frontend/src/index.css",
+        "lines": 225,
+        "default_theme": "dark",
+        "features": ["grain texture", "dark mode recharts fix", "a11y skip-link"]
+      }
+    },
+    {
+      "id": "app_css",
+      "type": "stylesheet",
+      "name": "App.css",
+      "description": "Component-level CSS for landing hero, data plane, metrics grid, price displays, and responsive breakpoints. Includes custom CSS variables for landing section backgrounds, borders, and gradients in both light/dark modes.",
+      "metadata": {
+        "path": "frontend/src/App.css",
+        "lines": 739,
+        "key_sections": ["landing-hero", "landing-data-plane", "instrument-card", "cycle-badges"]
+      }
+    },
+    {
+      "id": "vercel_config",
+      "type": "config",
+      "name": "vercel.json",
+      "description": "Vercel deployment configuration for Create React App. Defines SPA rewrites, static asset caching (31536000s immutable), and build commands. Framework: create-react-app, output: build/.",
+      "metadata": {
+        "path": "frontend/vercel.json",
+        "lines": 27,
+        "framework": "create-react-app",
+        "output_directory": "build"
+      }
+    },
+    {
+      "id": "package_json",
+      "type": "config",
+      "name": "package.json",
+      "description": "Frontend NPM package manifest. React 18.3, Recharts 2.12, Framer Motion 11, Lucide icons, Axios, Tailwind. Version 2.0.0. Scripts: start, build, test.",
+      "metadata": {
+        "path": "frontend/package.json",
+        "version": "2.0.0",
+        "key_deps": ["react@18.3.1", "recharts@2.12.7", "framer-motion@11.0.24", "lucide-react@0.376.0"]
+      }
+    },
+    {
+      "id": "index_html",
+      "type": "template",
+      "name": "index.html",
+      "description": "Main HTML template with no-FOUC theme script (default dark), Finnish meta tags, Google Fonts (IBM Plex Sans, JetBrains Mono), and Font Share (Cabinet Grotesk). Theme-color meta tag switches based on theme.",
+      "metadata": {
+        "path": "frontend/public/index.html",
+        "lines": 32,
+        "lang": "fi",
+        "default_theme": "dark"
+      }
+    },
+    {
+      "id": "privacy_html",
+      "type": "document",
+      "name": "privacy.html",
+      "description": "Finnish GDPR-compliant privacy policy (Tietosuojaseloste). States no user data collection, no cookies, no analytics, no tracking. Only platform-level logs (Railway/Vercel). Updated 2026-05-18.",
+      "metadata": {
+        "path": "frontend/public/privacy.html",
+        "lines": 164,
+        "lang": "fi",
+        "updated": "2026-05-18"
+      }
+    },
+    {
+      "id": "postcss_config",
+      "type": "config",
+      "name": "postcss.config.js",
+      "description": "PostCSS configuration with Tailwind and Autoprefixer plugins.",
+      "metadata": {
+        "path": "frontend/postcss.config.js",
+        "lines": 6
+      }
+    },
+    {
+      "id": "test_bensavahti_api",
+      "type": "test",
+      "name": "test_bensavahti_api.py",
+      "description": "Pytest suite for backend API endpoints. Tests health, meta, seed, prices/current, prices/history, factors, predict/run, predict/latest, regional, accuracy. Validates data structure, sorting, and constraints.",
+      "metadata": {
+        "path": "backend/tests/test_bensavahti_api.py",
+        "lines": 229,
+        "test_count": 17,
+        "key_validations": ["sorted data", "field presence", "no synthetic data"]
+      }
+    },
+    {
+      "id": "test_verification",
+      "type": "test",
+      "name": "test_verification.py",
+      "description": "Test script for price verification system with mock DB. Tests hard bounds, historical deviation, daily change limits, and suggested alternatives. 7 test cases covering outliers, jumps, and normal ranges.",
+      "metadata": {
+        "path": "backend/test_verification.py",
+        "lines": 119,
+        "test_cases": 7
+      }
+    },
+    {
+      "id": "test_news",
+      "type": "test",
+      "name": "test_news.py",
+      "description": "Test script for enhanced news module. Tests basic scraping, AI relevance scoring, and full workflow (scrape + AI + filter). Includes async tests for AI analysis.",
+      "metadata": {
+        "path": "backend/test_news.py",
+        "lines": 125,
+        "test_modes": ["basic_scraping", "ai_relevance", "full_workflow"]
+      }
+    },
+    {
+      "id": "daily_tracker_collection",
+      "type": "database_collection",
+      "name": "daily_tracker",
+      "description": "MongoDB collection storing real fuel price captures at 14:00 and 21:00 Helsinki. Fields: date, hour, fuel, region, actual_cheapest, by_city (cheapest+average per city), prediction_for_tomorrow_cheapest, prediction_full, hourly_predictions, best_window. Unique index on (fuel, region, date, hour).",
+      "metadata": {
+        "unique_index": ["fuel", "region", "date", "hour"],
+        "capture_times": [14, 21],
+        "per_city_fields": ["cheapest", "average", "count", "station", "source"]
+      }
+    },
+    {
+      "id": "price_observations_collection",
+      "type": "database_collection",
+      "name": "price_observations",
+      "description": "MongoDB collection for silent scrape observations (hours outside scheduled captures). Stores cheapest price, station, city, by_city breakdown, but no predictions or notifications.",
+      "metadata": {
+        "purpose": "silent scrapes",
+        "no_predictions": true,
+        "env_var": "SILENT_SCRAPE_HOURS"
+      }
+    },
+    {
+      "id": "scraper_contract",
+      "type": "interface",
+      "name": "Scraper Output Contract",
+      "description": "Shared output format for all scrapers: {city, station, address, price, date, age_hours, fuel, source, chain, raw_name}. All scrapers must return list of dicts matching this schema.",
+      "metadata": {
+        "fields": ["city", "station", "address", "price", "date", "age_hours", "fuel", "source", "chain", "raw_name"]
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "tracker.py",
+      "target": "tankille_scraper",
+      "type": "SCRAPES_WITH",
+      "description": "tracker.py uses tankille.py as PRIMARY scraper for per-city data in capture_daily and silent_scrape"
+    },
+    {
+      "source": "tracker.py",
+      "target": "polttoaine_scraper",
+      "type": "SCRAPES_WITH",
+      "description": "tracker.py uses polttoaine.py as SECONDARY scraper for national cross-check"
+    },
+    {
+      "source": "tracker.py",
+      "target": "validation_module",
+      "type": "USES",
+      "description": "tracker.py validates scraped prices through validation.py before storing to daily_tracker"
+    },
+    {
+      "source": "tracker.py",
+      "target": "daily_tracker_collection",
+      "type": "WRITES_TO",
+      "description": "capture_daily() writes verified capture + prediction to daily_tracker with (date, hour, fuel, region) unique key"
+    },
+    {
+      "source": "tracker.py",
+      "target": "price_observations_collection",
+      "type": "WRITES_TO",
+      "description": "silent_scrape() writes observation-only data to price_observations for non-scheduled hours"
+    },
+    {
+      "source": "tankille_scraper",
+      "target": "scraper_contract",
+      "type": "IMPLEMENTS",
+      "description": "tankille.py returns list of dicts matching scraper output contract"
+    },
+    {
+      "source": "polttoaine_scraper",
+      "target": "scraper_contract",
+      "type": "IMPLEMENTS",
+      "description": "polttoaine.py returns list of dicts matching scraper output contract"
+    },
+    {
+      "source": "hintatutka_scraper",
+      "target": "scraper_contract",
+      "type": "IMPLEMENTS",
+      "description": "hintatutka.py implements scraper contract but is experimental/disabled by default"
+    },
+    {
+      "source": "validation_module",
+      "target": "scraper_contract",
+      "type": "VALIDATES",
+      "description": "validation.py applies hard bounds and IQR outlier detection to scraper output"
+    },
+    {
+      "source": "frontend_app",
+      "target": "tailwind_config",
+      "type": "USES",
+      "description": "App.js uses Tailwind design tokens defined in tailwind.config.js"
+    },
+    {
+      "source": "frontend_app",
+      "target": "index_css",
+      "type": "IMPORTS",
+      "description": "App.js imports global styles from index.css (Tailwind base/components/utilities)"
+    },
+    {
+      "source": "frontend_app",
+      "target": "app_css",
+      "type": "IMPORTS",
+      "description": "App.js imports component-specific styles from App.css"
+    },
+    {
+      "source": "index_html",
+      "target": "frontend_app",
+      "type": "MOUNTS",
+      "description": "index.html mounts React app in #root div, applies theme script before first paint"
+    },
+    {
+      "source": "vercel_config",
+      "target": "package_json",
+      "type": "BUILDS_FROM",
+      "description": "vercel.json references package.json build/start commands for deployment"
+    },
+    {
+      "source": "test_bensavahti_api",
+      "target": "tracker.py",
+      "type": "TESTS",
+      "description": "test_bensavahti_api.py validates tracker endpoints (predict/latest, accuracy) behavior"
+    },
+    {
+      "source": "test_verification",
+      "target": "validation_module",
+      "type": "TESTS",
+      "description": "test_verification.py validates price verification logic with mock DB"
+    },
+    {
+      "source": "test_news",
+      "target": "tracker.py",
+      "type": "TESTS",
+      "description": "test_news.py validates news scraping and AI relevance scoring used by tracker news_watch_loop"
+    },
+    {
+      "source": "tracker.py",
+      "target": "weekly_cycle_module",
+      "type": "CAN_USE",
+      "description": "tracker.py can integrate weekly_cycle predictions (currently not wired in)"
+    },
+    {
+      "source": "weather_module",
+      "target": "tracker.py",
+      "type": "NOT_INTEGRATED",
+      "description": "weather.py provides demand adjustment calculations but is not yet wired into tracker predictions (experimental)"
+    },
+    {
+      "source": "traffic_module",
+      "target": "tracker.py",
+      "type": "NOT_INTEGRATED",
+      "description": "traffic.py provides traffic demand proxy but is not yet wired into tracker predictions (experimental)"
+    },
+    {
+      "source": "frontend_app",
+      "target": "daily_tracker_collection",
+      "type": "READS_VIA_API",
+      "description": "App.js reads daily_tracker data via /api/track/history to render TrackingChart and CityAverageChart"
+    },
+    {
+      "source": "tailwind_config",
+      "target": "index_css",
+      "type": "CONFIGURES",
+      "description": "tailwind.config.js defines design tokens consumed by CSS custom properties in index.css"
+    },
+    {
+      "source": "postcss_config",
+      "target": "tailwind_config",
+      "type": "PROCESSES",
+      "description": "postcss.config.js processes Tailwind directives from tailwind.config.js"
+    }
+  ],
+  "metadata": {
+    "chunk_id": 10,
+    "total_chunks": 16,
+    "file_count": 22,
+    "primary_focus": "tracker scheduler, scrapers (tankille/polttoaine/hintatutka), validation, experimental modules (weather/traffic/weekly_cycle), frontend app and styles, tests",
+    "key_patterns": [
+      "unified scheduler with notification + silent scrape hours",
+      "PRIMARY (tankille) + SECONDARY (polttoaine) scraper priority",
+      "scraper contract: standardized output format across all scrapers",
+      "validation pipeline: hard bounds + IQR outlier detection",
+      "experimental modules not yet wired into production predictions",
+      "dark theme default with no-FOUC script",
+      "single-file 1273-line React app with inline styles",
+      "daily_tracker unique index on (fuel, region, date, hour)",
+      "per-city cheapest + average stored in by_city subdocument"
+    ]
+  }
+}

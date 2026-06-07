@@ -1,0 +1,767 @@
+{
+  "entities": [
+    {
+      "id": "utils.js",
+      "type": "file",
+      "name": "frontend/src/lib/utils.js",
+      "attributes": {
+        "language": "javascript",
+        "purpose": "utility_functions",
+        "exports": ["cn", "fmtPrice", "fmtDelta", "fmtPct", "fmtDateFi", "fmtDateTimeFi", "fuelLabel"]
+      }
+    },
+    {
+      "id": "polttoaine_scraper_old",
+      "type": "file",
+      "name": "agent-a52a5e37468629d79/scrapers/polttoaine.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "web_scraper",
+        "target": "polttoaine.net",
+        "status": "legacy_worktree"
+      }
+    },
+    {
+      "id": "tankille_scraper_old",
+      "type": "file",
+      "name": "agent-a52a5e37468629d79/scrapers/tankille.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "web_scraper",
+        "target": "tankille.fi",
+        "status": "legacy_worktree"
+      }
+    },
+    {
+      "id": "iteration_1_test_report",
+      "type": "file",
+      "name": "test_reports/iteration_1.json",
+      "attributes": {
+        "type": "test_report",
+        "test_success_rate": "100%",
+        "tests_passed": "16/16",
+        "status": "all_passing"
+      }
+    },
+    {
+      "id": "check_prices_script",
+      "type": "file",
+      "name": "agent-a9562a62d22e952b1/check_prices.py",
+      "attributes": {
+        "language": "python",
+        "purpose": "legacy_notification_script",
+        "features": ["ntfy_integration", "price_comparison", "change_detection"]
+      }
+    },
+    {
+      "id": "server.py",
+      "type": "file",
+      "name": "backend/server.py",
+      "attributes": {
+        "language": "python",
+        "framework": "FastAPI",
+        "lines": 1132,
+        "purpose": "api_server",
+        "routes_count": 20
+      }
+    },
+    {
+      "id": "predict.py",
+      "type": "file",
+      "name": "backend/predict.py",
+      "attributes": {
+        "language": "python",
+        "lines": 1051,
+        "purpose": "prediction_algorithms",
+        "methods": ["moving_average", "linear_regression", "exp_smoothing", "fundamental_anchor", "ai_llm", "ensemble"]
+      }
+    },
+    {
+      "id": "tracker.py",
+      "type": "file",
+      "name": "backend/tracker.py",
+      "attributes": {
+        "language": "python",
+        "lines": 437,
+        "purpose": "scheduled_data_capture",
+        "capture_hours": [14, 21],
+        "timezone": "Europe/Helsinki"
+      }
+    },
+    {
+      "id": "notify.py",
+      "type": "file",
+      "name": "backend/notify.py",
+      "attributes": {
+        "language": "python",
+        "lines": 273,
+        "purpose": "push_notifications",
+        "service": "ntfy.sh"
+      }
+    },
+    {
+      "id": "news.py",
+      "type": "file",
+      "name": "backend/news.py",
+      "attributes": {
+        "language": "python",
+        "lines": 124,
+        "purpose": "rss_aggregator",
+        "sources": ["Iltalehti", "Helsingin Sanomat", "Ilta-Sanomat", "MTV Uutiset"]
+      }
+    },
+    {
+      "id": "factors.py",
+      "type": "file",
+      "name": "backend/factors.py",
+      "attributes": {
+        "language": "python",
+        "lines": 138,
+        "purpose": "market_data_fetcher",
+        "data_sources": ["Yahoo Finance"],
+        "fetches": ["Brent", "EUR/USD", "RBOB", "ULSD"]
+      }
+    },
+    {
+      "id": "tax_events.py",
+      "type": "file",
+      "name": "backend/tax_events.py",
+      "attributes": {
+        "language": "python",
+        "lines": 119,
+        "purpose": "tax_change_calendar",
+        "events": []
+      }
+    },
+    {
+      "id": "learn.py",
+      "type": "file",
+      "name": "backend/learn.py",
+      "attributes": {
+        "language": "python",
+        "lines": 130,
+        "purpose": "self_training",
+        "features": ["track_record", "bias_calculation", "mae_statistics"]
+      }
+    },
+    {
+      "id": "purge_captures_script",
+      "type": "file",
+      "name": "backend/purge_captures.py",
+      "attributes": {
+        "language": "python",
+        "lines": 101,
+        "purpose": "maintenance_script",
+        "safety": "dry_run_by_default"
+      }
+    },
+    {
+      "id": "capture_now_script",
+      "type": "file",
+      "name": "backend/capture_now.py",
+      "attributes": {
+        "language": "python",
+        "lines": 146,
+        "purpose": "manual_capture_script",
+        "idempotent": true
+      }
+    },
+    {
+      "id": "polttoaine_scraper",
+      "type": "file",
+      "name": "backend/scrapers/polttoaine.py",
+      "attributes": {
+        "language": "python",
+        "lines": 78,
+        "purpose": "web_scraper",
+        "target": "polttoaine.net",
+        "encoding": "latin1"
+      }
+    },
+    {
+      "id": "tankille_scraper",
+      "type": "file",
+      "name": "backend/scrapers/tankille.py",
+      "attributes": {
+        "language": "python",
+        "lines": 128,
+        "purpose": "web_scraper",
+        "target": "tankille.fi",
+        "priority": "PRIMARY"
+      }
+    },
+    {
+      "id": "design_guidelines",
+      "type": "file",
+      "name": "design_guidelines.json",
+      "attributes": {
+        "type": "design_system",
+        "theme": "Nordic Industrial Tech",
+        "archetype": "swiss_high_contrast"
+      }
+    },
+    {
+      "id": "railway_config",
+      "type": "file",
+      "name": "backend/railway.json",
+      "attributes": {
+        "type": "deployment_config",
+        "platform": "Railway",
+        "healthcheck": "/api/factors"
+      }
+    },
+    {
+      "id": "state_json",
+      "type": "file",
+      "name": "state.json",
+      "attributes": {
+        "type": "application_state",
+        "purpose": "change_detection",
+        "last_run": "2026-06-02T12:51:35"
+      }
+    },
+    {
+      "id": "settings_local",
+      "type": "file",
+      "name": ".claude/settings.local.json",
+      "attributes": {
+        "type": "permissions_config",
+        "purpose": "agent_permissions"
+      }
+    },
+    {
+      "id": "mongodb_snapshots",
+      "type": "database_collection",
+      "name": "snapshots",
+      "attributes": {
+        "purpose": "latest_live_scrape",
+        "key_fields": ["fuel", "ts", "national_min", "by_city", "cheap_sample_avg"]
+      }
+    },
+    {
+      "id": "mongodb_daily_tracker",
+      "type": "database_collection",
+      "name": "daily_tracker",
+      "attributes": {
+        "purpose": "real_captures_truth",
+        "key_fields": ["fuel", "region", "date", "hour", "actual_cheapest", "by_city"],
+        "unique_index": "(fuel, region, date, hour)"
+      }
+    },
+    {
+      "id": "mongodb_predictions",
+      "type": "database_collection",
+      "name": "predictions",
+      "attributes": {
+        "purpose": "stored_predictions",
+        "key_fields": ["target_date", "fuel", "region", "methods_full", "ensemble_full"]
+      }
+    },
+    {
+      "id": "mongodb_history",
+      "type": "database_collection",
+      "name": "history",
+      "attributes": {
+        "purpose": "historical_prices",
+        "source_filter": "scraped_only",
+        "note": "synthetic_data_removed"
+      }
+    },
+    {
+      "id": "moving_average_method",
+      "type": "algorithm",
+      "name": "moving_average",
+      "attributes": {
+        "type": "statistical",
+        "window": 7,
+        "date_aware": true
+      }
+    },
+    {
+      "id": "linear_regression_method",
+      "type": "algorithm",
+      "name": "linear_regression",
+      "attributes": {
+        "type": "statistical",
+        "lookback": 30,
+        "date_aware": true
+      }
+    },
+    {
+      "id": "exp_smoothing_method",
+      "type": "algorithm",
+      "name": "exp_smoothing",
+      "attributes": {
+        "type": "statistical",
+        "method": "Holt",
+        "alpha": 0.4,
+        "beta": 0.2
+      }
+    },
+    {
+      "id": "fundamental_anchor_method",
+      "type": "algorithm",
+      "name": "fundamental_anchor",
+      "attributes": {
+        "type": "quantitative",
+        "inputs": ["live_price", "brent", "eur_usd", "refined_product", "weekday", "momentum", "tax_step"],
+        "clamp": "±0.06 EUR/L"
+      }
+    },
+    {
+      "id": "ai_llm_method",
+      "type": "algorithm",
+      "name": "ai_llm",
+      "attributes": {
+        "type": "llm",
+        "models": ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-5", "claude-haiku-4-5"],
+        "fallback_chain": true
+      }
+    },
+    {
+      "id": "ensemble_method",
+      "type": "algorithm",
+      "name": "ensemble",
+      "attributes": {
+        "type": "weighted_average",
+        "data_quality_aware": true,
+        "self_calibrating": true
+      }
+    },
+    {
+      "id": "sanity_filter",
+      "type": "function",
+      "name": "_sanity_filter",
+      "attributes": {
+        "purpose": "outlier_removal",
+        "checks": ["hard_bounds", "IQR_detection"],
+        "bounds": "1.10-3.50 EUR/L"
+      }
+    },
+    {
+      "id": "conflict_scanner",
+      "type": "function",
+      "name": "_scan_conflict",
+      "attributes": {
+        "purpose": "geopolitical_risk_detection",
+        "keywords": ["sota", "konflikti", "kriisi", "pakote", "opec", "iran", "israel"]
+      }
+    },
+    {
+      "id": "weekday_adjustment",
+      "type": "function",
+      "name": "_empirical_weekday_adj",
+      "attributes": {
+        "purpose": "weekday_price_pattern",
+        "method": "rolling_mean_residuals",
+        "min_samples": 21
+      }
+    },
+    {
+      "id": "bias_correction",
+      "type": "function",
+      "name": "_bias_correction",
+      "attributes": {
+        "purpose": "self_training_correction",
+        "damping": "linear",
+        "max_correction": "±0.020 EUR/L"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "server.py",
+      "target": "predict.py",
+      "type": "imports",
+      "label": "predict_tomorrow"
+    },
+    {
+      "source": "server.py",
+      "target": "tracker.py",
+      "type": "imports",
+      "label": "tracker_mod"
+    },
+    {
+      "source": "server.py",
+      "target": "notify.py",
+      "type": "imports",
+      "label": "notify_mod"
+    },
+    {
+      "source": "server.py",
+      "target": "factors.py",
+      "type": "imports",
+      "label": "factors_mod"
+    },
+    {
+      "source": "server.py",
+      "target": "news.py",
+      "type": "imports",
+      "label": "news_mod"
+    },
+    {
+      "source": "server.py",
+      "target": "tax_events.py",
+      "type": "imports",
+      "label": "tax_events_mod"
+    },
+    {
+      "source": "server.py",
+      "target": "learn.py",
+      "type": "imports",
+      "label": "learn_mod"
+    },
+    {
+      "source": "server.py",
+      "target": "polttoaine_scraper",
+      "type": "imports",
+      "label": "polttoaine"
+    },
+    {
+      "source": "server.py",
+      "target": "tankille_scraper",
+      "type": "imports",
+      "label": "tankille"
+    },
+    {
+      "source": "tracker.py",
+      "target": "predict.py",
+      "type": "imports",
+      "label": "predict_mod"
+    },
+    {
+      "source": "tracker.py",
+      "target": "factors.py",
+      "type": "imports"
+    },
+    {
+      "source": "tracker.py",
+      "target": "news.py",
+      "type": "imports"
+    },
+    {
+      "source": "tracker.py",
+      "target": "notify.py",
+      "type": "imports"
+    },
+    {
+      "source": "tracker.py",
+      "target": "tax_events.py",
+      "type": "imports"
+    },
+    {
+      "source": "tracker.py",
+      "target": "learn.py",
+      "type": "imports"
+    },
+    {
+      "source": "tracker.py",
+      "target": "polttoaine_scraper",
+      "type": "imports"
+    },
+    {
+      "source": "tracker.py",
+      "target": "tankille_scraper",
+      "type": "imports"
+    },
+    {
+      "source": "predict.py",
+      "target": "moving_average_method",
+      "type": "implements"
+    },
+    {
+      "source": "predict.py",
+      "target": "linear_regression_method",
+      "type": "implements"
+    },
+    {
+      "source": "predict.py",
+      "target": "exp_smoothing_method",
+      "type": "implements"
+    },
+    {
+      "source": "predict.py",
+      "target": "fundamental_anchor_method",
+      "type": "implements"
+    },
+    {
+      "source": "predict.py",
+      "target": "ai_llm_method",
+      "type": "implements"
+    },
+    {
+      "source": "predict.py",
+      "target": "ensemble_method",
+      "type": "implements"
+    },
+    {
+      "source": "notify.py",
+      "target": "polttoaine_scraper",
+      "type": "imports"
+    },
+    {
+      "source": "notify.py",
+      "target": "tankille_scraper",
+      "type": "imports"
+    },
+    {
+      "source": "capture_now_script",
+      "target": "tracker.py",
+      "type": "imports"
+    },
+    {
+      "source": "capture_now_script",
+      "target": "notify.py",
+      "type": "imports"
+    },
+    {
+      "source": "check_prices_script",
+      "target": "polttoaine_scraper_old",
+      "type": "imports",
+      "label": "legacy"
+    },
+    {
+      "source": "check_prices_script",
+      "target": "tankille_scraper_old",
+      "type": "imports",
+      "label": "legacy"
+    },
+    {
+      "source": "server.py",
+      "target": "mongodb_snapshots",
+      "type": "writes_to",
+      "label": "/api/prices/current"
+    },
+    {
+      "source": "server.py",
+      "target": "mongodb_history",
+      "type": "writes_to",
+      "label": "scraped_only"
+    },
+    {
+      "source": "server.py",
+      "target": "mongodb_predictions",
+      "type": "writes_to",
+      "label": "/api/predict/run"
+    },
+    {
+      "source": "server.py",
+      "target": "mongodb_daily_tracker",
+      "type": "writes_to",
+      "label": "/api/track/*"
+    },
+    {
+      "source": "tracker.py",
+      "target": "mongodb_daily_tracker",
+      "type": "writes_to",
+      "label": "capture_daily"
+    },
+    {
+      "source": "tracker.py",
+      "target": "mongodb_predictions",
+      "type": "reads_from",
+      "label": "load_yesterday_prediction"
+    },
+    {
+      "source": "predict.py",
+      "target": "factors.py",
+      "type": "uses",
+      "label": "fetch_brent, fetch_eur_usd, fetch_product_for_fuel"
+    },
+    {
+      "source": "predict.py",
+      "target": "news.py",
+      "type": "uses",
+      "label": "fetch_news"
+    },
+    {
+      "source": "predict.py",
+      "target": "tax_events.py",
+      "type": "uses",
+      "label": "applicable_step, upcoming"
+    },
+    {
+      "source": "fundamental_anchor_method",
+      "target": "factors.py",
+      "type": "depends_on",
+      "label": "brent, eur_usd, refined_product"
+    },
+    {
+      "source": "fundamental_anchor_method",
+      "target": "weekday_adjustment",
+      "type": "uses"
+    },
+    {
+      "source": "fundamental_anchor_method",
+      "target": "bias_correction",
+      "type": "uses",
+      "label": "self_training"
+    },
+    {
+      "source": "ai_llm_method",
+      "target": "conflict_scanner",
+      "type": "uses"
+    },
+    {
+      "source": "ai_llm_method",
+      "target": "learn.py",
+      "type": "uses",
+      "label": "track_record"
+    },
+    {
+      "source": "ensemble_method",
+      "target": "moving_average_method",
+      "type": "aggregates"
+    },
+    {
+      "source": "ensemble_method",
+      "target": "linear_regression_method",
+      "type": "aggregates"
+    },
+    {
+      "source": "ensemble_method",
+      "target": "exp_smoothing_method",
+      "type": "aggregates"
+    },
+    {
+      "source": "ensemble_method",
+      "target": "fundamental_anchor_method",
+      "type": "aggregates"
+    },
+    {
+      "source": "ensemble_method",
+      "target": "ai_llm_method",
+      "type": "aggregates"
+    },
+    {
+      "source": "learn.py",
+      "target": "mongodb_predictions",
+      "type": "reads_from"
+    },
+    {
+      "source": "learn.py",
+      "target": "mongodb_daily_tracker",
+      "type": "reads_from",
+      "label": "actual_cheapest"
+    },
+    {
+      "source": "polttoaine_scraper",
+      "target": "sanity_filter",
+      "type": "filtered_by"
+    },
+    {
+      "source": "tankille_scraper",
+      "target": "sanity_filter",
+      "type": "filtered_by"
+    },
+    {
+      "source": "utils.js",
+      "target": "server.py",
+      "type": "formats_data_from",
+      "label": "frontend_utility"
+    },
+    {
+      "source": "railway_config",
+      "target": "server.py",
+      "type": "deployment_config_for"
+    },
+    {
+      "source": "design_guidelines",
+      "target": "utils.js",
+      "type": "design_system_for",
+      "label": "typography_formatting"
+    }
+  ],
+  "concepts": [
+    {
+      "id": "live_data_only_architecture",
+      "name": "Live Data Only Architecture",
+      "description": "All price data is live-scraped from today onwards. No synthetic, interpolated, or Tilastokeskus (Statfin) historical data. Legacy modeled data has been purged.",
+      "related_entities": ["mongodb_history", "mongodb_daily_tracker", "server.py", "tracker.py"]
+    },
+    {
+      "id": "dual_scraper_strategy",
+      "name": "Dual Scraper with Priority",
+      "description": "Two scrapers (polttoaine.net and tankille.fi) with tankille.fi as PRIMARY source. Fallback to polttoaine.net when tankille is >10% higher. Both filtered through sanity checks.",
+      "related_entities": ["polttoaine_scraper", "tankille_scraper", "sanity_filter", "server.py", "notify.py"]
+    },
+    {
+      "id": "five_method_prediction",
+      "name": "Five Parallel Prediction Methods",
+      "description": "MA, LR, Exp Smoothing, Fundamental Anchor, and AI LLM run in parallel, then combined via data-quality-aware ensemble with self-calibrating weights.",
+      "related_entities": ["predict.py", "moving_average_method", "linear_regression_method", "exp_smoothing_method", "fundamental_anchor_method", "ai_llm_method", "ensemble_method"]
+    },
+    {
+      "id": "scheduled_capture_system",
+      "name": "Scheduled Capture System",
+      "description": "Automated captures at 14:00 and 21:00 Helsinki time. Each capture scrapes actual prices, loads yesterday's prediction for accuracy tracking, and generates fresh prediction for tomorrow.",
+      "related_entities": ["tracker.py", "mongodb_daily_tracker", "capture_now_script"]
+    },
+    {
+      "id": "self_training_loop",
+      "name": "Self-Training Loop",
+      "description": "System learns from its own prediction errors. Fundamental anchor applies bias correction, AI sees its track record, ensemble weights calibrate to realized MAE.",
+      "related_entities": ["learn.py", "bias_correction", "fundamental_anchor_method", "ai_llm_method", "ensemble_method"]
+    },
+    {
+      "id": "fundamental_factors",
+      "name": "Fundamental Market Factors",
+      "description": "Live market data feeding predictions: Brent crude, EUR/USD, refined products (RBOB/ULSD), crack spreads, weekday effects, momentum, and known tax events.",
+      "related_entities": ["factors.py", "fundamental_anchor_method", "tax_events.py"]
+    },
+    {
+      "id": "geopolitical_risk_detection",
+      "name": "Geopolitical Risk Detection",
+      "description": "News scanner detects conflict/supply disruption keywords. AI handles forward-looking risk, while Brent already prices historical risk (no double-counting).",
+      "related_entities": ["news.py", "conflict_scanner", "ai_llm_method"]
+    },
+    {
+      "id": "data_quality_awareness",
+      "name": "Data Quality Awareness",
+      "description": "Prediction system adapts to thin vs. rich daily data. Thin data (<14 daily points) → lean on fundamental_anchor + AI. Rich data → balance all methods.",
+      "related_entities": ["ensemble_method", "predict.py", "mongodb_daily_tracker"]
+    },
+    {
+      "id": "price_clamping",
+      "name": "Price Clamping Safety",
+      "description": "Predictions clamped to ±0.06 EUR/L of live price (expanded by tax step amount when applicable). Prevents unrealistic jumps.",
+      "related_entities": ["fundamental_anchor_method", "ensemble_method", "predict.py"]
+    },
+    {
+      "id": "ntfy_notification_system",
+      "name": "ntfy.sh Notification System",
+      "description": "Push notifications sent at each capture with multi-fuel summary. Shows cheapest per city with cross-source validation.",
+      "related_entities": ["notify.py", "tracker.py", "server.py"]
+    },
+    {
+      "id": "date_aware_algorithms",
+      "name": "Date-Aware Statistical Algorithms",
+      "description": "MA/LR/ES use calendar day projections (+1 day) and daily tail extraction to avoid treating sparse data as daily frequency.",
+      "related_entities": ["moving_average_method", "linear_regression_method", "exp_smoothing_method", "predict.py"]
+    },
+    {
+      "id": "worktree_architecture",
+      "name": "Agent Worktree Architecture",
+      "description": "Multiple .claude/worktrees contain different agent iterations. agent-a9562a62d22e952b1 is current, agent-a52a5e37468629d79 is legacy.",
+      "related_entities": ["check_prices_script", "polttoaine_scraper_old", "tankille_scraper_old", "settings_local"]
+    }
+  ],
+  "metadata": {
+    "chunk_id": 5,
+    "total_chunks": 16,
+    "files_processed": 22,
+    "extraction_timestamp": "2026-06-07T00:00:00Z",
+    "key_patterns": [
+      "FastAPI backend with 1132 lines serving 20+ API routes",
+      "Prediction pipeline with 5 methods + ensemble (1051 lines)",
+      "Dual scraper system with priority ranking and sanity filters",
+      "Scheduled capture system at 14:00/21:00 Helsinki (tracker.py 437 lines)",
+      "Self-training bias correction and MAE calibration (learn.py 130 lines)",
+      "Market factors integration: Brent, EUR/USD, RBOB, ULSD, crack spreads",
+      "Geopolitical risk detection via RSS news keywords",
+      "ntfy.sh push notification system with multi-fuel summaries",
+      "MongoDB collections: snapshots, daily_tracker (truth), predictions, history",
+      "Agent worktree structure with legacy and current versions"
+    ]
+  }
+}

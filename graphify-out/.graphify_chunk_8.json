@@ -1,0 +1,436 @@
+{
+  "entities": [
+    {
+      "id": "frontend-dashboard-redesign-worktree",
+      "type": "worktree",
+      "name": "frontend-dashboard-redesign",
+      "description": "Git worktree for frontend dashboard redesign work"
+    },
+    {
+      "id": "test_bensavahti_api.py",
+      "type": "test_file",
+      "name": "test_bensavahti_api.py",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/backend/tests/test_bensavahti_api.py",
+      "description": "BensaVahti backend API integration tests covering all endpoints",
+      "lines": 229
+    },
+    {
+      "id": "frontend-package.json",
+      "type": "config_file",
+      "name": "package.json",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/package.json",
+      "description": "Frontend package configuration with React 18, Recharts, Framer Motion dependencies",
+      "version": "2.0.0"
+    },
+    {
+      "id": "App.js",
+      "type": "react_component",
+      "name": "App.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/App.js",
+      "description": "Main React application component (~666 lines), single component tree",
+      "lines": 666
+    },
+    {
+      "id": "AccuracyTracker.jsx",
+      "type": "react_component",
+      "name": "AccuracyTracker",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/AccuracyTracker.jsx",
+      "description": "Component displaying historical prediction accuracy metrics (MAE, within 2¢ rate)",
+      "lines": 109
+    },
+    {
+      "id": "AiAnalysis.jsx",
+      "type": "react_component",
+      "name": "AiAnalysis",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/AiAnalysis.jsx",
+      "description": "Component displaying AI prediction analysis with confidence interval and key drivers",
+      "lines": 207
+    },
+    {
+      "id": "Card.jsx",
+      "type": "react_component",
+      "name": "Card",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/Card.jsx",
+      "description": "Design system primitives: Card, CardLabel, StatNumber, DeltaBadge",
+      "lines": 87
+    },
+    {
+      "id": "CityAverageChart.jsx",
+      "type": "react_component",
+      "name": "CityAverageChart",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/CityAverageChart.jsx",
+      "description": "Recharts component showing all-cities average with market-move projection",
+      "lines": 195
+    },
+    {
+      "id": "FactorsCard.jsx",
+      "type": "react_component",
+      "name": "FactorsCard",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/FactorsCard.jsx",
+      "description": "Component displaying market factors: refined product, Brent crude, EUR/USD, crack spread",
+      "lines": 134
+    },
+    {
+      "id": "FuelToggle.jsx",
+      "type": "react_component",
+      "name": "FuelToggle",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/FuelToggle.jsx",
+      "description": "Toggle component for selecting fuel type (95E10 / Diesel)",
+      "lines": 42
+    },
+    {
+      "id": "MethodTable.jsx",
+      "type": "react_component",
+      "name": "MethodTable",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/MethodTable.jsx",
+      "description": "Component displaying 5-method prediction comparison with weights and ensemble",
+      "lines": 133
+    },
+    {
+      "id": "NewsCard.jsx",
+      "type": "react_component",
+      "name": "NewsCard",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/NewsCard.jsx",
+      "description": "Component displaying RSS news feed from Finnish sources",
+      "lines": 88
+    },
+    {
+      "id": "RangeToggle.jsx",
+      "type": "react_component",
+      "name": "RangeToggle",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/RangeToggle.jsx",
+      "description": "Generic toggle component for range selection (30/90/365 days)",
+      "lines": 29
+    },
+    {
+      "id": "RegionalGrid.jsx",
+      "type": "react_component",
+      "name": "RegionalGrid",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/RegionalGrid.jsx",
+      "description": "Component displaying city-by-city fuel price comparison grid with filtering",
+      "lines": 217
+    },
+    {
+      "id": "TrackingChart.jsx",
+      "type": "react_component",
+      "name": "TrackingChart",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/components/TrackingChart.jsx",
+      "description": "Recharts component for prediction vs actual tracking with city mode",
+      "lines": 196
+    },
+    {
+      "id": "api.js",
+      "type": "module",
+      "name": "api.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/lib/api.js",
+      "description": "Axios wrappers for all backend routes - single source of truth for HTTP contract",
+      "lines": 29
+    },
+    {
+      "id": "dashboard.js",
+      "type": "module",
+      "name": "dashboard.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/lib/dashboard.js",
+      "description": "Dashboard utility functions: safe parsing, formatting, forecast summary",
+      "lines": 94
+    },
+    {
+      "id": "dashboard.test.js",
+      "type": "test_file",
+      "name": "dashboard.test.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/lib/dashboard.test.js",
+      "description": "Jest tests for dashboard utility functions",
+      "lines": 72
+    },
+    {
+      "id": "modelName.js",
+      "type": "module",
+      "name": "modelName.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/lib/modelName.js",
+      "description": "Utility to convert model IDs to human-readable labels",
+      "lines": 19
+    },
+    {
+      "id": "tailwind.config.js",
+      "type": "config_file",
+      "name": "tailwind.config.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/tailwind.config.js",
+      "description": "Tailwind CSS configuration with custom colors, fonts, animations",
+      "lines": 59
+    },
+    {
+      "id": "vercel.json",
+      "type": "config_file",
+      "name": "vercel.json",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/vercel.json",
+      "description": "Vercel deployment config: SPA rewrites, cache headers, CRA framework",
+      "lines": 27
+    },
+    {
+      "id": "postcss.config.js",
+      "type": "config_file",
+      "name": "postcss.config.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/postcss.config.js",
+      "description": "PostCSS configuration for Tailwind CSS and autoprefixer",
+      "lines": 6
+    },
+    {
+      "id": "index.js",
+      "type": "module",
+      "name": "index.js",
+      "path": ".claude/worktrees/frontend-dashboard-redesign/frontend/src/index.js",
+      "description": "React entry point - renders App component to root element",
+      "lines": 7
+    }
+  ],
+  "relationships": [
+    {
+      "source": "App.js",
+      "target": "api.js",
+      "type": "imports",
+      "label": "uses API functions"
+    },
+    {
+      "source": "App.js",
+      "target": "dashboard.js",
+      "type": "imports",
+      "label": "uses utility functions"
+    },
+    {
+      "source": "App.js",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "App.js",
+      "target": "FuelToggle.jsx",
+      "type": "imports",
+      "label": "renders fuel selector"
+    },
+    {
+      "source": "App.js",
+      "target": "TrackingChart.jsx",
+      "type": "imports",
+      "label": "renders tracking chart"
+    },
+    {
+      "source": "App.js",
+      "target": "CityAverageChart.jsx",
+      "type": "imports",
+      "label": "renders city average chart"
+    },
+    {
+      "source": "App.js",
+      "target": "RegionalGrid.jsx",
+      "type": "imports",
+      "label": "renders regional grid"
+    },
+    {
+      "source": "App.js",
+      "target": "AccuracyTracker.jsx",
+      "type": "imports",
+      "label": "renders accuracy tracker"
+    },
+    {
+      "source": "App.js",
+      "target": "FactorsCard.jsx",
+      "type": "imports",
+      "label": "renders factors card"
+    },
+    {
+      "source": "App.js",
+      "target": "NewsCard.jsx",
+      "type": "imports",
+      "label": "renders news card"
+    },
+    {
+      "source": "index.js",
+      "target": "App.js",
+      "type": "imports",
+      "label": "renders main component"
+    },
+    {
+      "source": "AiAnalysis.jsx",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "AiAnalysis.jsx",
+      "target": "modelName.js",
+      "type": "imports",
+      "label": "formats model names"
+    },
+    {
+      "source": "AccuracyTracker.jsx",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "FactorsCard.jsx",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "MethodTable.jsx",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "MethodTable.jsx",
+      "target": "modelName.js",
+      "type": "imports",
+      "label": "formats AI model names"
+    },
+    {
+      "source": "NewsCard.jsx",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "NewsCard.jsx",
+      "target": "dashboard.js",
+      "type": "imports",
+      "label": "uses getSafeExternalUrl"
+    },
+    {
+      "source": "RegionalGrid.jsx",
+      "target": "Card.jsx",
+      "type": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "dashboard.test.js",
+      "target": "dashboard.js",
+      "type": "tests",
+      "label": "tests utility functions"
+    },
+    {
+      "source": "test_bensavahti_api.py",
+      "target": "api.js",
+      "type": "validates",
+      "label": "integration tests for backend endpoints"
+    },
+    {
+      "source": "vercel.json",
+      "target": "frontend-package.json",
+      "type": "configures",
+      "label": "defines build commands"
+    },
+    {
+      "source": "postcss.config.js",
+      "target": "tailwind.config.js",
+      "type": "uses",
+      "label": "processes Tailwind CSS"
+    },
+    {
+      "source": "Card.jsx",
+      "target": "tailwind.config.js",
+      "type": "uses",
+      "label": "applies custom theme"
+    },
+    {
+      "source": "TrackingChart.jsx",
+      "target": "dashboard.js",
+      "type": "imports",
+      "label": "uses fmtDateFi"
+    },
+    {
+      "source": "CityAverageChart.jsx",
+      "target": "dashboard.js",
+      "type": "imports",
+      "label": "uses fmtDateFi"
+    }
+  ],
+  "concepts": [
+    {
+      "id": "frontend-redesign",
+      "name": "Frontend Dashboard Redesign",
+      "description": "Redesigned dashboard UI with improved data visualization and user experience",
+      "related_entities": ["App.js", "AccuracyTracker.jsx", "TrackingChart.jsx", "CityAverageChart.jsx"]
+    },
+    {
+      "id": "react-component-architecture",
+      "name": "React Component Architecture",
+      "description": "Modular component structure with shared design system primitives",
+      "related_entities": ["Card.jsx", "FuelToggle.jsx", "RangeToggle.jsx"]
+    },
+    {
+      "id": "data-visualization",
+      "name": "Data Visualization",
+      "description": "Recharts-based charts for tracking predictions, city averages, and market factors",
+      "related_entities": ["TrackingChart.jsx", "CityAverageChart.jsx", "FactorsCard.jsx"]
+    },
+    {
+      "id": "api-client",
+      "name": "API Client Layer",
+      "description": "Centralized axios-based API client with typed wrappers for all backend routes",
+      "related_entities": ["api.js", "dashboard.js"]
+    },
+    {
+      "id": "testing-strategy",
+      "name": "Testing Strategy",
+      "description": "Integration tests for backend API and unit tests for frontend utilities",
+      "related_entities": ["test_bensavahti_api.py", "dashboard.test.js"]
+    },
+    {
+      "id": "design-system",
+      "name": "Design System",
+      "description": "Tailwind-based design system with custom colors, animations, and reusable primitives",
+      "related_entities": ["tailwind.config.js", "Card.jsx", "postcss.config.js"]
+    },
+    {
+      "id": "deployment-config",
+      "name": "Deployment Configuration",
+      "description": "Vercel deployment with SPA routing, cache optimization, and CRA framework",
+      "related_entities": ["vercel.json", "frontend-package.json"]
+    },
+    {
+      "id": "utility-functions",
+      "name": "Utility Functions",
+      "description": "Helper functions for formatting, validation, and data transformation",
+      "related_entities": ["dashboard.js", "modelName.js"]
+    },
+    {
+      "id": "prediction-display",
+      "name": "Prediction Display",
+      "description": "Components for displaying AI predictions, method comparisons, and accuracy metrics",
+      "related_entities": ["AiAnalysis.jsx", "MethodTable.jsx", "AccuracyTracker.jsx"]
+    },
+    {
+      "id": "regional-comparison",
+      "name": "Regional Comparison",
+      "description": "UI for comparing fuel prices across Finnish cities with filtering and sorting",
+      "related_entities": ["RegionalGrid.jsx", "CityAverageChart.jsx"]
+    },
+    {
+      "id": "news-integration",
+      "name": "News Integration",
+      "description": "Display of RSS news feed from Finnish market sources with age badges",
+      "related_entities": ["NewsCard.jsx"]
+    },
+    {
+      "id": "theme-support",
+      "name": "Theme Support",
+      "description": "Dark/light theme toggle with localStorage persistence and no-FOUC implementation",
+      "related_entities": ["App.js", "tailwind.config.js"]
+    }
+  ],
+  "metadata": {
+    "chunk_id": 8,
+    "total_chunks": 16,
+    "extraction_date": "2026-06-07",
+    "worktree": "frontend-dashboard-redesign",
+    "file_count": 22,
+    "primary_language": "JavaScript/JSX",
+    "framework": "React 18",
+    "ui_library": "Tailwind CSS",
+    "charting_library": "Recharts",
+    "test_framework": "Jest + pytest"
+  }
+}

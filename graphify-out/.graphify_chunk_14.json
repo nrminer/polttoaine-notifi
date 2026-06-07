@@ -1,0 +1,748 @@
+{
+  "entities": [
+    {
+      "id": "bensavahti",
+      "type": "application",
+      "name": "BensaVahti",
+      "description": "Finnish fuel price dashboard with tomorrow price predictor and ntfy push notifications"
+    },
+    {
+      "id": "vercel",
+      "type": "platform",
+      "name": "Vercel",
+      "description": "Frontend hosting platform for React CRA application"
+    },
+    {
+      "id": "railway",
+      "type": "platform",
+      "name": "Railway",
+      "description": "Backend hosting platform for FastAPI + uvicorn application"
+    },
+    {
+      "id": "mongodb_atlas",
+      "type": "database",
+      "name": "MongoDB Atlas",
+      "description": "Free M0 cluster database for storing fuel prices and predictions"
+    },
+    {
+      "id": "claude_opus_4_7",
+      "type": "ai_model",
+      "name": "Claude Opus 4.7",
+      "description": "AI model for fuel price prediction via emergentintegrations SDK"
+    },
+    {
+      "id": "fastapi_backend",
+      "type": "service",
+      "name": "FastAPI Backend",
+      "description": "Python FastAPI backend with Motor async MongoDB driver"
+    },
+    {
+      "id": "react_frontend",
+      "type": "service",
+      "name": "React Frontend",
+      "description": "Create React App frontend with Tailwind CSS and Recharts"
+    },
+    {
+      "id": "ntfy_sh",
+      "type": "service",
+      "name": "ntfy.sh",
+      "description": "Push notification service with topic polttoaine"
+    },
+    {
+      "id": "polttoaine_net",
+      "type": "data_source",
+      "name": "polttoaine.net",
+      "description": "Secondary scraping source for fuel prices"
+    },
+    {
+      "id": "tankille_fi",
+      "type": "data_source",
+      "name": "tankille.fi",
+      "description": "Primary scraping source for per-city fuel prices"
+    },
+    {
+      "id": "yahoo_finance",
+      "type": "data_source",
+      "name": "Yahoo Finance",
+      "description": "Market data source for Brent crude oil and EUR/USD exchange rates"
+    },
+    {
+      "id": "deployment_checklist",
+      "type": "documentation",
+      "name": "DEPLOYMENT_CHECKLIST.md",
+      "description": "Post-fix deployment actions and testing procedures"
+    },
+    {
+      "id": "railway_deployment_md",
+      "type": "documentation",
+      "name": "RAILWAY_DEPLOYMENT.md",
+      "description": "Step-by-step guide for deploying backend to Railway"
+    },
+    {
+      "id": "vercel_deployment_md",
+      "type": "documentation",
+      "name": "VERCEL_DEPLOYMENT.md",
+      "description": "Step-by-step guide for deploying frontend to Vercel"
+    },
+    {
+      "id": "fixes_applied",
+      "type": "documentation",
+      "name": "FIXES_APPLIED.md",
+      "description": "Security and accuracy fixes implementation summary"
+    },
+    {
+      "id": "fixes_summary",
+      "type": "documentation",
+      "name": "FIXES_SUMMARY.txt",
+      "description": "Overview of completed security and accuracy audit fixes"
+    },
+    {
+      "id": "privacy_policy",
+      "type": "documentation",
+      "name": "privacy.html / PRIVACY.md",
+      "description": "Finnish privacy policy stating no personal data collection"
+    },
+    {
+      "id": "prd",
+      "type": "documentation",
+      "name": "PRD.md",
+      "description": "Product requirements document with architecture and backlog"
+    },
+    {
+      "id": "agents_md",
+      "type": "documentation",
+      "name": "AGENTS.md",
+      "description": "Comprehensive AI agent orientation guide for the repository"
+    },
+    {
+      "id": "admin_token",
+      "type": "security",
+      "name": "ADMIN_TOKEN",
+      "description": "Environment variable for password-protecting destructive endpoints"
+    },
+    {
+      "id": "rate_limiting",
+      "type": "security",
+      "name": "Rate Limiting",
+      "description": "slowapi rate limiter for preventing DoS attacks"
+    },
+    {
+      "id": "defusedxml",
+      "type": "security",
+      "name": "defusedxml",
+      "description": "Protection against XML entity expansion attacks in RSS feeds"
+    },
+    {
+      "id": "fundamental_anchor",
+      "type": "prediction_method",
+      "name": "Fundamental Anchor",
+      "description": "Prediction method using live price + Brent-EUR pass-through + weekday + momentum"
+    },
+    {
+      "id": "moving_average",
+      "type": "prediction_method",
+      "name": "Moving Average",
+      "description": "7-day moving average prediction method"
+    },
+    {
+      "id": "linear_regression",
+      "type": "prediction_method",
+      "name": "Linear Regression",
+      "description": "30-day linear regression prediction method"
+    },
+    {
+      "id": "exp_smoothing",
+      "type": "prediction_method",
+      "name": "Exponential Smoothing",
+      "description": "Holt exponential smoothing with alpha=0.4, beta=0.2"
+    },
+    {
+      "id": "ai_llm_predict",
+      "type": "prediction_method",
+      "name": "AI LLM Predict",
+      "description": "Claude-based prediction with geopolitical risk handling"
+    },
+    {
+      "id": "ensemble",
+      "type": "prediction_method",
+      "name": "Ensemble",
+      "description": "Data-quality-aware weighted combination of 5 prediction methods"
+    },
+    {
+      "id": "daily_tracker",
+      "type": "mongodb_collection",
+      "name": "daily_tracker",
+      "description": "Real captures at 14:00 and 21:00 Helsinki time with prediction tracking"
+    },
+    {
+      "id": "snapshots",
+      "type": "mongodb_collection",
+      "name": "snapshots",
+      "description": "Latest live scrape with national_min and by_city data"
+    },
+    {
+      "id": "predictions",
+      "type": "mongodb_collection",
+      "name": "predictions",
+      "description": "Last /api/predict/run output shown in UI via /predict/latest"
+    },
+    {
+      "id": "history",
+      "type": "mongodb_collection",
+      "name": "history",
+      "description": "Real-only historical prices with source:scraped, no synthetic data"
+    },
+    {
+      "id": "emergentintegrations",
+      "type": "python_package",
+      "name": "emergentintegrations",
+      "description": "SDK for accessing Claude models, hosted on Emergent's private PyPI"
+    },
+    {
+      "id": "slowapi",
+      "type": "python_package",
+      "name": "slowapi",
+      "description": "Rate limiting library for FastAPI endpoints"
+    },
+    {
+      "id": "motor",
+      "type": "python_package",
+      "name": "motor",
+      "description": "Async MongoDB driver for Python"
+    },
+    {
+      "id": "price_verification",
+      "type": "feature",
+      "name": "Price Verification System",
+      "description": "Safety system to verify prices before storage with historical deviation checks"
+    },
+    {
+      "id": "iqr_sanity_filter",
+      "type": "feature",
+      "name": "IQR Sanity Filter",
+      "description": "1.5×IQR outlier detection replacing 25% median deviation"
+    },
+    {
+      "id": "cors_tightening",
+      "type": "security",
+      "name": "CORS Tightening",
+      "description": "Restricted CORS from wildcard to specific Vercel frontend origin"
+    },
+    {
+      "id": "scheduled_captures",
+      "type": "feature",
+      "name": "Scheduled Captures",
+      "description": "Automatic data capture at 14:00 and 21:00 Helsinki time"
+    },
+    {
+      "id": "news_watch_loop",
+      "type": "feature",
+      "name": "News Watch Loop",
+      "description": "Auto-reruns AI prediction when new fuel-relevant news appears"
+    },
+    {
+      "id": "dark_theme",
+      "type": "feature",
+      "name": "Dark Theme",
+      "description": "Default dark theme with light/dark toggle persisted to localStorage"
+    },
+    {
+      "id": "github_actions",
+      "type": "ci_cd",
+      "name": "GitHub Actions",
+      "description": "Workflow that checks gas prices every 15 minutes and commits state"
+    },
+    {
+      "id": "pip_extra_index",
+      "type": "configuration",
+      "name": "PIP_EXTRA_INDEX_URL",
+      "description": "Required env var pointing to Emergent's private PyPI for emergentintegrations"
+    },
+    {
+      "id": "agent_worktree_a52a5e37",
+      "type": "worktree",
+      "name": "agent-a52a5e37468629d79",
+      "description": "Agent worktree with deployment docs and requirements"
+    },
+    {
+      "id": "agent_worktree_a9562a62",
+      "type": "worktree",
+      "name": "agent-a9562a62d22e952b1",
+      "description": "Agent worktree with security fixes and deployment checklist"
+    }
+  ],
+  "relationships": [
+    {
+      "source": "react_frontend",
+      "target": "vercel",
+      "type": "DEPLOYED_ON",
+      "properties": {
+        "url": "https://polttoaine-notifi.vercel.app",
+        "root_directory": "frontend"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "railway",
+      "type": "DEPLOYED_ON",
+      "properties": {
+        "url": "https://polttoaine-notifi-production.up.railway.app",
+        "root_directory": "backend"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "mongodb_atlas",
+      "type": "CONNECTS_TO",
+      "properties": {
+        "connection_string": "MONGO_URL environment variable",
+        "database": "bensavahti"
+      }
+    },
+    {
+      "source": "react_frontend",
+      "target": "fastapi_backend",
+      "type": "CALLS",
+      "properties": {
+        "environment_variable": "REACT_APP_BACKEND_URL",
+        "protocol": "HTTPS"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "claude_opus_4_7",
+      "type": "USES",
+      "properties": {
+        "sdk": "emergentintegrations",
+        "fallback_chain": "Opus 4.7 → 4.6 → Sonnet 4.5 → Haiku 4.5"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "polttoaine_net",
+      "type": "SCRAPES",
+      "properties": {
+        "priority": "secondary",
+        "purpose": "cross-check fuel prices"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "tankille_fi",
+      "type": "SCRAPES",
+      "properties": {
+        "priority": "primary",
+        "purpose": "per-city fuel prices"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "yahoo_finance",
+      "type": "FETCHES",
+      "properties": {
+        "data": "Brent crude oil, EUR/USD exchange rates",
+        "cache_duration": "15 minutes"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "ntfy_sh",
+      "type": "PUBLISHES_TO",
+      "properties": {
+        "topic": "polttoaine",
+        "schedule": "14:00 and 21:00 Helsinki"
+      }
+    },
+    {
+      "source": "bensavahti",
+      "target": "fundamental_anchor",
+      "type": "USES_PREDICTION_METHOD",
+      "properties": {
+        "weight_thin_data": 0.48,
+        "clamp": "±0.06 EUR/L"
+      }
+    },
+    {
+      "source": "bensavahti",
+      "target": "moving_average",
+      "type": "USES_PREDICTION_METHOD",
+      "properties": {
+        "window": 7
+      }
+    },
+    {
+      "source": "bensavahti",
+      "target": "linear_regression",
+      "type": "USES_PREDICTION_METHOD",
+      "properties": {
+        "lookback": 30
+      }
+    },
+    {
+      "source": "bensavahti",
+      "target": "exp_smoothing",
+      "type": "USES_PREDICTION_METHOD",
+      "properties": {
+        "alpha": 0.4,
+        "beta": 0.2
+      }
+    },
+    {
+      "source": "bensavahti",
+      "target": "ai_llm_predict",
+      "type": "USES_PREDICTION_METHOD",
+      "properties": {
+        "weight_thin_data": 0.3
+      }
+    },
+    {
+      "source": "ensemble",
+      "target": "fundamental_anchor",
+      "type": "COMBINES",
+      "properties": {}
+    },
+    {
+      "source": "ensemble",
+      "target": "moving_average",
+      "type": "COMBINES",
+      "properties": {}
+    },
+    {
+      "source": "ensemble",
+      "target": "linear_regression",
+      "type": "COMBINES",
+      "properties": {}
+    },
+    {
+      "source": "ensemble",
+      "target": "exp_smoothing",
+      "type": "COMBINES",
+      "properties": {}
+    },
+    {
+      "source": "ensemble",
+      "target": "ai_llm_predict",
+      "type": "COMBINES",
+      "properties": {}
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "daily_tracker",
+      "type": "WRITES_TO",
+      "properties": {
+        "schedule": "14:00 and 21:00 Helsinki",
+        "unique_index": "(fuel, region, date, hour)"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "snapshots",
+      "type": "WRITES_TO",
+      "properties": {
+        "cache": "5 minutes",
+        "purpose": "live anchor source"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "predictions",
+      "type": "WRITES_TO",
+      "properties": {
+        "endpoint": "/api/predict/run",
+        "reads_via": "/api/predict/latest"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "history",
+      "type": "READS_FROM",
+      "properties": {
+        "filter": "source:scraped only",
+        "no_synthetic": true
+      }
+    },
+    {
+      "source": "railway_deployment_md",
+      "target": "railway",
+      "type": "DOCUMENTS",
+      "properties": {
+        "includes": "environment variables, MongoDB setup, CORS config"
+      }
+    },
+    {
+      "source": "vercel_deployment_md",
+      "target": "vercel",
+      "type": "DOCUMENTS",
+      "properties": {
+        "includes": "root directory setup, build config, env vars"
+      }
+    },
+    {
+      "source": "deployment_checklist",
+      "target": "fixes_applied",
+      "type": "REFERENCES",
+      "properties": {
+        "purpose": "post-deployment testing"
+      }
+    },
+    {
+      "source": "fixes_applied",
+      "target": "admin_token",
+      "type": "IMPLEMENTS",
+      "properties": {
+        "endpoints": "/api/seed, /api/track/backfill, /api/notify/test"
+      }
+    },
+    {
+      "source": "fixes_applied",
+      "target": "rate_limiting",
+      "type": "IMPLEMENTS",
+      "properties": {
+        "library": "slowapi",
+        "limits": "10-20 requests/minute"
+      }
+    },
+    {
+      "source": "fixes_applied",
+      "target": "defusedxml",
+      "type": "IMPLEMENTS",
+      "properties": {
+        "protection": "XML entity expansion attacks in RSS feeds"
+      }
+    },
+    {
+      "source": "fixes_applied",
+      "target": "iqr_sanity_filter",
+      "type": "IMPLEMENTS",
+      "properties": {
+        "replaced": "25% median deviation filter"
+      }
+    },
+    {
+      "source": "fixes_applied",
+      "target": "cors_tightening",
+      "type": "IMPLEMENTS",
+      "properties": {
+        "changed_from": "allow_origins=['*']",
+        "configurable_via": "CORS_ORIGINS env var"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "emergentintegrations",
+      "type": "DEPENDS_ON",
+      "properties": {
+        "version": "1.0.0",
+        "requires": "PIP_EXTRA_INDEX_URL"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "slowapi",
+      "type": "DEPENDS_ON",
+      "properties": {
+        "version": "0.1.9"
+      }
+    },
+    {
+      "source": "fastapi_backend",
+      "target": "motor",
+      "type": "DEPENDS_ON",
+      "properties": {
+        "version": "3.3.2"
+      }
+    },
+    {
+      "source": "pip_extra_index",
+      "target": "emergentintegrations",
+      "type": "REQUIRED_FOR",
+      "properties": {
+        "url": "https://d33sy5i8bnduwe.cloudfront.net/simple/"
+      }
+    },
+    {
+      "source": "scheduled_captures",
+      "target": "daily_tracker",
+      "type": "POPULATES",
+      "properties": {
+        "hours": "14:00, 21:00 Helsinki"
+      }
+    },
+    {
+      "source": "news_watch_loop",
+      "target": "ai_llm_predict",
+      "type": "TRIGGERS",
+      "properties": {
+        "rate_limit": "≥15 min gap",
+        "env_var": "NEWS_WATCH_SECONDS"
+      }
+    },
+    {
+      "source": "privacy_policy",
+      "target": "bensavahti",
+      "type": "DOCUMENTS",
+      "properties": {
+        "language": "Finnish",
+        "key_point": "no personal data collection"
+      }
+    },
+    {
+      "source": "prd",
+      "target": "bensavahti",
+      "type": "DOCUMENTS",
+      "properties": {
+        "includes": "architecture, tech stack, backlog, environment variables"
+      }
+    },
+    {
+      "source": "agents_md",
+      "target": "bensavahti",
+      "type": "DOCUMENTS",
+      "properties": {
+        "audience": "AI agents",
+        "sections": "19 sections covering TL;DR to debugging"
+      }
+    },
+    {
+      "source": "github_actions",
+      "target": "polttoaine_net",
+      "type": "CHECKS",
+      "properties": {
+        "frequency": "every 15 minutes",
+        "cities": "Helsinki, Vantaa, Espoo"
+      }
+    },
+    {
+      "source": "price_verification",
+      "target": "daily_tracker",
+      "type": "PROTECTS",
+      "properties": {
+        "checks": "hard bounds, historical deviation, daily change limit, cross-fuel"
+      }
+    },
+    {
+      "source": "fixes_summary",
+      "target": "fixes_applied",
+      "type": "SUMMARIZES",
+      "properties": {
+        "cost": "$16.50",
+        "files_modified": 7,
+        "vulnerabilities_fixed": 9
+      }
+    },
+    {
+      "source": "agent_worktree_a52a5e37",
+      "target": "railway_deployment_md",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source": "agent_worktree_a52a5e37",
+      "target": "vercel_deployment_md",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source": "agent_worktree_a52a5e37",
+      "target": "prd",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source": "agent_worktree_a9562a62",
+      "target": "deployment_checklist",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source": "agent_worktree_a9562a62",
+      "target": "fixes_applied",
+      "type": "CONTAINS",
+      "properties": {}
+    },
+    {
+      "source": "agent_worktree_a9562a62",
+      "target": "fixes_summary",
+      "type": "CONTAINS",
+      "properties": {}
+    }
+  ],
+  "concepts": [
+    {
+      "name": "Split-Stack Architecture",
+      "description": "3-service architecture with React on Vercel, FastAPI on Railway, and MongoDB on Atlas",
+      "related_entities": ["vercel", "railway", "mongodb_atlas", "bensavahti"]
+    },
+    {
+      "name": "Live-Only Data Policy",
+      "description": "No synthetic, interpolated, or extrapolated data - only real scraped captures from today onward",
+      "related_entities": ["daily_tracker", "history", "tankille_fi", "polttoaine_net"]
+    },
+    {
+      "name": "5-Method Ensemble Prediction",
+      "description": "Data-quality-aware weighted combination of MA, LR, ES, fundamental_anchor, and AI methods",
+      "related_entities": ["ensemble", "moving_average", "linear_regression", "exp_smoothing", "fundamental_anchor", "ai_llm_predict"]
+    },
+    {
+      "name": "Security Hardening",
+      "description": "Authentication, rate limiting, XML protection, CORS tightening, and dependency updates",
+      "related_entities": ["admin_token", "rate_limiting", "defusedxml", "cors_tightening", "fixes_applied"]
+    },
+    {
+      "name": "Scheduled Data Capture",
+      "description": "Automated capture at 14:00 and 21:00 Helsinki time with ntfy notifications",
+      "related_entities": ["scheduled_captures", "daily_tracker", "ntfy_sh"]
+    },
+    {
+      "name": "Dark-First UI Theme",
+      "description": "Default dark theme with toggle persisted to localStorage and no-FOUC script",
+      "related_entities": ["dark_theme", "react_frontend"]
+    },
+    {
+      "name": "Private PyPI Dependency",
+      "description": "emergentintegrations requires PIP_EXTRA_INDEX_URL pointing to Emergent's private index",
+      "related_entities": ["emergentintegrations", "pip_extra_index", "railway"]
+    },
+    {
+      "name": "Accuracy Improvements",
+      "description": "Anchor/target alignment, IQR filtering, region validation, and consistent price parsing",
+      "related_entities": ["iqr_sanity_filter", "price_verification", "fixes_applied"]
+    },
+    {
+      "name": "Geopolitical Risk Handling",
+      "description": "AI handles forward geopolitical risk while Brent handles already-priced risk",
+      "related_entities": ["ai_llm_predict", "fundamental_anchor", "claude_opus_4_7"]
+    },
+    {
+      "name": "Finnish Language UI",
+      "description": "All UI text and privacy policy in Finnish language",
+      "related_entities": ["react_frontend", "privacy_policy", "bensavahti"]
+    },
+    {
+      "name": "Cold Start Tolerance",
+      "description": "Prediction system works with 0-N data points using live anchor",
+      "related_entities": ["ensemble", "fundamental_anchor", "snapshots"]
+    },
+    {
+      "name": "News-Triggered Predictions",
+      "description": "Automatic AI rerun when new fuel-relevant news appears, rate-limited",
+      "related_entities": ["news_watch_loop", "ai_llm_predict", "fastapi_backend"]
+    }
+  ],
+  "metadata": {
+    "chunk_id": 14,
+    "total_chunks": 16,
+    "files_processed": 22,
+    "primary_focus": "Deployment documentation, security fixes, privacy policy, and agent worktree configurations",
+    "key_files": [
+      "RAILWAY_DEPLOYMENT.md",
+      "VERCEL_DEPLOYMENT.md",
+      "DEPLOYMENT_CHECKLIST.md",
+      "FIXES_APPLIED.md",
+      "FIXES_SUMMARY.txt",
+      "AGENTS.md",
+      "privacy.html",
+      "PRD.md"
+    ]
+  }
+}

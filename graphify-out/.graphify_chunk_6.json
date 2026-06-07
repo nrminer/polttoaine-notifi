@@ -1,0 +1,470 @@
+{
+  "nodes": [
+    {
+      "id": "backend/scrapers/__init__.py",
+      "label": "__init__.py",
+      "type": "file",
+      "language": "python",
+      "path": "backend/scrapers/__init__.py",
+      "size": 0,
+      "description": "Empty package initialization file for scrapers module"
+    },
+    {
+      "id": "backend/tests/test_bensavahti_api.py",
+      "label": "test_bensavahti_api.py",
+      "type": "file",
+      "language": "python",
+      "path": "backend/tests/test_bensavahti_api.py",
+      "size": 229,
+      "description": "Comprehensive pytest test suite covering all backend API endpoints including health, prices, factors, predictions, regional data, tracking, and accuracy",
+      "exports": ["test_health", "test_meta", "test_seed_idempotent", "test_history_95E10_30days", "test_history_diesel_90days", "test_history_invalid_fuel", "test_factors", "test_predict_latest_95E10", "test_predict_latest_diesel", "test_regional_95E10", "test_regional_diesel", "test_accuracy", "test_current_prices_95E10", "test_predict_run_95E10", "test_predict_latest_after_run", "test_predict_run_invalid_fuel"]
+    },
+    {
+      "id": "frontend/package.json",
+      "label": "package.json",
+      "type": "config",
+      "language": "json",
+      "path": "frontend/package.json",
+      "description": "Frontend npm package manifest with React 18, Recharts, Framer Motion, Tailwind CSS, Axios, and Lucide icons",
+      "dependencies": ["react@18.3.1", "react-dom@18.3.1", "recharts@2.12.7", "framer-motion@11.0.24", "axios@1.6.8", "lucide-react@0.376.0", "tailwindcss@3.4.4"]
+    },
+    {
+      "id": "frontend/postcss.config.js",
+      "label": "postcss.config.js",
+      "type": "config",
+      "language": "javascript",
+      "path": "frontend/postcss.config.js",
+      "size": 6,
+      "description": "PostCSS configuration enabling Tailwind CSS and Autoprefixer"
+    },
+    {
+      "id": "frontend/tailwind.config.js",
+      "label": "tailwind.config.js",
+      "type": "config",
+      "language": "javascript",
+      "path": "frontend/tailwind.config.js",
+      "size": 59,
+      "description": "Tailwind CSS configuration with dark mode, custom colors (brand, accent, nordDark), custom fonts (Cabinet Grotesk, IBM Plex Sans, JetBrains Mono), shadows, and animations"
+    },
+    {
+      "id": "frontend/vercel.json",
+      "label": "vercel.json",
+      "type": "config",
+      "language": "json",
+      "path": "frontend/vercel.json",
+      "size": 27,
+      "description": "Vercel deployment configuration for Create React App with SPA rewrites and aggressive caching for static assets"
+    },
+    {
+      "id": "frontend/src/App.js",
+      "label": "App.js",
+      "type": "file",
+      "language": "javascript",
+      "path": "frontend/src/App.js",
+      "size": 990,
+      "description": "Main React application component (~990 lines) - renders entire BensaVahti UI with fuel price dashboard, prediction charts, AI analysis, regional grid, and dark/light theme toggle",
+      "imports": ["react", "framer-motion", "lucide-react", "./components/Card", "./components/FuelToggle", "./components/TrackingChart", "./components/CityAverageChart", "./components/MethodTable", "./components/AiAnalysis", "./components/RegionalGrid", "./components/AccuracyTracker", "./components/FactorsCard", "./components/NewsCard", "./lib/api", "./lib/utils", "./lib/modelName"],
+      "exports": ["App"]
+    },
+    {
+      "id": "frontend/src/index.js",
+      "label": "index.js",
+      "type": "file",
+      "language": "javascript",
+      "path": "frontend/src/index.js",
+      "size": 7,
+      "description": "React entry point - renders App component to root DOM element",
+      "imports": ["react", "react-dom/client", "./App"],
+      "exports": []
+    },
+    {
+      "id": "frontend/src/components/AccuracyTracker.jsx",
+      "label": "AccuracyTracker.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/AccuracyTracker.jsx",
+      "size": 106,
+      "description": "React component displaying prediction accuracy metrics table with MAE and ≤2¢ hit rate for each prediction method, sorted by MAE",
+      "imports": ["react", "./Card", "lucide-react"],
+      "exports": ["AccuracyTracker"]
+    },
+    {
+      "id": "frontend/src/components/AiAnalysis.jsx",
+      "label": "AiAnalysis.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/AiAnalysis.jsx",
+      "size": 207,
+      "description": "Dark-themed card displaying Claude AI analysis with prediction value, confidence interval band, direction badge, explanation text, and numbered key drivers",
+      "imports": ["react", "lucide-react", "./Card", "../lib/modelName"],
+      "exports": ["AiAnalysis"]
+    },
+    {
+      "id": "frontend/src/components/Card.jsx",
+      "label": "Card.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/Card.jsx",
+      "size": 87,
+      "description": "Design system primitives: Card (animated container), CardLabel, StatNumber (large hero number), DeltaBadge (colored price change indicator)",
+      "imports": ["react", "framer-motion", "lucide-react", "../lib/utils"],
+      "exports": ["Card", "CardLabel", "StatNumber", "DeltaBadge"]
+    },
+    {
+      "id": "frontend/src/components/CityAverageChart.jsx",
+      "label": "CityAverageChart.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/CityAverageChart.jsx",
+      "size": 195,
+      "description": "Recharts line chart showing per-city average prices (thin lines) + all-cities average (thick blue) + tomorrow projection (yellow dashed) with market-move delta",
+      "imports": ["react", "recharts", "../lib/utils"],
+      "exports": ["CityAverageChart"]
+    },
+    {
+      "id": "frontend/src/components/FactorsCard.jsx",
+      "label": "FactorsCard.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/FactorsCard.jsx",
+      "size": 134,
+      "description": "Card displaying market factors: refined product (RBOB/ULSD) as PRIMARY day-ahead signal, crack-spread, Brent crude, EUR/USD with delta percentages and crude sensitivity calculation",
+      "imports": ["react", "./Card", "lucide-react"],
+      "exports": ["FactorsCard"]
+    },
+    {
+      "id": "frontend/src/components/FuelToggle.jsx",
+      "label": "FuelToggle.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/FuelToggle.jsx",
+      "size": 42,
+      "description": "Toggle button group for switching between 95E10 and Diesel fuel types with icons",
+      "imports": ["react", "lucide-react", "../lib/utils"],
+      "exports": ["FuelToggle"]
+    },
+    {
+      "id": "frontend/src/components/MethodTable.jsx",
+      "label": "MethodTable.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/MethodTable.jsx",
+      "size": 133,
+      "description": "Table displaying all 5 prediction methods (MA, LR, exp smoothing, fundamental_anchor, AI) with values, explanations, confidence intervals, ensemble weights shown as progress bars, and data sources note",
+      "imports": ["react", "lucide-react", "./Card", "../lib/utils", "../lib/modelName"],
+      "exports": ["MethodTable"]
+    },
+    {
+      "id": "frontend/src/components/NewsCard.jsx",
+      "label": "NewsCard.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/NewsCard.jsx",
+      "size": 83,
+      "description": "Card displaying RSS news feed items from Finnish sources (Iltalehti, HS, IS, MTV) with age badges and external links",
+      "imports": ["react", "lucide-react", "./Card"],
+      "exports": ["NewsCard"]
+    },
+    {
+      "id": "frontend/src/components/RangeToggle.jsx",
+      "label": "RangeToggle.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/RangeToggle.jsx",
+      "size": 29,
+      "description": "Generic toggle button group for selecting time ranges (30/90/365 days) - currently unused in App.js",
+      "imports": ["react", "../lib/utils"],
+      "exports": ["RangeToggle"]
+    },
+    {
+      "id": "frontend/src/components/RegionalGrid.jsx",
+      "label": "RegionalGrid.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/RegionalGrid.jsx",
+      "size": 215,
+      "description": "Filterable grid of city cards showing cheapest station price + city average + station count, with sort controls and freshness badges",
+      "imports": ["react", "lucide-react", "./Card"],
+      "exports": ["RegionalGrid"]
+    },
+    {
+      "id": "frontend/src/components/TrackingChart.jsx",
+      "label": "TrackingChart.jsx",
+      "type": "component",
+      "language": "javascript",
+      "path": "frontend/src/components/TrackingChart.jsx",
+      "size": 196,
+      "description": "Recharts ComposedChart showing prediction vs actual prices - supports two modes: national (actual blue line + predicted scatter + tomorrow dashed) and per-city (cheapest + average lines)",
+      "imports": ["react", "recharts", "../lib/utils"],
+      "exports": ["TrackingChart"]
+    },
+    {
+      "id": "frontend/src/lib/api.js",
+      "label": "api.js",
+      "type": "file",
+      "language": "javascript",
+      "path": "frontend/src/lib/api.js",
+      "size": 29,
+      "description": "Axios wrapper functions for all backend API routes - single source of truth for HTTP contract between frontend and backend",
+      "imports": ["axios"],
+      "exports": ["api", "fetchCurrent", "fetchHistory", "fetchFactors", "runPrediction", "fetchLatestPrediction", "fetchRegional", "fetchAccuracy", "fetchNews", "fetchTrackHistory", "runTrackCapture", "runTrackCaptureAll", "seedHistory"]
+    },
+    {
+      "id": "frontend/src/lib/modelName.js",
+      "label": "modelName.js",
+      "type": "file",
+      "language": "javascript",
+      "path": "frontend/src/lib/modelName.js",
+      "size": 19,
+      "description": "Utility to convert API model IDs like 'claude-opus-4-7' to human-readable labels like 'Claude Opus 4.7', strips date suffixes",
+      "imports": [],
+      "exports": ["formatModelName"]
+    },
+    {
+      "id": "frontend/src/lib/utils.js",
+      "label": "utils.js",
+      "type": "file",
+      "language": "javascript",
+      "path": "frontend/src/lib/utils.js",
+      "size": 38,
+      "description": "Utility functions: cn (className merger), fmtPrice, fmtDelta, fmtPct, fmtDateFi (Finnish date), fmtDateTimeFi, fuelLabel",
+      "imports": [],
+      "exports": ["cn", "fmtPrice", "fmtDelta", "fmtPct", "fmtDateFi", "fmtDateTimeFi", "fuelLabel"]
+    }
+  ],
+  "edges": [
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card primitives"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/FuelToggle",
+      "relationship": "imports",
+      "label": "renders fuel selector"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/TrackingChart",
+      "relationship": "imports",
+      "label": "renders prediction chart"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/CityAverageChart",
+      "relationship": "imports",
+      "label": "renders city average chart"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/MethodTable",
+      "relationship": "imports",
+      "label": "renders method comparison"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/AiAnalysis",
+      "relationship": "imports",
+      "label": "renders AI analysis card"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/RegionalGrid",
+      "relationship": "imports",
+      "label": "renders regional grid"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/AccuracyTracker",
+      "relationship": "imports",
+      "label": "renders accuracy tracker"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/FactorsCard",
+      "relationship": "imports",
+      "label": "renders market factors"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/components/NewsCard",
+      "relationship": "imports",
+      "label": "renders news feed"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/lib/api",
+      "relationship": "imports",
+      "label": "fetches backend data"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses formatters"
+    },
+    {
+      "source": "frontend/src/App.js",
+      "target": "frontend/src/lib/modelName",
+      "relationship": "imports",
+      "label": "formats model names"
+    },
+    {
+      "source": "frontend/src/index.js",
+      "target": "frontend/src/App.js",
+      "relationship": "imports",
+      "label": "renders main app"
+    },
+    {
+      "source": "frontend/src/components/AccuracyTracker.jsx",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "frontend/src/components/AiAnalysis.jsx",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "frontend/src/components/AiAnalysis.jsx",
+      "target": "frontend/src/lib/modelName",
+      "relationship": "imports",
+      "label": "formats model name"
+    },
+    {
+      "source": "frontend/src/components/Card.jsx",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses cn utility"
+    },
+    {
+      "source": "frontend/src/components/CityAverageChart.jsx",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses date formatter"
+    },
+    {
+      "source": "frontend/src/components/FactorsCard.jsx",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "frontend/src/components/FuelToggle.jsx",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses cn utility"
+    },
+    {
+      "source": "frontend/src/components/MethodTable.jsx",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "frontend/src/components/MethodTable.jsx",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses price formatters"
+    },
+    {
+      "source": "frontend/src/components/MethodTable.jsx",
+      "target": "frontend/src/lib/modelName",
+      "relationship": "imports",
+      "label": "formats AI model name"
+    },
+    {
+      "source": "frontend/src/components/NewsCard.jsx",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "frontend/src/components/RangeToggle.jsx",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses cn utility"
+    },
+    {
+      "source": "frontend/src/components/RegionalGrid.jsx",
+      "target": "frontend/src/components/Card",
+      "relationship": "imports",
+      "label": "uses Card components"
+    },
+    {
+      "source": "frontend/src/components/TrackingChart.jsx",
+      "target": "frontend/src/lib/utils",
+      "relationship": "imports",
+      "label": "uses date formatter"
+    },
+    {
+      "source": "frontend/src/lib/api.js",
+      "target": "backend/server.py",
+      "relationship": "calls",
+      "label": "HTTP requests to /api/*"
+    },
+    {
+      "source": "frontend/package.json",
+      "target": "frontend/tailwind.config.js",
+      "relationship": "configures",
+      "label": "tailwind dependency"
+    },
+    {
+      "source": "frontend/package.json",
+      "target": "frontend/postcss.config.js",
+      "relationship": "configures",
+      "label": "postcss dependency"
+    },
+    {
+      "source": "frontend/vercel.json",
+      "target": "frontend/package.json",
+      "relationship": "deploys",
+      "label": "Vercel build config"
+    },
+    {
+      "source": "backend/tests/test_bensavahti_api.py",
+      "target": "backend/server.py",
+      "relationship": "tests",
+      "label": "pytest suite for all API routes"
+    }
+  ],
+  "metadata": {
+    "chunk_id": 6,
+    "total_chunks": 16,
+    "file_count": 22,
+    "primary_languages": ["javascript", "python", "json"],
+    "focus_areas": [
+      "React frontend components",
+      "UI library and design system",
+      "API client layer",
+      "Test suite",
+      "Build configuration"
+    ],
+    "key_patterns": [
+      "Component-based architecture with separation of concerns",
+      "Design system primitives (Card, DeltaBadge, StatNumber)",
+      "Chart components using Recharts library",
+      "Centralized API client in lib/api.js",
+      "Tailwind CSS with custom theme tokens",
+      "Dark/light theme support",
+      "Finnish language UI throughout",
+      "Comprehensive test coverage for backend API",
+      "5 prediction methods displayed in UI (MA, LR, ES, fundamental_anchor, AI)",
+      "Refined product (RBOB/ULSD) as PRIMARY signal in FactorsCard"
+    ],
+    "technical_details": {
+      "frontend_framework": "React 18 (Create React App)",
+      "charts": "Recharts 2.12.7",
+      "styling": "Tailwind CSS 3.4.4 with custom config",
+      "animations": "Framer Motion 11.0.24",
+      "icons": "Lucide React 0.376.0",
+      "http_client": "Axios 1.6.8",
+      "test_framework": "pytest for backend",
+      "deployment": "Vercel (frontend)"
+    }
+  }
+}

@@ -1,0 +1,672 @@
+{
+  "entities": [
+    {
+      "id": "scrapers_polttoaine",
+      "name": "polttoaine.py scraper",
+      "type": "module",
+      "description": "Web scraper for polttoaine.net top-20 cheapest stations",
+      "attributes": {
+        "base_url": "https://polttoaine.net/index.php?cmd=20halvinta",
+        "encoding": "latin1",
+        "timeout": 30,
+        "supported_fuels": ["95E10", "diesel"],
+        "max_results": 20
+      }
+    },
+    {
+      "id": "scrapers_tankille",
+      "name": "tankille.fi scraper",
+      "type": "module",
+      "description": "Web scraper for tankille.fi per-city pages (PRIMARY source)",
+      "attributes": {
+        "base_url": "https://www.tankille.fi",
+        "timeout": 30,
+        "supported_cities": ["Helsinki", "Vantaa", "Espoo", "Tampere", "Turku", "Oulu", "Jyvaskyla", "Kuopio", "Lahti"],
+        "fuel_tabs": {"95E10": "fuel-95", "diesel": "fuel-dsl"},
+        "priority": "primary"
+      }
+    },
+    {
+      "id": "backend_server",
+      "name": "server.py",
+      "type": "module",
+      "description": "FastAPI backend server with all routes (1132 lines)",
+      "attributes": {
+        "framework": "FastAPI",
+        "database": "MongoDB Atlas (Motor async driver)",
+        "supported_fuels": ["95E10", "diesel"],
+        "supported_regions": ["Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti", "Suomi"],
+        "cors_origins": "configurable",
+        "rate_limiting": "slowapi"
+      }
+    },
+    {
+      "id": "backend_predict",
+      "name": "predict.py",
+      "type": "module",
+      "description": "5 prediction methods (MA/LR/ES/fundamental_anchor/AI) + ensemble (1051 lines)",
+      "attributes": {
+        "methods": ["moving_average", "linear_regression", "exp_smoothing", "fundamental_anchor", "ai_llm"],
+        "ai_models": ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"],
+        "max_daily_move": "0.06 EUR/L",
+        "brent_passthrough": "0.25 (uncalibrated prior)",
+        "refined_passthrough": "0.30 (uncalibrated prior)"
+      }
+    },
+    {
+      "id": "backend_tracker",
+      "name": "tracker.py",
+      "type": "module",
+      "description": "Scheduled captures at 14:00/21:00 Helsinki + news-watch loop (437 lines)",
+      "attributes": {
+        "scheduled_hours": [14, 21],
+        "timezone": "Europe/Helsinki",
+        "tracked_cities": ["Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti"],
+        "news_watch_interval": "1800s (configurable)"
+      }
+    },
+    {
+      "id": "backend_notify",
+      "name": "notify.py",
+      "type": "module",
+      "description": "ntfy.sh push notifications with multi-fuel summary (273 lines)",
+      "attributes": {
+        "service": "ntfy.sh",
+        "auth": "bearer token",
+        "format": "multi-city, multi-fuel summary",
+        "title_encoding": "ASCII-only (HTTP header constraint)"
+      }
+    },
+    {
+      "id": "backend_factors",
+      "name": "factors.py",
+      "type": "module",
+      "description": "Yahoo Finance integration for Brent, EUR/USD, RBOB, ULSD (138 lines)",
+      "attributes": {
+        "data_source": "Yahoo Finance v8 chart API",
+        "symbols": {"brent": "BZ=F", "eur_usd": "EURUSD=X", "rbob": "RB=F", "ulsd": "HO=F"},
+        "timeout": 12,
+        "lookback_days": "configurable (default 60)"
+      }
+    },
+    {
+      "id": "backend_news",
+      "name": "news.py",
+      "type": "module",
+      "description": "RSS aggregator for Finnish fuel/oil news (124 lines)",
+      "attributes": {
+        "sources": ["Iltalehti", "Helsingin Sanomat", "Ilta-Sanomat", "MTV Uutiset", "Taloussanomat"],
+        "filter_keywords": ["polttoaine", "bensiini", "diesel", "raakaöljy", "OPEC", "Brent", "Neste", "huoltoasema"],
+        "sanitization": "prompt injection prevention"
+      }
+    },
+    {
+      "id": "backend_tax_events",
+      "name": "tax_events.py",
+      "type": "module",
+      "description": "Known fuel tax/VAT changes registry (119 lines)",
+      "attributes": {
+        "purpose": "track known excise/VAT step events",
+        "events_list": "empty by default (user maintains)",
+        "lookahead": "30 days default"
+      }
+    },
+    {
+      "id": "backend_learn",
+      "name": "learn.py",
+      "type": "module",
+      "description": "Self-training layer: track record of predictions vs actuals (130 lines)",
+      "attributes": {
+        "methods_tracked": ["moving_average", "linear_regression", "exp_smoothing", "fundamental_anchor", "ai_llm"],
+        "metrics": ["n", "mae", "bias", "rmse"],
+        "window": "30 days default"
+      }
+    },
+    {
+      "id": "backend_capture_now",
+      "name": "capture_now.py",
+      "type": "script",
+      "description": "Manual capture script (NOW) for daily_tracker (146 lines)",
+      "attributes": {
+        "usage": "standalone CLI script",
+        "flags": ["--fuel", "--region", "--hour", "--notify"],
+        "idempotent": true
+      }
+    },
+    {
+      "id": "backend_purge_captures",
+      "name": "purge_captures.py",
+      "type": "script",
+      "description": "Delete daily_tracker rows (dry-run unless --yes) (101 lines)",
+      "attributes": {
+        "usage": "standalone CLI script",
+        "default_mode": "dry-run",
+        "flags": ["--date", "--hours", "--fuel", "--region", "--yes"]
+      }
+    },
+    {
+      "id": "mongodb_snapshots",
+      "name": "snapshots collection",
+      "type": "database_collection",
+      "description": "Latest live scrape snapshots",
+      "attributes": {
+        "fields": ["fuel", "ts", "national_min", "by_city", "cheap_sample_avg", "stations_count"],
+        "purpose": "live anchor source for predictions"
+      }
+    },
+    {
+      "id": "mongodb_history",
+      "name": "history collection",
+      "type": "database_collection",
+      "description": "Historical prices (REAL scraped only, synthetic removed)",
+      "attributes": {
+        "fields": ["fuel", "region", "date", "price", "source"],
+        "unique_index": "(fuel, region, date)",
+        "allowed_sources": ["scraped"]
+      }
+    },
+    {
+      "id": "mongodb_daily_tracker",
+      "name": "daily_tracker collection",
+      "type": "database_collection",
+      "description": "Ground truth: real captures at 14h/21h with by_city breakdown",
+      "attributes": {
+        "fields": ["fuel", "region", "date", "hour", "actual_cheapest", "by_city", "prediction_for_*", "prediction_full"],
+        "unique_index": "(fuel, region, date, hour)",
+        "by_city_structure": ["cheapest", "average", "count", "station", "source"]
+      }
+    },
+    {
+      "id": "mongodb_predictions",
+      "name": "predictions collection",
+      "type": "database_collection",
+      "description": "Last prediction run output (what UI shows)",
+      "attributes": {
+        "fields": ["target_date", "fuel", "region", "methods_full", "ensemble_full", "data_sources"],
+        "unique_index": "(fuel, region, target_date)"
+      }
+    },
+    {
+      "id": "ntfy_service",
+      "name": "ntfy.sh",
+      "type": "external_service",
+      "description": "Push notification service",
+      "attributes": {
+        "topic": "polttoaine",
+        "auth": "bearer token",
+        "server": "https://ntfy.sh",
+        "format": "UTF-8 body, ASCII title"
+      }
+    },
+    {
+      "id": "yahoo_finance",
+      "name": "Yahoo Finance",
+      "type": "external_service",
+      "description": "Market data source for commodities and FX",
+      "attributes": {
+        "api": "v8/finance/chart",
+        "symbols_used": ["BZ=F", "EURUSD=X", "RB=F", "HO=F"],
+        "auth": "none (public API)"
+      }
+    },
+    {
+      "id": "claude_ai",
+      "name": "Claude AI (Anthropic)",
+      "type": "external_service",
+      "description": "LLM for AI prediction method",
+      "attributes": {
+        "sdk": "emergentintegrations",
+        "models": ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-5", "claude-haiku-4-5"],
+        "fallback_chain": "opus-4-7 -> opus-4-6 -> sonnet-4-5 -> haiku-4-5",
+        "attempts_per_model": 3
+      }
+    },
+    {
+      "id": "sanity_filter",
+      "name": "Price sanity filter",
+      "type": "algorithm",
+      "description": "IQR-based outlier detection for scraped prices",
+      "attributes": {
+        "hard_bounds": "1.10 - 3.50 EUR/L",
+        "iqr_multiplier": "1.5",
+        "applied_per_source": true
+      }
+    },
+    {
+      "id": "source_priority",
+      "name": "Source priority logic",
+      "type": "algorithm",
+      "description": "tankille.fi PRIMARY, polttoaine.net SECONDARY",
+      "attributes": {
+        "primary": "tankille.fi",
+        "secondary": "polttoaine.net",
+        "fallback_threshold": ">10% price difference"
+      }
+    },
+    {
+      "id": "fundamental_anchor",
+      "name": "Fundamental anchor method",
+      "type": "prediction_method",
+      "description": "Physics-based day-ahead model: live + refined-product/Brent passthrough + weekday + momentum",
+      "attributes": {
+        "components": ["live_anchor", "refined_passthrough", "brent_passthrough", "eur_usd_effect", "momentum", "weekday_adj", "tax_step", "bias_correction"],
+        "clamp": "±0.06 EUR/L from live (expanded by tax step)",
+        "refined_priority": "RBOB/ULSD over Brent (3-7 day lag vs 1-2 week)"
+      }
+    },
+    {
+      "id": "ensemble_method",
+      "name": "Data-quality-aware ensemble",
+      "type": "prediction_method",
+      "description": "Weighted combination with self-calibration",
+      "attributes": {
+        "regimes": ["rich_data (>=14 daily points)", "thin_data (<14 points)"],
+        "thin_weights": {"fundamental_anchor": 0.48, "ai_llm": 0.30, "ma": 0.12, "es": 0.06, "lr": 0.04},
+        "rich_weights": {"fundamental_anchor": 0.30, "ai_llm": 0.22, "es": 0.18, "lr": 0.17, "ma": 0.13},
+        "calibration": "1/MAE weighting when n>=5 samples"
+      }
+    },
+    {
+      "id": "scheduled_captures",
+      "name": "Scheduled capture system",
+      "type": "process",
+      "description": "14:00 and 21:00 Helsinki automated captures",
+      "attributes": {
+        "hours": [14, 21],
+        "timezone": "Europe/Helsinki",
+        "operations": ["scrape", "compare_prediction", "predict_tomorrow", "store_daily_tracker", "send_ntfy"]
+      }
+    },
+    {
+      "id": "news_watch_loop",
+      "name": "News-triggered prediction rerun",
+      "type": "process",
+      "description": "Auto-rerun AI analysis when fuel-relevant news appears",
+      "attributes": {
+        "poll_interval": "1800s (NEWS_WATCH_SECONDS)",
+        "min_rerun_gap": "900s (rate limit)",
+        "trigger": "filtered headline set change",
+        "requires": "EMERGENT_LLM_KEY"
+      }
+    },
+    {
+      "id": "test_iteration_1",
+      "name": "Testing report iteration 1",
+      "type": "document",
+      "description": "Full backend + frontend test results (16/16 pass)",
+      "attributes": {
+        "backend_tests": "16/16 pass",
+        "frontend_tests": "100% verified",
+        "test_date": "unknown",
+        "critical_issues": 0
+      }
+    },
+    {
+      "id": "design_guidelines",
+      "name": "Design guidelines",
+      "type": "document",
+      "description": "Nordic Industrial Tech design system",
+      "attributes": {
+        "theme": "light (with dark mode)",
+        "archetype": "swiss_and_high_contrast",
+        "typography": {"heading": "Cabinet Grotesk", "body": "IBM Plex Sans", "mono": "JetBrains Mono"},
+        "colors": {"brand": "#002FA7", "accent": "#FDE047"},
+        "icons": "lucide-react"
+      }
+    },
+    {
+      "id": "check_prices_script",
+      "name": "check_prices.py",
+      "type": "script",
+      "description": "Digest script with change detection (state.json tracking) (216 lines)",
+      "attributes": {
+        "usage": "standalone notification script",
+        "change_detection": true,
+        "state_file": "state.json",
+        "output": "ntfy notification"
+      }
+    },
+    {
+      "id": "railway_config",
+      "name": "railway.json",
+      "type": "config",
+      "description": "Railway deployment configuration",
+      "attributes": {
+        "builder": "RAILPACK",
+        "start_command": "uvicorn server:app --host 0.0.0.0 --port $PORT",
+        "healthcheck": "/api/factors",
+        "restart_policy": "ON_FAILURE"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "backend_server",
+      "target": "scrapers_polttoaine",
+      "type": "imports",
+      "label": "uses for scraping"
+    },
+    {
+      "source": "backend_server",
+      "target": "scrapers_tankille",
+      "type": "imports",
+      "label": "uses for scraping (PRIMARY)"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_predict",
+      "type": "imports",
+      "label": "calls predict_tomorrow"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_tracker",
+      "type": "imports",
+      "label": "runs scheduler_loop and news_watch_loop"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_notify",
+      "type": "imports",
+      "label": "sends notifications"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_factors",
+      "type": "imports",
+      "label": "fetches Brent/EUR-USD"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_news",
+      "type": "imports",
+      "label": "fetches RSS news"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_tax_events",
+      "type": "imports",
+      "label": "checks for tax step events"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_learn",
+      "type": "imports",
+      "label": "gets track_record for self-training"
+    },
+    {
+      "source": "backend_server",
+      "target": "mongodb_snapshots",
+      "type": "reads_writes",
+      "label": "stores live scrapes"
+    },
+    {
+      "source": "backend_server",
+      "target": "mongodb_history",
+      "type": "reads_writes",
+      "label": "stores daily history points"
+    },
+    {
+      "source": "backend_server",
+      "target": "mongodb_daily_tracker",
+      "type": "reads_writes",
+      "label": "stores captures"
+    },
+    {
+      "source": "backend_server",
+      "target": "mongodb_predictions",
+      "type": "reads_writes",
+      "label": "stores prediction results"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "scrapers_polttoaine",
+      "type": "calls",
+      "label": "scrapes for captures"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "scrapers_tankille",
+      "type": "calls",
+      "label": "scrapes per-city (PRIMARY)"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "backend_predict",
+      "type": "calls",
+      "label": "runs predict_tomorrow at captures"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "backend_notify",
+      "type": "calls",
+      "label": "sends notifications at captures"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "backend_factors",
+      "type": "calls",
+      "label": "fetches market data"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "backend_news",
+      "type": "calls",
+      "label": "fetches news for prediction"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "backend_learn",
+      "type": "calls",
+      "label": "gets track_record for predictions"
+    },
+    {
+      "source": "backend_tracker",
+      "target": "mongodb_daily_tracker",
+      "type": "writes",
+      "label": "upserts capture rows"
+    },
+    {
+      "source": "backend_predict",
+      "target": "claude_ai",
+      "type": "calls",
+      "label": "ai_llm_predict method"
+    },
+    {
+      "source": "backend_predict",
+      "target": "fundamental_anchor",
+      "type": "implements",
+      "label": "fundamental_anchor function"
+    },
+    {
+      "source": "backend_predict",
+      "target": "ensemble_method",
+      "type": "implements",
+      "label": "ensemble function"
+    },
+    {
+      "source": "backend_notify",
+      "target": "ntfy_service",
+      "type": "publishes_to",
+      "label": "sends push notifications"
+    },
+    {
+      "source": "backend_notify",
+      "target": "scrapers_polttoaine",
+      "type": "calls",
+      "label": "scrapes for notification content"
+    },
+    {
+      "source": "backend_notify",
+      "target": "scrapers_tankille",
+      "type": "calls",
+      "label": "scrapes for notification content"
+    },
+    {
+      "source": "backend_factors",
+      "target": "yahoo_finance",
+      "type": "fetches_from",
+      "label": "gets Brent, EUR/USD, RBOB, ULSD"
+    },
+    {
+      "source": "backend_news",
+      "target": "external_service",
+      "type": "fetches_from",
+      "label": "RSS feeds from Finnish publishers"
+    },
+    {
+      "source": "backend_learn",
+      "target": "mongodb_predictions",
+      "type": "reads",
+      "label": "gets historical predictions"
+    },
+    {
+      "source": "backend_learn",
+      "target": "mongodb_daily_tracker",
+      "type": "reads",
+      "label": "gets actual prices for comparison"
+    },
+    {
+      "source": "backend_capture_now",
+      "target": "backend_tracker",
+      "type": "imports",
+      "label": "uses capture_daily function"
+    },
+    {
+      "source": "backend_capture_now",
+      "target": "backend_notify",
+      "type": "imports",
+      "label": "optionally sends notification"
+    },
+    {
+      "source": "backend_purge_captures",
+      "target": "mongodb_daily_tracker",
+      "type": "deletes_from",
+      "label": "removes specified rows"
+    },
+    {
+      "source": "check_prices_script",
+      "target": "scrapers_polttoaine",
+      "type": "imports",
+      "label": "scrapes prices"
+    },
+    {
+      "source": "check_prices_script",
+      "target": "scrapers_tankille",
+      "type": "imports",
+      "label": "scrapes prices"
+    },
+    {
+      "source": "check_prices_script",
+      "target": "ntfy_service",
+      "type": "publishes_to",
+      "label": "sends notifications on change"
+    },
+    {
+      "source": "scrapers_polttoaine",
+      "target": "sanity_filter",
+      "type": "filtered_by",
+      "label": "applied in server.py"
+    },
+    {
+      "source": "scrapers_tankille",
+      "target": "sanity_filter",
+      "type": "filtered_by",
+      "label": "applied in server.py"
+    },
+    {
+      "source": "scrapers_tankille",
+      "target": "source_priority",
+      "type": "subject_to",
+      "label": "PRIMARY source"
+    },
+    {
+      "source": "scrapers_polttoaine",
+      "target": "source_priority",
+      "type": "subject_to",
+      "label": "SECONDARY source"
+    },
+    {
+      "source": "fundamental_anchor",
+      "target": "backend_factors",
+      "type": "depends_on",
+      "label": "uses Brent, EUR/USD, refined product data"
+    },
+    {
+      "source": "fundamental_anchor",
+      "target": "backend_tax_events",
+      "type": "depends_on",
+      "label": "uses tax_step_eur_l"
+    },
+    {
+      "source": "fundamental_anchor",
+      "target": "backend_learn",
+      "type": "depends_on",
+      "label": "uses bias correction from track_stats"
+    },
+    {
+      "source": "ensemble_method",
+      "target": "backend_learn",
+      "type": "depends_on",
+      "label": "uses method_mae for calibration"
+    },
+    {
+      "source": "scheduled_captures",
+      "target": "backend_tracker",
+      "type": "implemented_by",
+      "label": "scheduler_loop function"
+    },
+    {
+      "source": "news_watch_loop",
+      "target": "backend_tracker",
+      "type": "implemented_by",
+      "label": "news_watch_loop function"
+    },
+    {
+      "source": "news_watch_loop",
+      "target": "backend_news",
+      "type": "monitors",
+      "label": "polls for headline changes"
+    },
+    {
+      "source": "news_watch_loop",
+      "target": "backend_predict",
+      "type": "triggers",
+      "label": "reruns prediction on news change"
+    },
+    {
+      "source": "railway_config",
+      "target": "backend_server",
+      "type": "configures",
+      "label": "deployment settings"
+    }
+  ],
+  "metadata": {
+    "chunk_id": 7,
+    "total_chunks": 16,
+    "files_processed": 22,
+    "primary_focus": "backend scrapers, server, prediction engine, tracker, notifications, factors, news, tax events, self-training",
+    "key_patterns": [
+      "Two-source scraping strategy (tankille.fi PRIMARY, polttoaine.net SECONDARY)",
+      "IQR-based sanity filtering applied per-source before merging",
+      "5 parallel prediction methods with data-quality-aware ensemble",
+      "Self-training: bias correction and 1/MAE calibration from real captures",
+      "Scheduled captures at 14:00/21:00 Helsinki with ntfy notifications",
+      "News-watch loop: auto-rerun AI on headline changes (rate-limited)",
+      "Fundamental anchor: refined product (RBOB/ULSD) over Brent for day-ahead",
+      "MongoDB collections: snapshots (live), history (scraped only), daily_tracker (ground truth), predictions (UI source)",
+      "Claude fallback chain: Opus-4-7 → Opus-4-6 → Sonnet-4-5 → Haiku-4-5",
+      "Tax events as known step functions (not learned from history)"
+    ],
+    "architectural_notes": [
+      "All data is LIVE-GATHERED (Tilastokeskus/synthetic removed)",
+      "daily_tracker unique index: (fuel, region, date, hour) for 14h/21h slots",
+      "Price verification: hard bounds + IQR outlier detection",
+      "Source priority: >10% tankille premium → fallback to polttoaine",
+      "Prediction clamp: ±0.06 EUR/L from live (expanded by tax step)",
+      "Self-calibration: methods weighted by inverse MAE when n>=5",
+      "News watch requires EMERGENT_LLM_KEY (disabled if missing)",
+      "ntfy title must be ASCII-only (HTTP header constraint)"
+    ]
+  }
+}
