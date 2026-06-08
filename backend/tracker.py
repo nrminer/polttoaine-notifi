@@ -112,8 +112,9 @@ def _sane(rows: list) -> list:
 
 
 # Tunnistaa suomalaisen päivämäärän skraapatusta date-kentästä, esim.
-# "8.6.2026", "08.06.2026", "8.6." (vuosi puuttuu → oletetaan kuluva vuosi).
-_FI_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})?")
+# "8.6.2026", "08.06.2026", "8.6." tai "8.6" (vuosi/loppupiste voi puuttua →
+# vuosi oletetaan kuluvaksi). Loppupiste valinnainen kuten server.py:n regexissä.
+_FI_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.?(\d{2,4})?")
 
 # age_hours-sentineli "tuntematon" (tankille/hintatutka palauttavat 999.0 kun
 # tuoreutta ei voi päätellä) — tällaisia ei lasketa tämän päivän havainnoiksi.

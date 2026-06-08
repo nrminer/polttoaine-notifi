@@ -916,8 +916,13 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     if isinstance(poltt_rows, list):
         for r in poltt_rows:
             date_text = (r.get("date") or "").strip()
-            age = round(_poltt_age_hours(date_text), 1)
-            if age <= max_age_hours and _reported_today(age):
+            raw_age = _poltt_age_hours(date_text)
+            age = round(raw_age, 1)
+            # Freshness-päätös tehdään pyöristämättömällä iällä: polttoaine.net
+            # antaa vain päivän (ei kellonaikaa), joten kaikkien tämän päivän
+            # rivien ikä == nyt-keskiyö, ja 0.1h pyöristys voisi heittää koko
+            # joukon "eiliseksi" keskiyön rajalla.
+            if raw_age <= max_age_hours and _reported_today(raw_age):
                 all_obs.append({
                     "region": r["city"],
                     "price": r["price"],
