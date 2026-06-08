@@ -840,8 +840,10 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     """Live-scrape both polttoaine.net (top 20 cheapest nationally) and
     tankille.fi (per-city pages) for ALL supported regions.
 
-    Returns ONLY entries that are ≤ `max_age_hours` old (default 24h).
-    For each region we return the cheapest fresh station.
+    Returns ONLY entries reported TODAY (since 00:00 Helsinki) — eli tämän
+    vuorokauden tuoreimmat hinnat, EI rullaavan 24h-ikkunan halvinta. Lisäksi
+    `max_age_hours` toimii ylärajana (oletus 24h) jos halutaan vielä tiukempi
+    tuoreusvaatimus. For each region we return the cheapest fresh station.
     Cached for 90 seconds.
     """
     if fuel not in FUELS:
@@ -851,9 +853,6 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     now_ts = datetime.now(timezone.utc)
     today_str = now_ts.date().isoformat()
     today_d = now_ts.date()
-    # polttoaine.net käyttää muotoa "16.05." (DD.MM.) — vertaillaan tähän
-    today_short = f"{today_d.day}.{today_d.month:02d}."
-    yesterday_short = f"{(today_d - timedelta(days=1)).day}.{(today_d - timedelta(days=1)).month:02d}."
     cached = _regional_cache.get(cache_key)
     if cached and (now_ts - cached["ts"]).total_seconds() < CACHE_TTL_REGIONAL_SECONDS:
         return cached["payload"]
@@ -880,6 +879,18 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     # raportointipäivän Helsinki-keskiyöstä (konservatiivinen yläraja, ei
     # fabrikoitu arvo). Tuntiresoluutiota ei väitetä olevan.
     now_hel = now_ts.astimezone(tracker_mod.HELSINKI)
+    today_hel = now_hel.date()
+
+    def _reported_today(age_h: float) -> bool:
+        """True jos havainto raportoitiin tänään (00:00 Helsinki jälkeen).
+
+        `age_h` on tunteja sitten kun hinta raportoitiin (tankille) tai tunteja
+        raportointipäivän Helsinki-keskiyöstä (polttoaine). Molemmissa
+        `now_hel - age_h` osuu raportointipäivään, joten päivävertailu kertoo
+        onko havainto tämän vuorokauden."""
+        if not isinstance(age_h, (int, float)) or age_h >= 900:
+            return False
+        return (now_hel - timedelta(hours=age_h)).date() == today_hel
 
     def _poltt_age_hours(date_text: str) -> float:
         m = re.match(r"^\s*(\d{1,2})\.(\d{1,2})\.?\s*$", date_text or "")
@@ -906,7 +917,7 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
         for r in poltt_rows:
             date_text = (r.get("date") or "").strip()
             age = round(_poltt_age_hours(date_text), 1)
-            if age <= max_age_hours:
+            if age <= max_age_hours and _reported_today(age):
                 all_obs.append({
                     "region": r["city"],
                     "price": r["price"],
@@ -923,7 +934,7 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
             continue
         for r in res:
             age = r.get("age_hours", 999)
-            if age <= max_age_hours:
+            if age <= max_age_hours and _reported_today(age):
                 all_obs.append({
                     "region": tankille.CITY_DISPLAY.get(city, city),
                     "price": r["price"],

@@ -2,7 +2,9 @@
 Daily prediction-vs-actual tracker.
 
 Every day at 14:00 and 21:00 Helsinki time we:
-  1. Scrape today's CHEAPEST gas station price across Finland (95E10 + diesel)
+  1. Scrape today's CHEAPEST gas station price across Finland (95E10 + diesel).
+     Only prices reported TODAY (since 00:00 Helsinki) count — we capture this
+     day's freshest data, not a rolling 24h / any-age cheapest.
   2. Read yesterday's prediction (if any) for today's cheapest
   3. Run a fresh prediction for tomorrow's cheapest
   4. Store one row per (date, fuel) in MongoDB collection `daily_tracker`
@@ -19,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -108,6 +111,55 @@ def _sane(rows: list) -> list:
     ]
 
 
+# Tunnistaa suomalaisen päivämäärän skraapatusta date-kentästä, esim.
+# "8.6.2026", "08.06.2026", "8.6." (vuosi puuttuu → oletetaan kuluva vuosi).
+_FI_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})?")
+
+# age_hours-sentineli "tuntematon" (tankille/hintatutka palauttavat 999.0 kun
+# tuoreutta ei voi päätellä) — tällaisia ei lasketa tämän päivän havainnoiksi.
+_AGE_UNKNOWN = 900.0
+
+
+def _row_observed_date(row: dict, now_hel: datetime) -> date | None:
+    """Paras arvio Helsinki-kalenteripäivästä jolloin rivin hinta raportoitiin.
+
+    - tankille/hintatutka-rivit kantavat suhteellisen iän (jo parsittu
+      `age_hours`-kenttään, esim. "3 tuntia sitten" → 3.0): vähennetään
+      nykyhetkestä.
+    - polttoaine.net-rivit kantavat absoluuttisen päivämäärän `date`-kentässä
+      ("8.6.2026" / "8.6.").
+
+    Palauttaa None jos tuoreutta ei voi päätellä (käsitellään ei-tämänpäiväisenä,
+    jotta capture ottaa vain 00:00 jälkeen päivittyneet hinnat)."""
+    age = row.get("age_hours")
+    if isinstance(age, (int, float)) and age < _AGE_UNKNOWN:
+        return (now_hel - timedelta(hours=age)).date()
+    m = _FI_DATE_RE.search((row.get("date") or "").strip())
+    if m:
+        day, month, year = m.groups()
+        try:
+            if not year:
+                y = now_hel.year
+            elif len(year) == 4:
+                y = int(year)
+            else:  # 2-numeroinen vuosi
+                y = 2000 + int(year)
+            return date(y, int(month), int(day))
+        except ValueError:
+            return None
+    return None
+
+
+def _today_only(rows: list, now_hel: datetime | None = None) -> list:
+    """Säilytä vain havainnot jotka raportoitiin TÄNÄÄN (00:00 Helsinki jälkeen).
+
+    Korvaa aiemman "halvin millä iällä tahansa" -logiikan: capture ottaa vain
+    tämän vuorokauden tuoreimmat hinnat eikä eilisen/päivien takaista halvinta."""
+    now_hel = now_hel or datetime.now(HELSINKI)
+    today = now_hel.date()
+    return [r for r in rows if _row_observed_date(r, now_hel) == today]
+
+
 def _city_breakdown(rows: list) -> dict:
     """{ city: { cheapest, average, count, station, source } } TRACKED_CITIES:lle."""
     by_city: dict[str, list] = {}
@@ -153,6 +205,15 @@ async def _scrape_cheapest(fuel: str, executor) -> dict:
         if isinstance(t, list):
             all_stations.extend(t)
     all_stations = _sane(all_stations)
+    # Ota vain tämän vuorokauden (00:00 Helsinki jälkeen) raportoidut hinnat —
+    # ei eilisen/päivien takaista halvinta.
+    now_hel = datetime.now(HELSINKI)
+    fresh_stations = _today_only(all_stations, now_hel)
+    logger.info(
+        "scrape %s: %d sane stations, %d from today (%s)",
+        fuel, len(all_stations), len(fresh_stations), now_hel.date().isoformat(),
+    )
+    all_stations = fresh_stations
     if not all_stations:
         return {"price": None, "station": None, "city": None,
                 "source": None, "count": 0, "by_city": _city_breakdown([])}
