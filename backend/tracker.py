@@ -30,6 +30,8 @@ import tax_events as tax_events_mod
 import learn as learn_mod
 import price_verification as verification_mod
 import accuracy_utils as accuracy_mod
+import traffic as traffic_mod
+import weather as weather_mod
 from scrapers import polttoaine, tankille
 from validation import validate_scraped_data
 
@@ -64,6 +66,41 @@ SILENT_SCRAPE_HOURS = _parse_silent_hours()
 
 # Kaupungit joista kerätään halvin + keskihinta jokaisessa capturessa
 TRACKED_CITIES = ("Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti")
+
+
+def _demand_context_sync() -> dict:
+    """STORE-ONLY kysyntäkonteksti per capture (sää + liikenne).
+
+    Kerätään daily_tracker-dokumenttiin tulevaa kalibrointia varten — EI
+    syötetä ennusteeseen, koska kysyntä→hinta-kertoimia ei ole mitattu
+    tästä markkinasta (ks. weather.py / traffic.py docstringit). Kun
+    captureita kertyy, ennustevirheet voidaan regressoida näitä vasten ja
+    vasta mitattu kerroin viedään malliin.
+
+    Tallennetaan vain AIDOT lukemat: API-katkossa kenttä jää pois
+    (ei neutraaleja täytearvoja)."""
+    ctx: dict = {}
+    try:
+        conditions = weather_mod.fetch_weather_conditions()
+        # fetch_weather_conditions palauttaa kaupungeille neutraalit
+        # oletusarvot myös API-katkossa → vaadi vähintään yksi AITO
+        # lämpötilalukema ennen kuin indeksi tallennetaan.
+        has_real_reading = any(
+            v.get("temp_celsius") is not None for v in conditions.values()
+        )
+        if has_real_reading:
+            # fetch_weather_conditions on välimuistitettu (3 h), joten
+            # winter_severity_index ei tee tuplahakua
+            ctx["winter_severity"] = round(weather_mod.winter_severity_index(), 3)
+    except Exception:
+        pass
+    try:
+        proxy = traffic_mod.traffic_demand_proxy()
+        if proxy is not None:
+            ctx["traffic_demand_proxy"] = round(float(proxy), 4)
+    except Exception:
+        pass
+    return ctx
 
 # Järkevät rajat Suomen polttoainehinnoille (€/L) — pudota parsintavirheet
 _PRICE_MIN = 1.10
@@ -410,6 +447,17 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
             current_price=cheapest["price"]
         )
 
+    # Store-only kysyntäkonteksti (sää + liikenne) kalibrointia varten.
+    # Aikaraja pitää capture-polun nopeana; katkossa jää tyhjäksi.
+    demand_context: dict = {}
+    try:
+        demand_context = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(executor, _demand_context_sync),
+            timeout=30,
+        )
+    except Exception:
+        demand_context = {}
+
     doc = {
         "date": today_iso,
         "hour": hour,
@@ -433,6 +481,8 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         "verification_override": cheapest.get("verification_override", False),
         "original_scraped_price": cheapest.get("original_scraped_price"),
         "verification_failed": cheapest.get("verification_failed", False),
+        # Store-only demand context for future calibration (see _demand_context_sync)
+        "demand_context": demand_context,
     }
     await db.daily_tracker.update_one(
         {"date": today_iso, "hour": hour, "fuel": fuel, "region": region},

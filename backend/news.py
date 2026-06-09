@@ -18,6 +18,7 @@ import json
 import re
 import html
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from defusedxml.ElementTree import fromstring
@@ -40,13 +41,14 @@ FEEDS = [
     ("https://www.is.fi/rss/autot.xml", "IS · Autot"),
     ("https://www.mtvuutiset.fi/api/feed/rss/uutiset_uusimmat", "MTV Uutiset"),
     ("https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_UUTISET", "YLE Uutiset"),
-    ("https://feeds.yle.fi/uutiset/v1/recent.rss?publisherIds=YLE_NOVOSTI", "YLE · Talous"),
+    # HUOM: YLE_NOVOSTI poistettu — se on YLEn venäjänkielinen palvelu,
+    # ei talousfeed; venäjänkieliset otsikot eivät osu FI/EN-suodattimiin.
     ("https://www.kauppalehti.fi/rss/uusimmat", "Kauppalehti"),
     ("https://www.talouselama.fi/api/feed/latest", "Talouselämä"),
-    
+
     # Major English sources - oil/gas/energy/geopolitics
-    ("https://feeds.reuters.com/reuters/businessNews", "Reuters · Business"),
-    ("https://feeds.reuters.com/Reuters/worldNews", "Reuters · World"),
+    # HUOM: feeds.reuters.com poistettu — Reuters lopetti julkiset
+    # RSS-syötteet 2020, domain ei enää edes resolvoidu.
     ("https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera"),
     ("https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "NYT · World"),
     ("https://rss.nytimes.com/services/xml/rss/nyt/Business.xml", "NYT · Business"),
@@ -60,16 +62,27 @@ FEEDS = [
     ("https://www.ft.com/rss/world", "Financial Times · World"),
     ("https://www.cnbc.com/id/100727362/device/rss/rss.html", "CNBC · Energy"),
     ("https://www.cnbc.com/id/10000664/device/rss/rss.html", "CNBC · Commodities"),
-    ("https://www.bloomberg.com/feed/podcast/bloomberg-commodities-edge.xml", "Bloomberg · Commodities"),
+    # HUOM: Bloombergin podcast-feed poistettu — jaksonimet eivät ole
+    # uutisotsikoita; platts.com-RSS poistettu — domain on eläköitynyt
+    # (S&P Global siirsi sisällön spglobal.comiin ilman julkista RSS:ää).
     ("https://www.marketwatch.com/rss/energy", "MarketWatch · Energy"),
     ("https://www.wsj.com/xml/rss/3_7031.xml", "WSJ · Commodities"),
-    
+
     # Energy-specific
-    ("https://www.oilprice.com/rss/main", "OilPrice.com"),
+    ("https://oilprice.com/rss/main", "OilPrice.com"),
     ("https://www.rigzone.com/news/feeds/oil_gas.rss", "Rigzone · Oil & Gas"),
-    ("https://www.platts.com/RSS/RSSFeed", "S&P Global Platts"),
     ("https://www.worldoil.com/rss/recent/topics/all", "World Oil"),
 ]
+
+# Per-feed health: päivitetään jokaisella fetch_news-ajolla. Kuolleet feedit
+# näkyvät tästä (/api/news → feed_health) sen sijaan että ne katoaisivat
+# hiljaa uutiskatteesta.
+_FEED_HEALTH: dict[str, dict] = {}
+
+
+def feed_health() -> dict:
+    """Viimeisimmän haun per-feed-tila: {label: {ok, status, items, checked_at}}."""
+    return dict(_FEED_HEALTH)
 
 # Avainsanat: polttoaine, raakaöljy-hinta, vero, OPEC, Brent, asemaketjut
 # (riittävän tiukka jotta ei matchaa esim. liikenneonnettomuus-uutisia)
@@ -285,15 +298,29 @@ def fetch_news(queries=None, max_age_days: int = 14, limit: int = 15) -> list[di
     
     Returns list of news items with 'breaking' field indicating breaking news.
     """
-    all_items: list[dict] = []
-    for url, label in FEEDS:
+    def _fetch_one(url: str, label: str) -> list[dict]:
+        checked = datetime.now(timezone.utc).isoformat()
         try:
             r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
             if r.status_code != 200:
-                continue
-            all_items.extend(_parse_rss(r.text, label))
-        except Exception:
-            continue
+                _FEED_HEALTH[label] = {"ok": False, "status": r.status_code,
+                                       "items": 0, "checked_at": checked}
+                return []
+            items = _parse_rss(r.text, label)
+            _FEED_HEALTH[label] = {"ok": True, "status": 200,
+                                   "items": len(items), "checked_at": checked}
+            return items
+        except Exception as e:
+            _FEED_HEALTH[label] = {"ok": False, "status": type(e).__name__,
+                                   "items": 0, "checked_at": checked}
+            return []
+
+    # Rinnakkainen haku: ~25 feedin sarjallinen läpikäynti 12 s timeoutilla
+    # kestäisi pahimmillaan minuutteja; rinnakkain koko kierros on ≤ TIMEOUT.
+    all_items: list[dict] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for items in pool.map(lambda f: _fetch_one(*f), FEEDS):
+            all_items.extend(items)
 
     cutoff_h = max_age_days * 24
     seen = set()

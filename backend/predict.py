@@ -23,11 +23,12 @@ import asyncio
 import json
 import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 from llm_client import LLMConfigError, configured_model, send_message
 import weekly_cycle as wc_mod
+import fi_holidays
 
 
 # ---------------- yleiset apurit ----------------
@@ -146,6 +147,12 @@ def _empirical_weekday_adj(dates, prices,
     try:
         parsed = [(_parse_date(d), float(p)) for d, p in dt]
     except Exception:
+        return None, 0
+
+    # Pyhä- ja aattopäivät pois viikonpäiväjakaumista — esim. helatorstai
+    # ei saa saastuttaa "torstain" systemaattista poikkeamaa.
+    parsed = [(d, p) for d, p in parsed if not fi_holidays.is_special(d)]
+    if len(parsed) < _WD_MIN_TOTAL:
         return None, 0
 
     # 7-pv keskittävä rolling mean — jättää reunoille ohuemman ikkunan
@@ -346,7 +353,8 @@ def fundamental_anchor(dates, prices, live_anchor,
                        product_chg: float | None = None,
                        product_label: str | None = None,
                        tax_step_eur_l: float | None = None,
-                       track_stats: dict | None = None) -> dict:
+                       track_stats: dict | None = None,
+                       tomorrow_date_iso: str | None = None) -> dict:
     """Fysikaalisesti motivoitu day-ahead-malli:
 
         ennuste = live-ankkuri
@@ -416,18 +424,32 @@ def fundamental_anchor(dates, prices, live_anchor,
     #    <3 havaintoa, palaudutaan kiinteään ±0.004 €/L -prioriin (heikko
     #    suunnatieto — tarkoitus EI ole olla mitattu Suomi-spesifinen).
     wd_adj = 0.0
-    wd_source = None  # "empiirinen N" | "prior"
-    emp_wd, emp_n = _empirical_weekday_adj(dates, prices, tomorrow_weekday)
-    if emp_wd is not None:
-        wd_adj = emp_wd
-        wd_source = f"empiirinen n={emp_n}"
+    wd_source = None  # "empiirinen N" | "prior" | pyhäkalenteri
+    holiday_profile = None
+    if tomorrow_date_iso:
+        try:
+            holiday_profile = fi_holidays.demand_profile(_parse_date(tomorrow_date_iso))
+        except Exception:
+            holiday_profile = None
+    if holiday_profile is not None:
+        # Pyhäkalenteri ohittaa viikonpäivärytmin: pyhäpäivä käyttäytyy kuin
+        # sunnuntai (matala kysyntä), aatto kuin perjantai (matka-/tankkaus-
+        # päivä). Sama ±0.004 €/L -priorimagnitudi kuin viikonpäivpriorissa.
+        kind, name = holiday_profile
+        wd_adj = -0.004 if kind == "holiday" else 0.004
+        wd_source = name
     else:
-        if tomorrow_weekday in (1, 2):       # ti, ke
-            wd_adj = 0.004
-        elif tomorrow_weekday in (6, 0):     # su, ma
-            wd_adj = -0.004
-        if wd_adj:
-            wd_source = "prior"
+        emp_wd, emp_n = _empirical_weekday_adj(dates, prices, tomorrow_weekday)
+        if emp_wd is not None:
+            wd_adj = emp_wd
+            wd_source = f"empiirinen n={emp_n}"
+        else:
+            if tomorrow_weekday in (1, 2):       # ti, ke
+                wd_adj = 0.004
+            elif tomorrow_weekday in (6, 0):     # su, ma
+                wd_adj = -0.004
+            if wd_adj:
+                wd_source = "prior"
     if wd_adj:
         tag = f"viikonpäivä-{wd_source}" if wd_source else "viikonpäivä"
         parts.append(f"{tag} {wd_adj*1000:+.1f} m€/L")
@@ -685,6 +707,21 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     weekday_fi = wd[datetime.now(timezone.utc).weekday()]
     tomorrow_weekday_fi = wd[(datetime.now(timezone.utc).weekday() + 1) % 7]
 
+    # Pyhäkalenteri: tunnettu deterministinen kysyntäsignaali (vrt. verot)
+    tomorrow_date = datetime.now(timezone.utc).date() + timedelta(days=1)
+    cal_profile = fi_holidays.demand_profile(tomorrow_date)
+    if cal_profile:
+        kind, cal_name = cal_profile
+        if kind == "holiday":
+            cal_line = (f"Huomenna on {cal_name} (pyhäpäivä) — kysyntä ja "
+                        "asematarjonta tyypillisesti matalia, kuten sunnuntaina.")
+        else:
+            cal_line = (f"Huomenna on {cal_name} — matkustus- ja "
+                        "tankkauspäivä, kysyntä tyypillisesti koholla kuten "
+                        "perjantaina.")
+    else:
+        cal_line = "Ei pyhä- tai aattopäiviä huomenna."
+
     conflict_hits = _scan_conflict(news_headlines)
 
     news_block = ""
@@ -764,6 +801,7 @@ async def ai_llm_predict(fuel: str, prices: list[float],
         f"=== LAG-PIIKIT (eksplisiittiset viiveet aidosta päivähännästä) ===\n"
         f"{lag_block}\n\n"
         f"=== MOMENTUMSIGNAALI ===\n7 pv trendi: {slope_str}\n\n"
+        f"=== KALENTERI (tunnettu, deterministinen) ===\n{cal_line}\n\n"
         f"=== LIVE-SKRAPATTU PÄIVÄHISTORIA (kerätty tästä päivästä alkaen) ===\n"
         f"{sample_lines}\n\n"
         f"=== DATALAATU ===\n{data_quality_note}\n\n"
@@ -1042,6 +1080,8 @@ async def predict_tomorrow(fuel: str,
         prices[-1] = float(live_today_price)
 
     tomorrow_weekday = (datetime.now(timezone.utc).weekday() + 1) % 7
+    tomorrow_date_iso = (datetime.now(timezone.utc).date()
+                         + timedelta(days=1)).isoformat()
     conflict = bool(_scan_conflict(news_headlines))
     n_daily = len(_daily_tail(dates, prices, max_gap=3, min_len=4))
 
@@ -1054,7 +1094,7 @@ async def predict_tomorrow(fuel: str,
         brent_chg, eur_usd_chg, tomorrow_weekday, conflict=conflict,
         product_usd_gal=product_usd_gal, product_chg=product_chg,
         product_label=product_label, tax_step_eur_l=tax_step_eur_l,
-        track_stats=track_stats,
+        track_stats=track_stats, tomorrow_date_iso=tomorrow_date_iso,
     )
     ai = await ai_llm_predict(
         fuel, prices, dates, brent, eur_usd,
@@ -1089,6 +1129,11 @@ async def predict_tomorrow(fuel: str,
         "current_price": round(_safe_prices(prices)[-1], 4) if _safe_prices(prices) else None,
         "live_anchor": live_today_price,
         "conflict_signal": conflict,
+        "calendar_event": (
+            {"kind": _prof[0], "name": _prof[1], "date": tomorrow_date_iso}
+            if (_prof := fi_holidays.demand_profile(_parse_date(tomorrow_date_iso)))
+            else None
+        ),
         "n_daily_points": n_daily,
         "product_label": product_label,
         "product_usd_gal": product_usd_gal,

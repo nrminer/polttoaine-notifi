@@ -149,7 +149,7 @@ Grouped logically. All routes are prefixed `/api`.
 | GET | `/api/factors` | Brent + EUR/USD time series (Yahoo Finance, cached 15 min) |
 
 ### News
-| GET | `/api/news?max_age_days=14&limit=8` | RSS-aggregated Finnish fuel news |
+| GET | `/api/news?max_age_days=14&limit=8` | RSS-aggregated Finnish fuel news. Response includes `feed_health` (count of ok feeds + failed feed labels per run) — dead feeds are visible instead of silently shrinking coverage. Feeds are fetched in parallel. |
 
 ### Predictions
 | POST | `/api/predict/run` | Runs **all 5 methods** from **daily_tracker captures ONLY** + live anchor (NO Statfin). Cold-start tolerant: 400 only if there is literally no live data. Persists into `predictions`. |
@@ -490,6 +490,35 @@ curl https://polttoaine-notifi-production.up.railway.app/api/factors
 **Known cold-start note**: per-city `by_city` and the all-cities chart only
 populate from captures taken AFTER deploy; there is NO real backed source for
 historical per-city data and none is fabricated.
+
+**Data-input additions (2026-06-09)**:
+- `backend/fi_holidays.py` — deterministic Finnish public-holiday calendar
+  (computus + fixed + juhannus/pyhäinpäivä rules; verified against known
+  2025/2026 dates). Wired into: `fundamental_anchor` weekday prior (holiday →
+  Sunday-like −0.004, eve → Friday-like +0.004 — reuses the existing prior
+  magnitude, no new unmeasured constants), `_empirical_weekday_adj`
+  (holiday/eve dates excluded from weekday buckets), the AI prompt
+  (`=== KALENTERI ===` section), and the prediction payload as
+  `calendar_event` (UI shows a chip next to the geopol chip).
+- News feeds cleaned: dead `feeds.reuters.com` (RSS discontinued 2020,
+  NXDOMAIN), retired `platts.com` RSS, Bloomberg podcast feed, and the
+  mislabeled `YLE_NOVOSTI` (Russian-language service, not a talous feed)
+  removed. Per-feed health tracked in `news._FEED_HEALTH`, exposed via
+  `/api/news` → `feed_health`.
+- `daily_tracker` docs now carry a STORE-ONLY `demand_context`
+  (`winter_severity` from FMI/Digitraffic, `traffic_demand_proxy` from
+  Fintraffic LAM) for FUTURE calibration. NOT fed into predictions
+  (coefficients unmeasured); only real readings are stored — API outages
+  leave the fields out rather than writing neutral defaults.
+
+**Candidate data sources (researched, not implemented)**:
+- EU Commission Weekly Oil Bulletin — official weekly Finnish pump prices
+  (95E10 + diesel, with/without tax). Weekly granularity → little day-ahead
+  value, but a strong CALIBRATION anchor for scraper sanity and pass-through
+  fractions. Needs endpoint verification (XLSX/CSV at energy.ec.europa.eu).
+- ICE Gasoil futures (the actual NWE diesel benchmark; `HO=F` is a US
+  proxy) — no reliable free feed found (Yahoo doesn't carry it); revisit if
+  a free source appears.
 
 ## 17. Useful one-liners for debugging
 

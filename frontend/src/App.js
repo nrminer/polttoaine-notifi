@@ -299,6 +299,7 @@ export default function App() {
             data_sources: data.data_sources,
             // rikkaampi konteksti (taustamuuttujat + self-training)
             conflict_signal: data.conflict_signal,
+            calendar_event: data.calendar_event,
             n_daily_points: data.n_daily_points,
             product_label: data.product_label,
             product_usd_gal: data.product_usd_gal,
@@ -718,6 +719,19 @@ export default function App() {
                   title="Uutisista poimittu konflikti-/tarjontahäiriösignaali — leveämpi epävarmuusväli."
                 >
                   geopol. signaali
+                </span>
+              )}
+              {prediction?.calendar_event?.name && (
+                <span
+                  data-testid="calendar-chip"
+                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-sky-50 dark:bg-sky-500/15 border border-sky-300 dark:border-sky-400/30 text-sky-800 dark:text-sky-200 font-semibold"
+                  title={
+                    prediction.calendar_event.kind === "holiday"
+                      ? "Huominen on pyhäpäivä — kysyntä tyypillisesti matala (kuten sunnuntaina)."
+                      : "Huominen on aattopäivä — matkustus- ja tankkauspäivä, kysyntä koholla."
+                  }
+                >
+                  {prediction.calendar_event.name}
                 </span>
               )}
             </div>

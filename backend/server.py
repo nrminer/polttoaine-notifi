@@ -716,6 +716,7 @@ async def _run_prediction_impl(req: PredictionRequest):
         "data_sources": result.get("data_sources"),
         # rikkaampi konteksti UI:lle (näytetään prediction-kortissa)
         "conflict_signal": result.get("conflict_signal"),
+        "calendar_event": result.get("calendar_event"),
         "n_daily_points": result.get("n_daily_points"),
         "product_label": result.get("product_label"),
         "product_usd_gal": result.get("product_usd_gal"),
@@ -745,10 +746,16 @@ async def get_news(max_age_days: int = 14, limit: int = 15):
     items = await loop.run_in_executor(
         executor, news_mod.fetch_news, None, max_age_days, limit
     )
+    health = news_mod.feed_health()
+    failed = sorted(label for label, h in health.items() if not h.get("ok"))
     return {
         "items": items,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "max_age_days": max_age_days,
+        "feed_health": {
+            "ok": sum(1 for h in health.values() if h.get("ok")),
+            "failed": failed,
+        },
     }
 
 
@@ -841,6 +848,7 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
         "data_sources": data_sources,
         # rikkaampi konteksti — taustamuuttujat & self-training (näytetään UI:ssa)
         "conflict_signal": doc.get("conflict_signal"),
+        "calendar_event": doc.get("calendar_event"),
         "n_daily_points": doc.get("n_daily_points"),
         "product_label": doc.get("product_label"),
         "product_usd_gal": doc.get("product_usd_gal"),
