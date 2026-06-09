@@ -561,6 +561,10 @@ async def get_factors():
 @app.post("/api/predict/run")
 @limiter.limit("10/minute")
 async def run_prediction(req: PredictionRequest, request: Request):
+    return await _run_prediction_impl(req)
+
+
+async def _run_prediction_impl(req: PredictionRequest):
     fuel = req.fuel
     region = req.region
     if fuel not in FUELS:
@@ -1212,8 +1216,8 @@ async def admin_run(req: AdminRequest,
         preds = []
         for f in fuels:
             try:
-                res = await run_prediction(
-                    PredictionRequest(fuel=f, region=req.region), request)
+                res = await _run_prediction_impl(
+                    PredictionRequest(fuel=f, region=req.region))
                 preds.append({
                     "fuel": f,
                     "target_date": res.get("target_date"),
@@ -1319,7 +1323,7 @@ async def track_backfill(points: list[TrackBackfillPoint],
     if rerun_prediction and (inserted > 0 or updated > 0):
         for fuel, region in affected_fuels:
             try:
-                pred_result = await run_prediction(
+                pred_result = await _run_prediction_impl(
                     PredictionRequest(fuel=fuel, region=region)
                 )
                 predictions_rerun.append({
@@ -1451,7 +1455,7 @@ async def fix_capture(req: FixCaptureRequest,
     prediction_result = None
     if rerun_prediction and result.modified_count > 0:
         try:
-            pred = await run_prediction(PredictionRequest(fuel=req.fuel, region=req.region))
+            pred = await _run_prediction_impl(PredictionRequest(fuel=req.fuel, region=req.region))
             prediction_result = {
                 "target_date": pred.get("target_date"),
                 "ensemble": (pred.get("ensemble") or {}).get("value"),
@@ -1560,7 +1564,7 @@ async def reboot_system(recalculate: bool = Query(True),
                    remaining_captures)
         for fuel in FUELS:
             try:
-                pred_result = await run_prediction(
+                pred_result = await _run_prediction_impl(
                     PredictionRequest(fuel=fuel, region="Suomi")
                 )
                 recalculated.append({
@@ -1625,7 +1629,7 @@ async def on_startup():
 
     # taustaprosessi: aja AI-analyysi uudelleen kun uusia uutisia ilmestyy
     async def _news_predict(fuel: str):
-        return await run_prediction(PredictionRequest(fuel=fuel, region="Suomi"))
+        return await _run_prediction_impl(PredictionRequest(fuel=fuel, region="Suomi"))
 
     app.state.news_task = asyncio.create_task(
         tracker_mod.news_watch_loop(db, executor, FUELS, _news_predict)
