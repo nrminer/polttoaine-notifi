@@ -17,7 +17,7 @@ PRICE_MAX_SANITY = 3.50
 
 # Per-batch outlier threshold: drop rows whose price deviates more than this
 # from the median (as a fraction of the median).
-OUTLIER_THRESHOLD_FRACTION = 0.25
+OUTLIER_THRESHOLD_FRACTION = 0.15
 
 
 def validate_price_bounds(price: float, min_price: float = PRICE_MIN_SANITY, 
@@ -38,11 +38,11 @@ def validate_price_bounds(price: float, min_price: float = PRICE_MIN_SANITY,
 
 
 def filter_price_outliers(prices: list[float], threshold: float = OUTLIER_THRESHOLD_FRACTION) -> list[bool]:
-    """Identify outliers using IQR method.
+    """Identify outliers using median-relative deviation.
     
     Args:
         prices: List of prices in EUR/L
-        threshold: IQR multiplier for outlier detection (default 0.25)
+        threshold: Maximum relative deviation from median (default 0.20)
         
     Returns:
         List of booleans indicating which prices are valid (True = keep, False = outlier)
@@ -50,18 +50,13 @@ def filter_price_outliers(prices: list[float], threshold: float = OUTLIER_THRESH
     if not prices or len(prices) < 3:
         return [True] * len(prices)
     
-    arr = np.array(prices)
-    q1, q3 = np.percentile(arr, [25, 75])
-    iqr = q3 - q1
+    arr = np.array(prices, dtype=float)
+    median = float(np.median(arr))
     
-    if iqr == 0:
-        # All prices the same, no outliers
+    if median <= 0:
         return [True] * len(prices)
     
-    lower_bound = q1 - threshold * iqr
-    upper_bound = q3 + threshold * iqr
-    
-    return [lower_bound <= p <= upper_bound for p in prices]
+    return [abs(p - median) / median <= threshold for p in prices]
 
 
 def validate_scraped_data(
@@ -75,14 +70,14 @@ def validate_scraped_data(
     
     Applies multiple validation layers:
     1. Hard bounds check (min_price to max_price)
-    2. IQR-based outlier detection within batch
+    2. Median-relative outlier detection within batch
     
     Args:
         rows: List of dicts with 'price' field
         source: Name of scraper source (for logging)
         min_price: Minimum realistic price
         max_price: Maximum realistic price
-        outlier_threshold: IQR multiplier for outlier detection
+        outlier_threshold: Maximum relative deviation from median
         
     Returns:
         Filtered list containing only valid rows
@@ -95,7 +90,7 @@ def validate_scraped_data(
     bounds_rejected = 0
     for r in rows:
         price = r.get("price")
-        if price is None:
+        if not isinstance(price, (int, float)):
             continue
         if not validate_price_bounds(price, min_price, max_price):
             bounds_rejected += 1
@@ -111,7 +106,7 @@ def validate_scraped_data(
     if not bounded:
         return []
     
-    # Step 2: IQR outlier filter
+    # Step 2: median-relative outlier filter
     prices = [r["price"] for r in bounded]
     valid_mask = filter_price_outliers(prices, outlier_threshold)
     
@@ -120,7 +115,7 @@ def validate_scraped_data(
     
     if outliers_rejected > 0:
         logger.warning(
-            "%s: rejected %d/%d rows as statistical outliers (IQR threshold %.2f)",
+            "%s: rejected %d/%d rows as statistical outliers (median threshold %.2f)",
             source, outliers_rejected, len(bounded), outlier_threshold
         )
     

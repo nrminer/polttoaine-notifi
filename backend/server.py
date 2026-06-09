@@ -130,6 +130,15 @@ def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
     return validate_scraped_data(rows, source=label)
 
 
+def _regional_tankille_cities() -> list[str]:
+    """Tankille city slugs matching the regions this app actually displays."""
+    scrapeable = set(tankille.CITIES)
+    return [
+        region for region in SUPPORTED_REGIONS
+        if region != "Suomi" and region in scrapeable
+    ]
+
+
 async def _scrape_all(fuel: str) -> list[dict]:
     """Fetch current prices from production-validated scrapers.
 
@@ -266,6 +275,9 @@ async def meta():
     return {
         "fuels": list(FUELS),
         "regions": SUPPORTED_REGIONS,
+        "features": {
+            "realtime_updates": True,
+        },
     }
 
 
@@ -863,8 +875,7 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     if cached and (now_ts - cached["ts"]).total_seconds() < CACHE_TTL_REGIONAL_SECONDS:
         return cached["payload"]
 
-    # tankille.fi tarjoaa per-kaupunki sivut vain näille
-    tankille_cities = ["Helsinki", "Espoo", "Vantaa", "Tampere", "Oulu"]
+    tankille_cities = _regional_tankille_cities()
 
     loop = asyncio.get_event_loop()
     # rinnakkaiset skrapaukset
@@ -908,6 +919,7 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
         return delta_h if delta_h >= 0 else 999.0
 
     if isinstance(poltt_rows, list):
+        poltt_rows = _sanity_filter(poltt_rows, "regional-polttoaine")
         for r in poltt_rows:
             date_text = (r.get("date") or "").strip()
             age = round(_poltt_age_hours(date_text), 1)
@@ -926,6 +938,7 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     for city, res in zip(tankille_cities, tank_results):
         if isinstance(res, Exception) or not res:
             continue
+        res = _sanity_filter(res, f"regional-tankille-{city}")
         for r in res:
             age = r.get("age_hours", 999)
             if age <= max_age_hours:

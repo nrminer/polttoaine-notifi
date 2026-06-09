@@ -12,11 +12,25 @@ import time
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://serverless-app-2.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get(
+    "BENSAVAHTI_API_BASE_URL",
+    os.environ.get(
+        "REACT_APP_BACKEND_URL",
+        "https://polttoaine-notifi-production.up.railway.app",
+    ),
+).rstrip("/")
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        os.environ.get("BENSAVAHTI_LIVE_API_TESTS") != "1",
+        reason="live API tests are opt-in; set BENSAVAHTI_LIVE_API_TESTS=1",
+    ),
+]
 
 EXPECTED_FUELS = {"95E10", "diesel"}
 EXPECTED_REGIONS = {"Helsinki", "Espoo", "Vantaa", "Tampere", "Turku",
-                    "Oulu", "Jyväskylä", "Kuopio", "Lahti", "Suomi"}
+                    "Lahti", "Suomi"}
 
 
 @pytest.fixture(scope="module")

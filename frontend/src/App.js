@@ -40,7 +40,6 @@ import {
   fetchAccuracy,
   fetchNews,
   fetchTrackHistory,
-  seedHistory,
 } from "./lib/api";
 import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
 import NewsCard from "./components/NewsCard";
@@ -215,7 +214,6 @@ export default function App() {
   const [chartRange, setChartRange] = useState(90);
   const [chartSlot, setChartSlot] = useState("all");
   const [loading, setLoading] = useState({});
-  const [seeded, setSeeded] = useState(false);
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState(() => {
     if (typeof window === "undefined") return "dark";
@@ -241,15 +239,6 @@ export default function App() {
   );
 
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
-
-  const ensureSeeded = useCallback(async () => {
-    try {
-      await seedHistory(180, false);
-      setSeeded(true);
-    } catch (e) {
-      setSeeded(true);
-    }
-  }, []);
 
   const loadCurrent = useCallback(async (f) => {
     setLoad("current", true);
@@ -417,7 +406,6 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      await ensureSeeded();
       await Promise.all([
         loadCurrent(fuel),
         loadHistory(fuel, HISTORY_RANGE_DAYS),
@@ -426,21 +414,6 @@ export default function App() {
         loadRegional(fuel),
         loadAccuracy(fuel),
         loadNews(),
-        loadTracking(fuel),
-      ]);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!seeded) return;
-    (async () => {
-      await Promise.all([
-        loadCurrent(fuel),
-        loadHistory(fuel, HISTORY_RANGE_DAYS),
-        loadPrediction(fuel, false),
-        loadRegional(fuel),
-        loadAccuracy(fuel),
         loadTracking(fuel),
       ]);
     })();

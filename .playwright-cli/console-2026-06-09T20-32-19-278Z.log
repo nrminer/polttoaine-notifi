@@ -1,0 +1,87 @@
+[   67540ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/static/js/bundle.js:44619
+[   70273ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   70273ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   70274ms] [LOG] [SSE] Reconnecting in 1000ms (attempt 1) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   71783ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   71783ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   71783ms] [LOG] [SSE] Reconnecting in 2000ms (attempt 2) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   74024ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   74024ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   74024ms] [LOG] [SSE] Reconnecting in 4000ms (attempt 3) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   74547ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   74548ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   74548ms] [LOG] [SSE] Reconnecting in 8000ms (attempt 4) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   82911ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   82911ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   82911ms] [LOG] [SSE] Reconnecting in 16000ms (attempt 5) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   83170ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/static/js/bundle.js:44619
+[   84235ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   84235ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   84235ms] [LOG] [SSE] Reconnecting in 1000ms (attempt 1) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   85654ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   85654ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   85654ms] [LOG] [SSE] Reconnecting in 2000ms (attempt 2) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   88029ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   88029ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   88029ms] [LOG] [SSE] Reconnecting in 4000ms (attempt 3) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[   92432ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[   92432ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[   92432ms] [LOG] [SSE] Reconnecting in 8000ms (attempt 4) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  100820ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  100820ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  100820ms] [LOG] [SSE] Reconnecting in 16000ms (attempt 5) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  116941ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/static/js/bundle.js:44619
+[  117920ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  117920ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  117921ms] [LOG] [SSE] Reconnecting in 1000ms (attempt 1) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  119354ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  119354ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  119355ms] [LOG] [SSE] Reconnecting in 2000ms (attempt 2) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  121758ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  121759ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  121759ms] [LOG] [SSE] Reconnecting in 4000ms (attempt 3) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  122637ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  122637ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  122637ms] [LOG] [SSE] Reconnecting in 8000ms (attempt 4) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  130909ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  130909ms] [LOG] [SSE] Reconnecting in 16000ms (attempt 5) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  130927ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/static/js/bundle.js:44619
+[  131736ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  131736ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  131736ms] [LOG] [SSE] Reconnecting in 1000ms (attempt 1) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  133275ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  133275ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  133275ms] [LOG] [SSE] Reconnecting in 2000ms (attempt 2) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  135652ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  135652ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  135653ms] [LOG] [SSE] Reconnecting in 4000ms (attempt 3) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  140044ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  140044ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  140044ms] [LOG] [SSE] Reconnecting in 8000ms (attempt 4) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  148421ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  148421ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  148421ms] [LOG] [SSE] Reconnecting in 16000ms (attempt 5) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  164795ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  164795ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  164795ms] [LOG] [SSE] Reconnecting in 30000ms (attempt 6) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  195177ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  195177ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  195177ms] [LOG] [SSE] Reconnecting in 30000ms (attempt 7) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  204056ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  204056ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  204056ms] [LOG] [SSE] Reconnecting in 1000ms (attempt 1) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  205452ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  205452ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  205452ms] [LOG] [SSE] Reconnecting in 2000ms (attempt 2) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  207756ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  207756ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  207756ms] [LOG] [SSE] Reconnecting in 4000ms (attempt 3) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  212152ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  212153ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  212153ms] [LOG] [SSE] Reconnecting in 8000ms (attempt 4) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  220535ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  220535ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  220536ms] [LOG] [SSE] Reconnecting in 16000ms (attempt 5) @ http://127.0.0.1:3001/static/js/bundle.js:6171
+[  236932ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://polttoaine-notifi-production.up.railway.app/api/updates/stream:0
+[  236932ms] [ERROR] [SSE] Connection error: Event @ http://127.0.0.1:3001/static/js/bundle.js:6164
+[  236932ms] [LOG] [SSE] Reconnecting in 30000ms (attempt 6) @ http://127.0.0.1:3001/static/js/bundle.js:6171

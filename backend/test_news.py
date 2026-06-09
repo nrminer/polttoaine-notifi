@@ -6,6 +6,10 @@ import asyncio
 import os
 from news import fetch_news, fetch_news_with_ai_relevance, calculate_relevance_with_ai
 
+# Manual smoke-test script. Pytest should not collect these helpers because the
+# AI relevance path needs live credentials and caller-provided sample data.
+__test__ = False
+
 def test_basic_scraping():
     """Test basic news scraping without AI."""
     print("=" * 60)

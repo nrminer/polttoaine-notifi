@@ -82,7 +82,6 @@ KEYWORDS = re.compile(
     r"raakaöljy|öljyn\s+hin|öljymarkkin|öljyn?\s+tuotant|"
     r"polttoaineverot|valmistevero|polttoainevero|"
     r"\bOPEC|\bBrent\b|\bWTI\b|"
-    r"Neste\s+(Oil|Express|huoltoasem)|Teboil|ABC\s+asem|huoltoasem|tankkau|"
     r"pumppu\s*hin|liikennepolttoaine|"
     # English keywords - oil/gas/energy
     r"\boil\s+price|\bcrude\s+oil|\bpetroleum|\bbarrel|"
@@ -91,12 +90,12 @@ KEYWORDS = re.compile(
     r"Venezuela.*oil|Libya.*oil|Nigeria.*oil|"
     r"\benergy\s+crisis|\brefinery|\brefineries|\bpipeline|"
     r"Middle\s+East.*conflict|Ukraine.*war|sanctions.*oil|sanctions.*energy|"
-    r"\bdrilling|\bfracking|\bshale\s+oil|"
+    r"\bshale\s+oil|"
     r"oil\s+supply|oil\s+demand|oil\s+production|oil\s+output|"
-    r"energy\s+security|strategic\s+reserve|"
+    r"strategic\s+reserve|"
     r"\bIEA\b|International\s+Energy\s+Agency|"
-    r"oil\s+embargo|oil\s+exports|LNG|natural\s+gas|"
-    r"commodity.*oil|energy.*sector|fossil\s+fuel"
+    r"oil\s+embargo|oil\s+exports|"
+    r"commodity.*oil|shale\s+oil"
     r")",
     re.IGNORECASE,
 )
@@ -140,6 +139,34 @@ IGNORE_PATTERNS = re.compile(
     r")",
     re.IGNORECASE,
 )
+
+PRICE_SIGNAL_KEYWORDS = re.compile(
+    r"("
+    r"hinta|halpa|kallis|vero|valmistevero|"
+    r"polttoaine|bensiini|\bdiesel|raaka|Ã¶ljy|OPEC|Brent|WTI|"
+    r"oil|crude|barrel|fuel price|gas price|gasoline|petroleum|"
+    r"refinery|pipeline|supply|production|output|exports|sanctions|shale oil"
+    r")",
+    re.IGNORECASE,
+)
+
+LOCAL_STATION_NON_MARKET_PATTERNS = re.compile(
+    r"("
+    r"katto\s+(sortui|romaht)|romahtanut|rakennustarkastaja|"
+    r"ovet\s+(kiinni|aukea)|autioitui|omistaja\s+kuoli|"
+    r"huoltoasema.*(katto|romaht|aukea|kiinni|autioitui)"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _title_is_price_relevant(title: str) -> bool:
+    """Return True when a title is plausibly useful for fuel-price context."""
+    if not KEYWORDS.search(title):
+        return False
+    if LOCAL_STATION_NON_MARKET_PATTERNS.search(title) and not PRICE_SIGNAL_KEYWORDS.search(title):
+        return False
+    return True
 
 
 def _calculate_severity(title: str, desc: str) -> int:
@@ -276,7 +303,7 @@ def fetch_news(queries=None, max_age_days: int = 14, limit: int = 15) -> list[di
             continue
         # match VAIN otsikkoa vasten — kuvaukset usein matchaavat aiheeseen
         # vain väljästi (esim. "huoltoaseman lähellä kolari")
-        if not KEYWORDS.search(it["title"]):
+        if not _title_is_price_relevant(it["title"]):
             continue
         key = it["title"][:80].lower()
         if key in seen:

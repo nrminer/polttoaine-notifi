@@ -31,6 +31,7 @@ import learn as learn_mod
 import price_verification as verification_mod
 import accuracy_utils as accuracy_mod
 from scrapers import polttoaine, tankille
+from validation import validate_scraped_data
 
 logger = logging.getLogger("bensavahti.tracker")
 
@@ -101,12 +102,8 @@ def next_18_helsinki(now_utc: datetime | None = None) -> datetime:
 
 
 def _sane(rows: list) -> list:
-    """Pudota selvät parsintavirheet (hinta rajojen ulkopuolella)."""
-    return [
-        r for r in rows
-        if isinstance(r.get("price"), (int, float))
-        and _PRICE_MIN <= r["price"] <= _PRICE_MAX
-    ]
+    """Drop parse errors and statistical price outliers."""
+    return validate_scraped_data(rows, source="tracker")
 
 
 def _city_breakdown(rows: list) -> dict:
@@ -264,6 +261,7 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         )
         
         if not verification.is_valid:
+            original_scraped_price = cheapest["price"]
             logger.error(
                 "⚠️  PRICE VERIFICATION FAILED for %s on %s @%02dh: %s",
                 fuel, today_iso, hour, verification.reason
@@ -285,16 +283,17 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
                               verification.suggested_alternative)
                 cheapest["price"] = verification.suggested_alternative
                 cheapest["verification_override"] = True
-                cheapest["original_scraped_price"] = cheapest["price"]
+                cheapest["original_scraped_price"] = original_scraped_price
             elif context.get("last_price"):
                 logger.warning("   → Using last known good price: %.3f EUR/L", 
                               context["last_price"])
                 cheapest["price"] = context["last_price"]
                 cheapest["verification_override"] = True
-                cheapest["original_scraped_price"] = cheapest["price"]
+                cheapest["original_scraped_price"] = original_scraped_price
             else:
                 logger.error("   → No fallback available, setting price to None")
                 cheapest["price"] = None
+                cheapest["original_scraped_price"] = original_scraped_price
                 cheapest["verification_failed"] = True
         else:
             logger.info("✓ Price verification passed for %s: %.3f EUR/L", 
