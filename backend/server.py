@@ -35,6 +35,7 @@ import tracker as tracker_mod
 import notify as notify_mod
 import tax_events as tax_events_mod
 import learn as learn_mod
+import accuracy_utils as accuracy_mod
 from predict import predict_tomorrow
 from validation import validate_scraped_data, PRICE_MIN_SANITY, PRICE_MAX_SANITY
 
@@ -1000,53 +1001,37 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
 @app.get("/api/accuracy")
 async def accuracy(fuel: str = Query("95E10"), region: str = Query("Suomi"),
                    days: int = Query(30, ge=7, le=180)):
-    """Vertaa menneitä ennusteita toteutuneisiin hintoihin."""
     if fuel not in FUELS:
         raise HTTPException(400, f"unknown fuel {fuel}")
-    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
-    cur = db.predictions.find(
-        {"fuel": fuel, "region": region, "target_date": {"$gte": cutoff}},
-        {"_id": 0},
-    ).sort("target_date", 1)
-    preds = await cur.to_list(length=days + HISTORY_BUFFER_DAYS)
-
-    # hae toteutuneet
+    realized_rows = await accuracy_mod.realized_prediction_rows(
+        db, fuel, region, days=days
+    )
     method_errors: dict[str, list[float]] = {
         "moving_average": [], "linear_regression": [], "exp_smoothing": [],
-        "fundamental_anchor": [], "ai_llm": [], "ensemble": [],
+        "fundamental_anchor": [], "ai_llm": [], "weekly_cycle": [],
+        "ensemble": [],
     }
     rows = []
-    for p in preds:
-        # "Toteutunut" = AITO skrapattu halvin kyseiseltä päivältä
-        # (daily_tracker), EI mallinnettu/kuukausi-Statfin-arvo. Jos päivältä
-        # on useampi capture (14:00/21:00), käytetään myöhäisintä.
-        actual_doc = await db.daily_tracker.find_one(
-            {"fuel": fuel, "region": region, "date": p["target_date"],
-             "actual_cheapest": {"$ne": None}},
-            {"_id": 0, "actual_cheapest": 1},
-            sort=[("hour", -1)],
-        )
-        actual = actual_doc.get("actual_cheapest") if actual_doc else None
+    for realized in realized_rows:
+        actual = realized.get("actual")
         row = {
-            "target_date": p["target_date"],
+            "target_date": realized.get("target_date"),
             "actual": actual,
-            "ensemble": p.get("ensemble"),
-            "methods": p.get("methods", {}),
+            "ensemble": (realized.get("methods") or {}).get("ensemble"),
+            "methods": realized.get("methods", {}),
+            "source": realized.get("source"),
         }
         rows.append(row)
         if actual is None:
             continue
-        for m, v in (p.get("methods") or {}).items():
+        for m, v in (realized.get("methods") or {}).items():
             if v is not None and m in method_errors:
                 method_errors[m].append(abs(v - actual))
-        if p.get("ensemble") is not None:
-            method_errors["ensemble"].append(abs(p["ensemble"] - actual))
 
     summary = {}
     for m, errs in method_errors.items():
         if errs:
             mae = sum(errs) / len(errs)
-            # within 2 cents
             within2c = sum(1 for e in errs if e <= 0.02) / len(errs) * 100
             summary[m] = {
                 "n": len(errs),
@@ -1372,12 +1357,16 @@ async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, 
         {"_id": 0, "prediction_full": 0},
     ).sort([("date", 1), ("hour", 1)])
     rows = await cur.to_list(length=days * 2 + HISTORY_BUFFER_DAYS)
-    # tarkkuusyhteenveto
+    # tarkkuusyhteenveto: use the same realized comparison engine as /api/accuracy.
+    # This survives reboots because it can recover from preserved daily_tracker rows.
+    realized_rows = await accuracy_mod.realized_prediction_rows(
+        db, fuel, "Suomi", days=days
+    )
     errs = [
-        abs(r["predicted_cheapest_for_today"] - r["actual_cheapest"])
-        for r in rows
-        if r.get("predicted_cheapest_for_today") is not None
-        and r.get("actual_cheapest") is not None
+        abs((r.get("methods") or {}).get("ensemble") - r["actual"])
+        for r in realized_rows
+        if (r.get("methods") or {}).get("ensemble") is not None
+        and r.get("actual") is not None
     ]
     summary = {
         "n_compared": len(errs),

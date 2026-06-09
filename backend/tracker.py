@@ -29,6 +29,7 @@ import notify as notify_mod
 import tax_events as tax_events_mod
 import learn as learn_mod
 import price_verification as verification_mod
+import accuracy_utils as accuracy_mod
 from scrapers import polttoaine, tankille
 
 logger = logging.getLogger("bensavahti.tracker")
@@ -178,26 +179,15 @@ async def realized_method_mae(db, fuel: str, region: str = "Suomi",
     jonka ensemble käyttää itsekalibrointiin. Sama totuuslähde kuin
     /api/accuracy:lla; tyhjä historia → kaikki n=0 (ensemble palaa kiinteisiin
     painoihin)."""
-    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
-    preds = await db.predictions.find(
-        {"fuel": fuel, "region": region, "target_date": {"$gte": cutoff}},
-        {"_id": 0, "target_date": 1, "methods": 1},
-    ).sort("target_date", 1).to_list(length=days + 5)
-
     methods = ("moving_average", "linear_regression", "exp_smoothing",
-               "fundamental_anchor", "ai_llm", "weekly_cycle")
+               "fundamental_anchor", "ai_llm", "weekly_cycle", "ensemble")
     errs: dict[str, list] = {m: [] for m in methods}
-    for p in preds:
-        actual_doc = await db.daily_tracker.find_one(
-            {"fuel": fuel, "region": region, "date": p["target_date"],
-             "actual_cheapest": {"$ne": None}},
-            {"_id": 0, "actual_cheapest": 1},
-            sort=[("hour", -1)],
-        )
-        actual = actual_doc.get("actual_cheapest") if actual_doc else None
-        if actual is None:
-            continue
-        for m, v in (p.get("methods") or {}).items():
+    rows = await accuracy_mod.realized_prediction_rows(
+        db, fuel, region, days=days, methods=methods
+    )
+    for row in rows:
+        actual = row.get("actual")
+        for m, v in (row.get("methods") or {}).items():
             if m in errs and v is not None:
                 errs[m].append(abs(v - actual))
     return {
