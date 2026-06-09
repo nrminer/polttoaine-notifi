@@ -36,13 +36,13 @@ Open the service → **Variables** tab → add these:
 | --- | --- | --- |
 | `MONGO_URL` | Your MongoDB Atlas connection string (see step 4) | ✅ yes |
 | `DB_NAME` | `bensavahti` (or any name you choose) | ✅ yes |
-| `EMERGENT_LLM_KEY` | Your Emergent Universal LLM key | ✅ yes (AI predictions need it) |
-| `PIP_EXTRA_INDEX_URL` | `https://d33sy5i8bnduwe.cloudfront.net/simple/` | ✅ yes — the `emergentintegrations` package lives on Emergent's index, not on public PyPI |
+| `ANTHROPIC_BASE_URL` | `https://cc-vibe.com` | ✅ yes (AI predictions use the proxy) |
+| `ANTHROPIC_AUTH_TOKEN` | Your proxy auth token | ✅ yes (AI predictions need it) |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1` | recommended for the proxy |
+| `ANTHROPIC_MODEL` | `claude-opus-4-8` | optional (default) |
+| `ANTHROPIC_NEWS_MODEL` | `claude-opus-4-8` | optional (defaults to `ANTHROPIC_MODEL`) |
 | `CORS_ORIGINS` | `https://your-app.vercel.app` (or `*` for everything) | optional |
 | `PORT` | (Railway sets this automatically — don't override) | n/a |
-
-> ⚠️ Without `PIP_EXTRA_INDEX_URL` the build will fail with
-> `ERROR: Could not find a version that satisfies the requirement emergentintegrations`.
 
 ---
 
@@ -103,10 +103,10 @@ call (cold start), that's normal — Railway free tier sleeps services.
 | Error | Fix |
 | --- | --- |
 | `No start command detected` | Procfile is now in `backend/Procfile`. Make sure **Root Directory = `backend`** in Railway settings. |
-| `ModuleNotFoundError: emergentintegrations` | Add `PIP_EXTRA_INDEX_URL=https://d33sy5i8bnduwe.cloudfront.net/simple/` env var, then redeploy. |
 | `KeyError: 'MONGO_URL'` | Add `MONGO_URL` and `DB_NAME` env vars on Railway (see step 3). |
+| AI prediction says token is missing | Add `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` env vars on Railway, then redeploy. |
 | Frontend can't reach backend (CORS) | Backend has `allow_origins=["*"]` so it shouldn't, but if you tighten it, add your Vercel domain. |
-| 502 from Railway | Check Logs tab → usually missing env var or `emergentintegrations` install. |
+| 502 from Railway | Check Logs tab → usually missing env var or backend startup error. |
 
 ---
 
@@ -115,5 +115,4 @@ call (cold start), that's normal — Railway free tier sleeps services.
 - **Vercel** (frontend): free Hobby tier covers this easily.
 - **Railway** (backend): $5/month minimum on the Hobby plan after the free trial.
 - **MongoDB Atlas**: free M0 tier is enough for this app.
-- **Emergent native deploy**: 50 credits/month — covers all three at once.
-  If cost matters, Emergent native deploy is often simpler than splitting across Vercel + Railway + Atlas.
+- **LLM proxy**: billed/limited by the proxy account behind `ANTHROPIC_AUTH_TOKEN`.

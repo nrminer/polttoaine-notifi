@@ -6,7 +6,7 @@ Antaa rinnakkaisia ennusteita huomisen hinnalle:
     - linear_regression  : pienimmän neliösumman trendi, projisoitu +1 KALENTERIPÄIVÄ
     - exp_smoothing      : Holt-tyylinen taso + trendi (päivätason häntä)
     - fundamental_anchor : live-hinta + Brent-EUR-pass-through + viikonpäivä + momentum
-    - ai_llm             : Claude Opus 4.7 (uutiset + geopoliittinen riski)
+    - ai_llm             : Claude Opus 4.8 (uutiset + geopoliittinen riski)
     - weekly_cycle       : viikoittainen hinnoittelurytmi (hypyt, syklivaihe)
 
 Sekä datalaatutietoinen ensemble-yhdistelmä, joka ankkuroidaan live-hintaan.
@@ -26,6 +26,7 @@ import os
 from datetime import datetime, timezone
 
 import numpy as np
+from llm_client import LLMConfigError, configured_model, send_message
 import weekly_cycle as wc_mod
 
 
@@ -484,18 +485,11 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                          tax_events: list[dict] | None = None,
                          tax_step_eur_l: float | None = None,
                          track_record: dict | None = None) -> dict:
-    """Claude Opus 4.7 -ennuste. Hoitaa ETUPAINOTTEISEN geopoliittisen riskin:
+    """Claude Opus 4.8 -ennuste. Hoitaa ETUPAINOTTEISEN geopoliittisen riskin:
     konflikti-/tarjontahäiriöuutiset jotka Brent ei vielä täysin hinnoittele."""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-    except Exception as e:
+    if not os.environ.get("ANTHROPIC_AUTH_TOKEN") and not os.environ.get("ANTHROPIC_API_KEY"):
         return {"value": None, "confidence_low": None, "confidence_high": None,
-                "explanation": f"LLM-kirjastoa ei voitu ladata: {e}"}
-
-    key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
-        return {"value": None, "confidence_low": None, "confidence_high": None,
-                "explanation": "EMERGENT_LLM_KEY puuttuu - AI-ennustetta ei voi tehdä."}
+                "explanation": "ANTHROPIC_AUTH_TOKEN puuttuu - AI-ennustetta ei voi tehdä."}
 
     p = _safe_prices(prices)
     if not p:
@@ -816,24 +810,26 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     )
 
     models_to_try = [
-        ("anthropic", "claude-opus-4-7"),
-        ("anthropic", "claude-opus-4-6"),
-        ("anthropic", "claude-sonnet-4-5-20250929"),
-        ("anthropic", "claude-haiku-4-5-20251001"),
+        configured_model("claude-opus-4-8"),
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-opus-4-6",
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5-20251001",
     ]
+    models_to_try = list(dict.fromkeys(models_to_try))
 
     last_err = "unknown error"
-    for provider, model in models_to_try:
+    for model in models_to_try:
         for attempt in range(3):
             try:
-                chat = LlmChat(
-                    api_key=key,
-                    session_id=f"fuel-predict-{fuel}-{today_iso}-{provider}-{model}-{attempt}",
+                text = await send_message(
                     system_message=system_message,
-                ).with_model(provider, model)
-
-                msg = UserMessage(text=prompt)
-                text = await chat.send_message(msg)
+                    user_message=prompt,
+                    model=model,
+                    max_tokens=1200,
+                    temperature=0.2,
+                )
 
                 raw = text.strip()
                 if raw.startswith("```"):
@@ -862,6 +858,9 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                     "key_drivers": data.get("key_drivers", []),
                     "model": model,
                 }
+            except LLMConfigError as e:
+                return {"value": None, "confidence_low": None, "confidence_high": None,
+                        "explanation": str(e)}
             except Exception as e:
                 last_err = f"{type(e).__name__}: {str(e)[:140]}"
                 if "Budget" in str(e) or "budget" in str(e):

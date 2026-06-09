@@ -58,7 +58,7 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
-    load_dotenv()  # lukee backend/.env (MONGO_URL, DB_NAME, EMERGENT_LLM_KEY…)
+    load_dotenv()  # lukee backend/.env (MONGO_URL, DB_NAME, ANTHROPIC_AUTH_TOKEN...)
 
     mongo_url = os.environ.get("MONGO_URL")
     db_name = os.environ.get("DB_NAME")

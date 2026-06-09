@@ -1,12 +1,12 @@
-// Convert API model id ("claude-opus-4-7" / "claude-sonnet-4-5-20250929") into a
-// human label ("Claude Opus 4.7", "Claude Sonnet 4.5").
+// Convert API model id ("claude-opus-4-8" / "claude-sonnet-4-5-20250929") into a
+// human label ("Claude Opus 4.8", "Claude Sonnet 4.5").
 // Returns null when no model id is present (AI path failed / has not run) so
 // callers do not fabricate a specific model that never produced output.
 export function formatModelName(modelId) {
   if (!modelId || typeof modelId !== "string") return null;
   // Strip date suffix like "-20260416" (any 8-digit tail)
   const m = modelId.replace(/-\d{8}$/, "");
-  // claude-opus-4-7 -> ["claude","opus","4","7"]
+  // claude-opus-4-8 -> ["claude","opus","4","8"]
   const parts = m.split("-");
   if (parts.length < 3) return modelId;
   const vendor = parts[0]; // "claude"

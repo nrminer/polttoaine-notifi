@@ -10,8 +10,9 @@
   push-notifier. UI in Finnish.
 - **Stack**: React (CRA) on Vercel · FastAPI + Motor (async MongoDB) on Railway
   · MongoDB Atlas (free M0).
-- **AI**: Claude Opus 4.7 via `emergentintegrations` SDK (Anthropic) — invoked
-  from `backend/predict.py` for the AI-prediction method.
+- **AI**: Claude Opus 4.8 via Anthropic-compatible proxy
+  (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`) — invoked from
+  `backend/predict.py` for the AI-prediction method.
 - **Data inputs**: **LIVE-GATHERED ONLY** — scrapes of `polttoaine.net` +
   `tankille.fi` captured into `daily_tracker` from today onward; Yahoo Finance
   for Brent + EUR/USD; RSS news from Finnish sources. **Tilastokeskus (Statfin)
@@ -34,7 +35,7 @@ tell us — no hard-coded ±N ¢/L claim). The app:
    Vantaa, Tampere, Turku, Lahti) with cheapest **and average** per city.
 2. Predicts **tomorrow's** cheapest using **5 parallel methods** (MA, LR, Holt
    exp.smoothing, **fundamental_anchor** = live + Brent-EUR pass-through +
-   weekday + momentum, and Claude Opus 4.7 with geopolitical-risk handling) →
+   weekday + momentum, and Claude Opus 4.8 with geopolitical-risk handling) →
    a **data-quality-aware ensemble clamped to ±0.06 €/L of the live price**.
 3. Captures actuals at **14:00 and 21:00 Helsinki** (`SCHEDULED_HOURS` in
    `tracker.py`) and tracks prediction-vs-actual accuracy against **real
@@ -59,8 +60,8 @@ tell us — no hard-coded ±N ¢/L claim). The app:
                                                      ▼
                                           ┌──────────────────────┐         ┌──────────────────────┐
                                           │  ntfy.sh             │         │  Anthropic Claude    │
-                                          │  topic: polttoaine   │         │  via emergentintegr.  │
-                                          │  bearer token auth   │         │  Opus 4.7 → Sonnet… │
+                                          │  topic: polttoaine   │         │  via proxy endpoint  │
+                                          │  bearer token auth   │         │  Opus 4.8 → Opus… │
                                           └──────────────────────┘         └──────────────────────┘
 ```
 
@@ -90,7 +91,7 @@ The backend has NO frontend assets — pure API.
 │   ├── scrapers/
 │   │   ├── polttoaine.py  … polttoaine.net scraper (top-N cheapest)
 │   │   └── tankille.py    … tankille.fi scraper (per-city pages) — PRIMARY source
-│   ├── requirements.txt   … pinned deps (fastapi, motor, numpy, emergentintegrations)
+│   ├── requirements.txt   … pinned deps (fastapi, motor, numpy, requests)
 │   ├── Procfile           … `web: uvicorn server:app --host 0.0.0.0 --port $PORT`
 │   ├── railway.json       … explicit Railway build/deploy config
 │   ├── .python-version    … `3.11`
@@ -109,7 +110,7 @@ The backend has NO frontend assets — pure API.
         ├── lib/
         │   ├── api.js     … axios wrappers for every backend route
         │   ├── utils.js   … fmtPrice, fmtDelta, fmtDateFi…
-        │   └── modelName.js … converts "claude-opus-4-7" → "Claude Opus 4.7"
+        │   └── modelName.js … converts "claude-opus-4-8" → "Claude Opus 4.8"
         └── components/
             ├── Card.jsx        … design-system primitives (Card, CardLabel, StatNumber, DeltaBadge)
             ├── FuelToggle.jsx  … 95E10 / Diesel toggle
@@ -202,8 +203,8 @@ Grouped logically. All routes are prefixed `/api`.
                     │      pass-through + weekday + momentum,     │
                     │      clamped ±0.06 €/L                      │
                     └─▶ ai_llm_predict()  Claude + geo-risk      │
-                          │  (emergentintegrations, Opus 4.7 →    │
-                          │   4.6 → Sonnet 4.5 → Haiku 4.5)       │
+                          │  (Anthropic proxy, Opus 4.8 →         │
+                          │   Opus 4.7 → 4.6 → Sonnet/Haiku 4.5)  │
                           ▼
    ensemble = data-quality-aware weights (thin daily data → lean on
    fundamental_anchor 0.48 + AI 0.30); result CLAMPED ±0.06 €/L of live
@@ -248,8 +249,8 @@ Model returns strict JSON; the function strips markdown fences, finds the first
 `{` and last `}`, parses, and returns a `dict` with `value`, `confidence_low/high`,
 `direction`, `explanation`, `key_drivers`, `model`.
 
-If Opus 4.7 fails (rate-limit / budget / network), it falls through to 4.6,
-then Sonnet 4.5, then Haiku 4.5. Each gets 3 attempts.
+If Opus 4.8 fails (rate-limit / budget / network), it falls through to Opus
+4.7, 4.6, Sonnet 4.5, then Haiku 4.5. Each gets 3 attempts.
 
 ## 8. Scrapers & Price Verification
 
@@ -351,8 +352,11 @@ CRA bakes env vars at build time → changing this requires a redeploy.
 |----------------------|----------|-------|
 | `MONGO_URL`          | yes      | MongoDB Atlas connection string |
 | `DB_NAME`            | yes      | `bensavahti` |
-| `EMERGENT_LLM_KEY`   | yes      | Universal LLM key (`sk-emergent-…`) for Claude via emergentintegrations |
-| `PIP_EXTRA_INDEX_URL`| yes      | `https://d33sy5i8bnduwe.cloudfront.net/simple/` — emergentintegrations lives on Emergent's private PyPI, not on public PyPI |
+| `ANTHROPIC_BASE_URL` | yes      | Anthropic-compatible proxy URL, e.g. `https://cc-vibe.com` |
+| `ANTHROPIC_AUTH_TOKEN`| yes     | Proxy bearer token for Claude Opus 4.8 |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | no | `1` recommended with the proxy |
+| `ANTHROPIC_MODEL`    | no       | Defaults to `claude-opus-4-8` |
+| `ANTHROPIC_NEWS_MODEL` | no     | Defaults to `ANTHROPIC_MODEL` |
 | `CORS_ORIGINS`       | no       | defaults to `*` |
 | `ADMIN_TOKEN`        | optional | enables `POST /api/admin/run` (unset → 503). Constant-time compared to body `password` / `X-Admin-Token` header |
 | `NEWS_WATCH_SECONDS` | optional | news-watcher poll interval, default `1800`; `0` disables auto AI re-run on new news |
@@ -377,7 +381,7 @@ Save to GitHub (button in Emergent chat input)
         │
         └──▶ Railway autodeploys backend     (~120 s)
               Reads backend/railway.json + Procfile
-              Installs requirements.txt (needs PIP_EXTRA_INDEX_URL!)
+              Installs requirements.txt
               Starts: uvicorn server:app --host 0.0.0.0 --port $PORT
 ```
 
@@ -394,7 +398,7 @@ Critical contract details:
 - Numeric fields are JSON floats (e.g. `1.857`), NOT strings
 - Timestamps are ISO-8601 with timezone
 - `data_sources` field is `null | {tracker_captures, combined_points, source:"live_scrape_only"}`
-- `methods.ai_llm.model` is the actual model id string (`claude-opus-4-7`) — `lib/modelName.js` converts it to display label
+- `methods.ai_llm.model` is the actual model id string (`claude-opus-4-8`) — `lib/modelName.js` converts it to display label
 
 ## 13. UI conventions
 
@@ -410,7 +414,7 @@ Critical contract details:
 
 | Gotcha                                                | Where it bit                                                          |
 |-------------------------------------------------------|-----------------------------------------------------------------------|
-| `emergentintegrations` not on public PyPI             | Add `PIP_EXTRA_INDEX_URL` to Railway → otherwise build fails          |
+| Anthropic proxy env missing                           | Add `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` to Railway          |
 | `pydantic_core` version mismatch with `pydantic`      | requirements.txt pins both (`pydantic==2.6.4`, `pydantic_core==2.16.3`) |
 | Non-ASCII chars in `Title:` HTTP header               | ntfy publish would 500 with UnicodeEncodeError; use ASCII-only title  |
 | CRA bakes env vars at **build** time                  | Changing REACT_APP_BACKEND_URL needs a Vercel redeploy, not a refresh |
@@ -507,7 +511,7 @@ curl https://polttoaine-notifi-production.up.railway.app/api/factors
 - ✅ `tracker.capture_daily` always runs full `predict_tomorrow` (the old
   `<7 pts → AI-only` cold-start branch that hid `fundamental_anchor` is gone).
 - ✅ News-watcher (`news_watch_loop`) auto-reruns AI/prediction on new
-  fuel-news (rate-limited; `NEWS_WATCH_SECONDS`, needs `EMERGENT_LLM_KEY`).
+  fuel-news (rate-limited; `NEWS_WATCH_SECONDS`, needs `ANTHROPIC_AUTH_TOKEN`).
 
 **Ops / UI**:
 - ✅ Capture times **14:00 + 21:00 Helsinki** (`SCHEDULED_HOURS`).
@@ -521,7 +525,7 @@ curl https://polttoaine-notifi-production.up.railway.app/api/factors
 1. "Save to GitHub" → Vercel + Railway redeploy (all above is code-complete
    locally; production still runs the old code until then).
 2. Set Railway env: `ADMIN_TOKEN` (+ optional `NEWS_WATCH_SECONDS`); confirm
-   `EMERGENT_LLM_KEY`, `PIP_EXTRA_INDEX_URL`, `NTFY_*` still set.
+   `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `NTFY_*` still set.
 3. After deploy, trigger one fresh prediction (`/api/admin/run` action
    `all`, or wait for 14:00/21:00) so the UI shows `fundamental_anchor`.
 

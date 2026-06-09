@@ -15,13 +15,13 @@ ENHANCED v2: AI-powered relevance scoring to calculate fuel price impact probabi
 from __future__ import annotations
 import asyncio
 import json
-import os
 import re
 import html
 import requests
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from defusedxml.ElementTree import fromstring
+from llm_client import configured_news_model, is_llm_configured, send_message
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BensaVahti/2.0)"}
 TIMEOUT = 12
@@ -334,13 +334,7 @@ async def calculate_relevance_with_ai(items: list[dict], batch_size: int = 10) -
     
     Returns items with AI analysis populated. If AI unavailable, returns unchanged.
     """
-    key = os.getenv("EMERGENT_LLM_KEY")
-    if not key:
-        return items
-    
-    try:
-        from emergentintegrations import LlmChat, UserMessage
-    except ImportError:
+    if not is_llm_configured():
         return items
     
     system_message = (
@@ -384,14 +378,13 @@ async def calculate_relevance_with_ai(items: list[dict], batch_size: int = 10) -
         prompt = "\n".join(prompt_parts)
         
         try:
-            chat = LlmChat(
-                api_key=key,
-                session_id=f"news-relevance-{datetime.now(timezone.utc).isoformat()}",
+            response = await send_message(
                 system_message=system_message,
-            ).with_model("anthropic", "claude-sonnet-4-5-20250929")  # Fast model for batch analysis
-            
-            msg = UserMessage(text=prompt)
-            response = await chat.send_message(msg)
+                user_message=prompt,
+                model=configured_news_model(),
+                max_tokens=900,
+                temperature=0.0,
+            )
             
             # Parse JSON response
             raw = response.strip()
@@ -442,7 +435,7 @@ def fetch_news_with_ai_relevance(
         max_age_days: Maximum age of news items
         limit: Maximum number of items to return AFTER filtering by relevance
         min_relevance: Minimum relevance score (0-100) to include
-        use_ai: Whether to use AI for relevance scoring (requires EMERGENT_LLM_KEY)
+        use_ai: Whether to use AI for relevance scoring (requires ANTHROPIC_AUTH_TOKEN)
     
     Returns:
         List of news items sorted by relevance_score (if AI used) or age_hours
@@ -450,7 +443,7 @@ def fetch_news_with_ai_relevance(
     # First fetch all matching news
     all_news = fetch_news(queries, max_age_days, limit=100)  # Get more initially
     
-    if not use_ai or not os.getenv("EMERGENT_LLM_KEY"):
+    if not use_ai or not is_llm_configured():
         # Return without AI analysis
         return all_news[:limit]
     

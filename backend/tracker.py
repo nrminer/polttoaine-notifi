@@ -554,10 +554,10 @@ async def news_watch_loop(db, executor, fuels, predict_fn,
     - Poll-väli `NEWS_WATCH_SECONDS` (oletus 1800 s); 0 = pois käytöstä.
     - `min_rerun_seconds` rajoittaa LLM-kustannusta: ennustetta ei aja
       uudelleen useammin kuin tämän välein vaikka uutisia tulisi tiuhaan.
-    - Vaatii EMERGENT_LLM_KEY:n (muuten AI-osa ei päivity → ei mieltä ajaa).
+    - Vaatii ANTHROPIC_AUTH_TOKEN:n (muuten AI-osa ei päivity → ei mieltä ajaa).
     """
-    if not os.environ.get("EMERGENT_LLM_KEY"):
-        logger.info("news-watch disabled (EMERGENT_LLM_KEY missing)")
+    if not (os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")):
+        logger.info("news-watch disabled (ANTHROPIC_AUTH_TOKEN missing)")
         return
     if poll_seconds is None:
         try:

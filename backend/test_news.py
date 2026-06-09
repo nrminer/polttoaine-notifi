@@ -35,8 +35,8 @@ async def test_ai_relevance(sample_items):
     print("TEST 2: AI Relevance Scoring")
     print("=" * 60)
     
-    if not os.getenv("EMERGENT_LLM_KEY"):
-        print("\n⚠ EMERGENT_LLM_KEY not set - skipping AI test")
+    if not (os.getenv("ANTHROPIC_AUTH_TOKEN") or os.getenv("ANTHROPIC_API_KEY")):
+        print("\n⚠ ANTHROPIC_AUTH_TOKEN not set - skipping AI test")
         return
     
     # Take first 5 items for testing
@@ -67,8 +67,8 @@ def test_full_workflow():
     print("TEST 3: Full Workflow (Scrape + AI + Filter)")
     print("=" * 60)
     
-    if not os.getenv("EMERGENT_LLM_KEY"):
-        print("\n⚠ EMERGENT_LLM_KEY not set - skipping full workflow test")
+    if not (os.getenv("ANTHROPIC_AUTH_TOKEN") or os.getenv("ANTHROPIC_API_KEY")):
+        print("\n⚠ ANTHROPIC_AUTH_TOKEN not set - skipping full workflow test")
         return
     
     print("\nFetching news with AI relevance (min_relevance=50)...\n")
