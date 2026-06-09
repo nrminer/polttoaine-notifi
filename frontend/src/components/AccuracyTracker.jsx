@@ -52,7 +52,7 @@ export default function AccuracyTracker({ data }) {
       <div className="text-center mb-4 pb-4 border-b border-line">
         <div className="mb-3">
           <div className="text-5xl font-bold tnum text-brand mb-2" data-testid="accuracy-mae-cents">
-            ±{maeCents}¢
+            ±{maeCents} snt
           </div>
           <div className="text-sm text-secondary mb-1">Keskivirhe</div>
         </div>
@@ -61,7 +61,7 @@ export default function AccuracyTracker({ data }) {
           <div className="text-3xl font-bold tnum text-accent mb-1" data-testid="accuracy-hit-rate">
             {hitRate}%
           </div>
-          <div className="text-sm text-secondary">Vertailuja ±2¢ sisällä</div>
+          <div className="text-sm text-secondary">Vertailuista ±2 sentin sisällä</div>
         </div>
 
         <div className="text-sm text-secondary leading-relaxed max-w-md mx-auto">
@@ -104,7 +104,7 @@ export default function AccuracyTracker({ data }) {
                 <tr className="border-b border-line bg-surface text-left">
                   <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3">Menetelmä</th>
                   <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">Keskivirhe</th>
-                  <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">≤2¢ vertailut</th>
+                  <th className="font-mono text-[10px] uppercase text-muted py-2.5 px-3 text-right">±2 snt sisällä</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,7 +118,7 @@ export default function AccuracyTracker({ data }) {
                       <span className="text-xs text-ink">{METHOD_LABEL[key] || key}</span>
                     </td>
                     <td className="py-3 px-3 text-right font-mono tnum text-xs font-medium">
-                      ±{(s.mae * 100).toFixed(1)}¢
+                      ±{(s.mae * 100).toFixed(1)} snt
                     </td>
                     <td className="py-3 px-3 text-right font-mono tnum text-xs text-secondary">
                       {s.within_2c_pct != null ? `${s.within_2c_pct.toFixed(0)}%` : "—"}

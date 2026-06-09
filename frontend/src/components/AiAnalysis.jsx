@@ -134,7 +134,7 @@ export default function AiAnalysis({ ai, brent, eurUsd, anchor }) {
                 }`}
               >
                 {value - anchor > 0 ? "+" : ""}
-                {((value - anchor) * 1000).toFixed(1)} m€/L
+                {((value - anchor) * 100).toFixed(1)} snt/L
               </div>
             </div>
           )}

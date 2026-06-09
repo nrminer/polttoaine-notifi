@@ -28,7 +28,11 @@ function TooltipBody({ active, payload, label }) {
           p.value != null && (
             <div key={p.dataKey} className="flex justify-between gap-4 text-ink py-0.5">
               <span style={{ color: p.color }}>{p.name}</span>
-              <span className="tnum font-semibold">{p.value.toFixed(3)} €/L</span>
+              <span className="tnum font-semibold">
+                {Array.isArray(p.value)
+                  ? `${p.value[0].toFixed(3)} – ${p.value[1].toFixed(3)} €/L`
+                  : `${p.value.toFixed(3)} €/L`}
+              </span>
             </div>
           )
       )}
@@ -57,26 +61,28 @@ export default function TrackingChart({
         average: c.average ?? null,
       };
     }
+    const lo = r.prediction_full?.ensemble?.confidence_low ?? null;
+    const hi = r.prediction_full?.ensemble?.confidence_high ?? null;
     return {
       slot,
       date: r.date,
       hour,
       actual: r.actual_cheapest,
       predicted: r.predicted_cheapest_for_today,
-      confidence_low: r.prediction_full?.ensemble?.confidence_low ?? null,
-      confidence_high: r.prediction_full?.ensemble?.confidence_high ?? null,
+      band: lo != null && hi != null ? [lo, hi] : null,
     };
   });
 
   if (!isCity && rows.length && tomorrow?.date && tomorrow?.value != null) {
     const tomorrowConfidence = tomorrow.confidence_range || {};
+    const lo = tomorrowConfidence.low ?? null;
+    const hi = tomorrowConfidence.high ?? null;
     data.push({
       slot: `${tomorrow.date} 14`,
       date: tomorrow.date,
       hour: 14,
       tomorrow: tomorrow.value,
-      confidence_low: tomorrowConfidence.low ?? null,
-      confidence_high: tomorrowConfidence.high ?? null,
+      band: lo != null && hi != null ? [lo, hi] : null,
     });
   }
 
@@ -84,7 +90,7 @@ export default function TrackingChart({
     .flatMap((d) =>
       isCity
         ? [d.cheapest, d.average]
-        : [d.actual, d.predicted, d.tomorrow, d.confidence_low, d.confidence_high]
+        : [d.actual, d.predicted, d.tomorrow, ...(d.band || [])]
     )
     .filter((v) => v !== null && v !== undefined);
 
@@ -97,7 +103,7 @@ export default function TrackingChart({
       >
         {isCity
           ? `Ei vielä ${city}-dataa. Kaupunkikohtainen historia kertyy klo 14 ja 21 mittauksista.`
-          : 'Ei vielä dataa. Päivittäinen mittaus käynnistyy klo 14 (Helsinki). Aja "Tallenna nyt" pakottaaksesi ensimmäisen pisteen.'}
+          : "Ei vielä dataa. Hinnat mitataan automaattisesti klo 14 ja 21 (Helsinki) — ensimmäiset pisteet ilmestyvät tähän seuraavan mittauksen jälkeen."}
       </div>
     );
   }
@@ -178,24 +184,13 @@ export default function TrackingChart({
             <>
               <Area
                 type="monotone"
-                dataKey="confidence_high"
+                dataKey="band"
                 name="Luottamusväli"
                 stroke="none"
                 fill={confidenceBandStyle.fill}
                 fillOpacity={confidenceBandStyle.opacity}
                 connectNulls
                 isAnimationActive
-              />
-              <Area
-                type="monotone"
-                dataKey="confidence_low"
-                name="confidence_low_hidden"
-                stroke="none"
-                fill="#ffffff"
-                fillOpacity={1}
-                connectNulls
-                isAnimationActive
-                legendType="none"
               />
               <Line
                 type="monotone"

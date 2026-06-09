@@ -27,7 +27,7 @@ function BreakingBadge() {
   return (
     <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2 py-1 rounded-md bg-red-100 text-red-700 border border-red-200 animate-pulse">
       <AlertTriangle size={10} strokeWidth={2.8} />
-      BREAKING
+      JUURI NYT
     </span>
   );
 }
@@ -36,7 +36,7 @@ export default function NewsCard({ items = [], fetchedAt }) {
   const breakingItems = items.filter(it => it.breaking && (it.age_hours || 999) <= 6);
   const hasBreaking = breakingItems.length > 0;
   const maxSeverity = hasBreaking ? Math.max(...breakingItems.map(it => it.severity || 0)) : 0;
-  const severityLabel = maxSeverity >= 7 ? 'CRITICAL' : maxSeverity >= 4 ? 'MAJOR' : 'MODERATE';
+  const severityLabel = maxSeverity >= 7 ? 'kriittinen' : maxSeverity >= 4 ? 'merkittävä' : 'kohtalainen';
   const severityColor = maxSeverity >= 7 ? 'red' : maxSeverity >= 4 ? 'orange' : 'yellow';
 
   return (
@@ -74,13 +74,13 @@ export default function NewsCard({ items = [], fetchedAt }) {
                 severityColor === 'red' ? 'text-red-800' :
                 severityColor === 'orange' ? 'text-orange-800' : 'text-yellow-800'
               }`}>
-                {severityLabel} uutinen havaittu
+                {severityLabel.charAt(0).toUpperCase() + severityLabel.slice(1)} uutinen havaittu
               </p>
               <p className={`mt-0.5 ${
                 severityColor === 'red' ? 'text-red-700' :
                 severityColor === 'orange' ? 'text-orange-700' : 'text-yellow-700'
               }`}>
-                Ennuste päivitetty automaattisesti. Hintaraja {
+                Ennuste päivitetty automaattisesti. Ennusteen liikkumavara {
                   maxSeverity >= 7 ? '±0.15 €/L' :
                   maxSeverity >= 4 ? '±0.10 €/L' : '±0.08 €/L'
                 }.

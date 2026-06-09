@@ -102,11 +102,11 @@ function deltaColorDark(d) {
   if (d < -0.0005) return "text-emerald-300";
   return "text-slate-400";
 }
-function deltaFmtMilli(d) {
+function deltaFmtSnt(d) {
   if (d == null) return "—";
-  const v = d * 1000;
+  const v = d * 100;
   const sign = v > 0 ? "+" : v < 0 ? "−" : "";
-  return `${sign}${Math.abs(v).toFixed(1)} m€`;
+  return `${sign}${Math.abs(v).toFixed(1)} snt`;
 }
 
 const LANDING_SOURCES = [
@@ -129,9 +129,9 @@ const LANDING_SOURCES = [
     accent: "sky",
   },
   {
-    name: "daily_tracker",
+    name: "Omat mittaukset",
     label: "toteumavertailu",
-    detail: "capture-ajat",
+    detail: "klo 14 + 21",
     accent: "slate",
   },
 ];
@@ -495,8 +495,8 @@ export default function App() {
   const scrapeTime = current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "odottaa dataa";
   const accuracyBadge =
     tracking?.summary?.mae != null
-      ? `${(tracking.summary.mae * 100).toFixed(1)} c/L MAE`
-      : `${comparedCount} vertailua`;
+      ? `±${(tracking.summary.mae * 100).toFixed(1)} snt keskivirhe`
+      : "kerääntyy";
 
   return (
     <div className="app-shell relative">
@@ -526,7 +526,7 @@ export default function App() {
               {current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "—"}
               {current?.stale && (
                 <span className="ml-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[11px] rounded-md">
-                  CACHED
+                  VÄLIMUISTI
                 </span>
               )}
             </div>
@@ -579,7 +579,7 @@ export default function App() {
             <div className="landing-actions">
               <a href="#dashboard" className="landing-primary-action">
                 <ArrowDown size={16} />
-                Avaa näkymä
+                Näytä hinnat
               </a>
               <button
                 data-testid="landing-refresh-btn"
@@ -610,7 +610,7 @@ export default function App() {
               />
               <LandingMetric
                 icon={CheckCircle2}
-                label="Vertailudata"
+                label="Ennustetarkkuus"
                 value={accuracyBadge}
                 detail={`${comparedCount} toteutunutta vertailua`}
                 testId="landing-accuracy-metric"
@@ -650,14 +650,14 @@ export default function App() {
                   <span>€/L</span>
                 </div>
                 <div className="landing-price-note">
-                  {tomorrowDelta != null ? deltaFmtMilli(tomorrowDelta) : "ennuste odottaa"}
+                  {tomorrowDelta != null ? `${deltaFmtSnt(tomorrowDelta)}/L vs. tänään` : "ennuste odottaa"}
                 </div>
               </div>
             </div>
 
             <div className="landing-chart-block">
               <div className="landing-chart-head">
-                <span>capture-trendi</span>
+                <span>mittaustrendi</span>
                 <span>{landingSeries.length ? `${landingSeries.length} pistettä` : "ei vielä dataa"}</span>
               </div>
               <LandingBars series={landingSeries} />
@@ -688,12 +688,12 @@ export default function App() {
       >
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7">
-            <CardLabel className="mb-3">Suomi · day-ahead pumppuhinta-arvio</CardLabel>
+            <CardLabel className="mb-3">Suomi · huomisen pumppuhinta-arvio</CardLabel>
             <h2 className="font-display text-4xl md:text-5xl font-black tracking-normal leading-[1.02]">
-              Operatiivinen näkymä
+              Hinnat ja huomisen ennuste
             </h2>
             <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
-              Tuoreimmat hinnat, capture-historia ja mallien välinen vertailu
+              Tuoreimmat hinnat, mittaushistoria ja mallien välinen vertailu
               yhdessä näkymässä.
             </p>
 
@@ -766,12 +766,17 @@ export default function App() {
                 </div>
                 <div className="pl-5">
                   <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-                    Halvimpien {current?.stations_count || ""} ka.
+                    Halvimpien asemien ka.
                   </div>
                   <div className="hero-num tnum text-2xl mt-1">
                     {cheapAvg != null ? cheapAvg.toFixed(3) : "—"}
                     <span className="text-secondary text-xs ml-1">€/L</span>
                   </div>
+                  {current?.stations_count != null && (
+                    <div className="font-mono text-[11px] text-muted mt-0.5">
+                      {current.stations_count} asemaa otoksessa
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
@@ -824,8 +829,8 @@ export default function App() {
                       : 'bg-yellow-900/40 border border-yellow-700/50 text-yellow-200'
                   }`}>
                     <Activity size={10} strokeWidth={2.8} />
-                    {prediction.ensemble.breaking_news_severity >= 7 ? 'CRITICAL' : 
-                     prediction.ensemble.breaking_news_severity >= 4 ? 'MAJOR' : 'MODERATE'}
+                    {prediction.ensemble.breaking_news_severity >= 7 ? 'KRIITTINEN UUTINEN' :
+                     prediction.ensemble.breaking_news_severity >= 4 ? 'MERKITTÄVÄ UUTINEN' : 'UUTISSIGNAALI'}
                   </span>
                 )}
               </div>
@@ -854,6 +859,12 @@ export default function App() {
                 )}
               </div>
               <div className="space-y-1.5" data-testid="dark-method-grid">
+                <div className="grid grid-cols-[5.5rem_1fr_4rem_3rem] md:grid-cols-[6rem_1fr_4.5rem_3.5rem] items-center gap-3 pb-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                  <span>menetelmä</span>
+                  <span>arvio</span>
+                  <span className="text-right">Δ live</span>
+                  <span className="text-right">paino</span>
+                </div>
                 {DARK_METHODS.map(({ key, label }) => {
                   const m = prediction?.methods?.[key];
                   const v = m?.value;
@@ -886,7 +897,7 @@ export default function App() {
                         <span className="text-slate-500 text-[11px] ml-1">€/L</span>
                       </div>
                       <div className={`font-mono tnum text-[11px] text-right ${deltaColorDark(d)}`}>
-                        {deltaFmtMilli(d)}
+                        {deltaFmtSnt(d)}
                       </div>
                       <div className="font-mono tnum text-[11px] text-right text-slate-500">
                         {w != null ? `${Math.round(w * 100)}%` : ""}
@@ -1012,7 +1023,7 @@ export default function App() {
 
               <div className="flex items-center gap-1.5">
                 <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
-                  Capture
+                  Mittaus
                 </span>
                 {CHART_SLOTS.map((s) => (
                   <FilterBtn
@@ -1143,8 +1154,10 @@ export default function App() {
 
 function getNextDay(isoDate) {
   if (!isoDate) return null;
-  const d = new Date(isoDate);
-  d.setDate(d.getDate() + 1);
+  // Parse as UTC noon so the +1 day never shifts across a date boundary
+  // regardless of the viewer's timezone.
+  const d = new Date(`${isoDate.slice(0, 10)}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
 
@@ -1186,19 +1199,19 @@ function TrackingFooter({ summary, fuel }) {
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          MAE (vertailtu)
+          Keskivirhe
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">
-          {mae != null ? mae.toFixed(4) : "—"}
-          <span className="text-secondary text-xs ml-1">€/L</span>
+          {mae != null ? `±${(mae * 100).toFixed(1)}` : "—"}
+          <span className="text-secondary text-xs ml-1">snt</span>
         </div>
         <div className="font-mono text-[11px] text-muted mt-0.5">
-          {n_compared > 0 ? `${n_compared} pv` : "kerää dataa"}
+          {n_compared > 0 ? `${n_compared} vertailua` : "kerää dataa"}
         </div>
       </div>
       <div className="bg-surface rounded-lg p-3 border border-line">
         <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          ≤2 snt vertailut
+          Osumat ±2 snt sisällä
         </div>
         <div className="font-mono tnum text-lg font-bold mt-1">
           {within_2c_pct != null ? `${within_2c_pct.toFixed(0)}%` : "—"}
@@ -1223,7 +1236,7 @@ function DirectionPill({ delta }) {
         data-testid="direction-pill"
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30 font-mono text-xs font-semibold"
       >
-        <ArrowUpRight size={14} strokeWidth={2.6} /> kallistuu +{n.toFixed(3)} €/L
+        <ArrowUpRight size={14} strokeWidth={2.6} /> kallistuu +{(n * 100).toFixed(1)} snt/L
       </span>
     );
   if (n < -0.0005)
@@ -1232,7 +1245,7 @@ function DirectionPill({ delta }) {
         data-testid="direction-pill"
         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-semibold"
       >
-        <ArrowDownRight size={14} strokeWidth={2.6} /> halpenee {n.toFixed(3)} €/L
+        <ArrowDownRight size={14} strokeWidth={2.6} /> halpenee {Math.abs(n * 100).toFixed(1)} snt/L
       </span>
     );
   return (
