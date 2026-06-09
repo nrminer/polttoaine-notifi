@@ -163,7 +163,8 @@ html.dark .instrument-card {
 
 .landing-title {
   margin-top: 0;
-  font-family: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
+  /* Same display face as the rest of the app (Space Grotesk was never loaded) */
+  font-family: "Cabinet Grotesk", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(3rem, 6.4vw, 5.05rem);
   font-weight: 900;
   letter-spacing: 0;

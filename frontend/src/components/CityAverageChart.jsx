@@ -53,7 +53,7 @@ export default function CityAverageChart({
   height = 320,
 }) {
   const data = rows.map((r) => {
-    const hour = r.hour ?? 21;
+    const hour = r.hour ?? 20;
     const slot = `${r.date} ${String(hour).padStart(2, "0")}`;
     const bc = r.by_city || {};
     const point = { slot, date: r.date, hour };

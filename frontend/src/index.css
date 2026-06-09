@@ -86,6 +86,27 @@ html.dark .text-amber-700 { color: #fcd34d !important; }
 html.dark .bg-signalUpBg { background-color: rgb(239 68 68 / 0.16) !important; }
 html.dark .bg-signalDownBg { background-color: rgb(16 185 129 / 0.16) !important; }
 
+/* Breaking-news banner palettes (NewsCard) */
+html.dark .bg-red-50 { background-color: rgb(239 68 68 / 0.12) !important; }
+html.dark .bg-red-100 { background-color: rgb(239 68 68 / 0.18) !important; }
+html.dark .border-red-100 { border-color: rgb(239 68 68 / 0.22) !important; }
+html.dark .border-red-200 { border-color: rgb(239 68 68 / 0.32) !important; }
+html.dark .text-red-600 { color: #f87171 !important; }
+html.dark .text-red-700 { color: #fca5a5 !important; }
+html.dark .text-red-800 { color: #fecaca !important; }
+html.dark .text-red-900 { color: #fee2e2 !important; }
+html.dark .bg-orange-50 { background-color: rgb(249 115 22 / 0.12) !important; }
+html.dark .border-orange-200 { border-color: rgb(249 115 22 / 0.32) !important; }
+html.dark .text-orange-600 { color: #fb923c !important; }
+html.dark .text-orange-700 { color: #fdba74 !important; }
+html.dark .text-orange-800 { color: #fed7aa !important; }
+html.dark .bg-yellow-50 { background-color: rgb(234 179 8 / 0.12) !important; }
+html.dark .border-yellow-200 { border-color: rgb(234 179 8 / 0.32) !important; }
+html.dark .text-yellow-600 { color: #facc15 !important; }
+html.dark .text-yellow-700 { color: #fde047 !important; }
+html.dark .text-yellow-800 { color: #fef08a !important; }
+html.dark .bg-amber-50 { background-color: rgb(245 158 11 / 0.12) !important; }
+
 /* Recharts passes light hex stroke props inline — retarget for dark */
 html.dark .recharts-cartesian-grid line { stroke: #1a2744 !important; }
 html.dark .recharts-cartesian-axis-line,

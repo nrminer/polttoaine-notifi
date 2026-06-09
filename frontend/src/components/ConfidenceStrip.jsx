@@ -25,7 +25,7 @@ export function ConfidenceStrip({
   // Format MAE as cents
   const maeText =
     predictionMAE !== null && predictionMAE !== undefined && !isNaN(predictionMAE)
-      ? `±${(predictionMAE * 100).toFixed(1)}¢`
+      ? `±${(predictionMAE * 100).toFixed(1)} snt`
       : "—";
 
   return (
@@ -77,7 +77,7 @@ export function ConfidenceStrip({
       >
         <TrendingUp size={14} className="text-secondary" strokeWidth={2.2} />
         <span className="font-medium text-ink">{maeText}</span>
-        <Tooltip text="Toteutuneisiin captureihin verrattu keskimääräinen poikkeama (MAE)" />
+        <Tooltip text="Ennusteen keskimääräinen poikkeama toteutuneista mittauksista" />
       </div>
     </div>
   );

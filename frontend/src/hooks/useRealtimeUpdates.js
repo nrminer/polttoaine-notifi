@@ -17,6 +17,13 @@ export function useRealtimeUpdates(onUpdate) {
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttempts = useRef(0);
 
+  // Keep the latest callback in a ref so a changing callback (e.g. one that
+  // closes over the selected fuel) doesn't tear down and reopen the stream.
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
   const connect = useCallback(() => {
     // Clean up existing connection
     if (eventSourceRef.current) {
@@ -43,8 +50,8 @@ export function useRealtimeUpdates(onUpdate) {
         });
 
         // Call the callback if provided
-        if (onUpdate && typeof onUpdate === 'function') {
-          onUpdate(data);
+        if (typeof onUpdateRef.current === 'function') {
+          onUpdateRef.current(data);
         }
       } catch (err) {
         console.error('[SSE] Failed to parse event data:', err);
@@ -68,7 +75,7 @@ export function useRealtimeUpdates(onUpdate) {
     };
 
     eventSourceRef.current = eventSource;
-  }, [onUpdate]);
+  }, []);
 
   useEffect(() => {
     connect();

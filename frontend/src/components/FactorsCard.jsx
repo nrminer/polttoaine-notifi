@@ -72,7 +72,7 @@ export default function FactorsCard({ factors, prediction }) {
     <Card testId="factors-card" className="p-6">
       <CardLabel className="mb-1">Vaikuttavat tekijät</CardLabel>
       <p className="text-[11px] text-muted font-mono mb-4">
-        day-ahead-pääsignaali = jalostettu tuote · Brent + FX = tausta
+        huomisen pääsignaali = jalostettu tuote · Brent + valuutta = tausta
       </p>
 
       <div className="space-y-3">
