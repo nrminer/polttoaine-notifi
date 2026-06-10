@@ -31,7 +31,11 @@ function TooltipBody({ active, payload, label }) {
     return fmtDateFi(d) + (h ? ` · klo ${h}:00` : "");
   })();
   return (
-    <div className="bg-white border border-line rounded-lg shadow-lg px-3 py-2.5 font-mono text-xs min-w-[180px]">
+    <div 
+      role="tooltip"
+      aria-live="polite"
+      className="bg-white border border-line rounded-lg shadow-lg px-3 py-2.5 font-mono text-xs min-w-[180px]"
+    >
       <div className="text-secondary mb-1.5 text-[10px] uppercase tracking-wider">{human}</div>
       {payload.map(
         (p) =>

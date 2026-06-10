@@ -87,7 +87,19 @@ def _freshness_hours(date_text: str) -> float:
 
 
 def _scrape_city(city: str, fuel: str) -> list:
+    """Scrape fuel prices for a specific city.
+    
+    SECURITY: Validates city against whitelist to prevent SSRF attacks.
+    """
+    # SECURITY: Validate city against whitelist
+    if city not in CITIES:
+        raise ValueError(f"Invalid city: {city}")
+    
     slug = city.lower()
+    # SECURITY: Ensure slug is alphanumeric only
+    if not slug.replace('-', '').isalpha():
+        raise ValueError(f"Invalid city format: {city}")
+    
     url = f"{BASE_URL}/{slug}/"
     resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
     if resp.status_code == 404:

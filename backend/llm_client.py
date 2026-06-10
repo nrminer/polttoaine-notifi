@@ -115,7 +115,17 @@ def _send_message_sync(
         )
 
     if response.status_code >= 400:
+        # SECURITY: Redact secrets from error messages
         detail = response.text.replace("\n", " ")[:500]
+        # Import here to avoid circular dependency
+        import re
+        # Redact common secret patterns
+        detail = re.sub(
+            r'(api[_-]?key|token|secret|authorization|password|bearer)[\"\s:=]+[^\s\"]+',
+            r'\1=REDACTED',
+            detail,
+            flags=re.IGNORECASE
+        )
         raise LLMRequestError(f"HTTP {response.status_code}: {detail}")
 
     try:

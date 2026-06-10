@@ -38,6 +38,11 @@ import learn as learn_mod
 import accuracy_utils as accuracy_mod
 from predict import predict_tomorrow
 from validation import validate_scraped_data, PRICE_MIN_SANITY, PRICE_MAX_SANITY
+from security_utils import (
+    validate_fuel, validate_region, validate_fuel_and_region,
+    sanitize_string, redact_secrets, validate_price_bounds, validate_date_format,
+    ALLOWED_FUELS, ALLOWED_REGIONS
+)
 
 # ---------------- konfiguraatio ----------------
 
@@ -48,8 +53,13 @@ logging.basicConfig(level=logging.INFO)
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+# SECURITY: Wrap MongoDB initialization with error handling to prevent credential leakage
+try:
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+except Exception as e:
+    logger.error("Database initialization failed (credentials redacted)")
+    raise SystemExit(1)
 
 FUELS = ("95E10", "diesel")
 # Käyttäjän valitsemat "alueelliset" kaupungit — vain näistä näytetään hinnat
@@ -98,6 +108,22 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="BensaVahti API", version="2.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# SECURITY: Add security headers middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if os.environ.get("ENV") == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - tightened to Vercel origin (can be overridden via env)
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "https://polttoaine-notifi.vercel.app").split(",")
@@ -311,7 +337,8 @@ async def seed_history(days: int = 365, force: bool = False,
 
 
 @app.get("/api/prices/current")
-async def current_prices(fuel: str = Query("95E10")):
+@limiter.limit("20/minute")  # SECURITY: Rate limit expensive scraping operation
+async def current_prices(fuel: str = Query("95E10"), request: Request = None):
     """Skrapaa nykyhinnat (live, halvimmat asemat). KAIKKI data on live-
     skrapattua — ei Tilastokeskus-kuukausihistoriaa.
 
@@ -321,8 +348,8 @@ async def current_prices(fuel: str = Query("95E10")):
       confidence_data  - lähdetietokäsitys (lähdejako, tuoreus, hintaleveys)
       by_city          - per-kaupunki halvin + keskiarvo + lähteet
     """
-    if fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {fuel}")
+    # SECURITY: Validate fuel parameter immediately
+    validate_fuel(fuel)
 
     rows = await _scrape_all(fuel)
     if isinstance(rows, Exception):
@@ -343,7 +370,7 @@ async def current_prices(fuel: str = Query("95E10")):
                 "stale": True,
                 "confidence_data": last.get("confidence_data"),
             }
-        raise HTTPException(503, "no data: scrapers returned empty and no cache")
+        raise HTTPException(503, "Service temporarily unavailable")
 
     by_city = _city_aggregate(rows)
     cheap_avg = _national_average(rows)
@@ -489,8 +516,9 @@ async def current_prices(fuel: str = Query("95E10")):
 async def history(fuel: str = Query("95E10"),
                   region: str = Query("Suomi"),
                   days: int = Query(180, ge=7, le=730)):
-    if fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {fuel}")
+    # SECURITY: Validate against whitelist to prevent NoSQL injection
+    validate_fuel_and_region(fuel, region)
+    
     cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).isoformat()
     cur = db.history.find(
         {"fuel": fuel, "region": region, "date": {"$gte": cutoff}},
@@ -547,7 +575,8 @@ async def updates_stream(request: Request):
 
 
 @app.get("/api/factors")
-async def get_factors():
+@limiter.limit("30/minute")  # SECURITY: Rate limit external API calls
+async def get_factors(request: Request = None):
     """Brent + EUR/USD (60 päivän sarja + nykyarvo + delta)."""
     loop = asyncio.get_event_loop()
     brent_task = loop.run_in_executor(executor, factors_mod.fetch_brent, 60)
@@ -580,15 +609,15 @@ async def run_prediction(req: PredictionRequest, request: Request):
 async def _run_prediction_impl(req: PredictionRequest):
     fuel = req.fuel
     region = req.region
-    if fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {fuel}")
+    
+    # SECURITY: Validate against whitelist to prevent NoSQL injection
+    validate_fuel_and_region(fuel, region)
+    
     # CRITICAL FIX: Only "Suomi" region supported - data collection and training
     # only happens for national aggregate. Per-city predictions would need
     # separate per-city capture in tracker.py
     if region != "Suomi":
-        raise HTTPException(400, f"only region='Suomi' supported (national aggregate)")
-    if region not in SUPPORTED_REGIONS:
-        raise HTTPException(400, f"unknown region {region}")
+        raise HTTPException(400, "Only national predictions supported")
 
     # --- Build the price series from LIVE-GATHERED data ONLY ---
     # Ainoa lähde: daily_tracker — aidot 14:00 / 21:00 live-capturet.
@@ -740,7 +769,8 @@ async def _run_prediction_impl(req: PredictionRequest):
 
 
 @app.get("/api/news")
-async def get_news(max_age_days: int = 14, limit: int = 15):
+@limiter.limit("10/minute")  # SECURITY: Rate limit expensive RSS scraping (~25 feeds)
+async def get_news(max_age_days: int = 14, limit: int = 15, request: Request = None):
     """Hae viimeisimmät polttoaine- ja öljymarkkinauutiset."""
     loop = asyncio.get_event_loop()
     items = await loop.run_in_executor(
@@ -861,7 +891,7 @@ async def latest_prediction(fuel: str = Query("95E10"), region: str = Query("Suo
 
 
 @app.get("/api/regional")
-async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0)):
+async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0, ge=0.1, le=168.0)):
     """Live-scrape both polttoaine.net (top 20 cheapest nationally) and
     tankille.fi (per-city pages) for ALL supported regions.
 
@@ -869,8 +899,8 @@ async def regional(fuel: str = Query("95E10"), max_age_hours: float = Query(24.0
     For each region we return the cheapest fresh station.
     Cached for 90 seconds.
     """
-    if fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {fuel}")
+    # SECURITY: Validate fuel parameter
+    validate_fuel(fuel)
 
     cache_key = f"regional:{fuel}:{int(max_age_hours)}"
     now_ts = datetime.now(timezone.utc)
@@ -1084,8 +1114,8 @@ async def track_run(fuel: str = Query("95E10"), request: Request = None):
     Idempotentti: saman päivän uusinta-ajo korvaa rivin.
     Lähettää ntfy-ilmoituksen jokaisen capturen jälkeen.
     """
-    if fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {fuel}")
+    # SECURITY: Validate fuel parameter
+    validate_fuel(fuel)
     doc = await tracker_mod.capture_daily(db, executor, fuel)
     doc.pop("prediction_full", None)
     asyncio.create_task(_notify_async([doc]))
@@ -1133,7 +1163,7 @@ async def notify_test(x_admin_token: Optional[str] = Header(default=None)):
 # ---------------- password-protected manual trigger (Postman) ----------------
 
 class AdminRequest(BaseModel):
-    password: str = ""           # tai lähetä X-Admin-Token -header
+    # SECURITY: Password removed from body - use X-Admin-Token header only
     action: str = "all"          # ping | capture | predict | all | notify
     fuel: str = "all"            # all | 95E10 | diesel
     region: str = "Suomi"
@@ -1141,12 +1171,16 @@ class AdminRequest(BaseModel):
     notify: bool = False
 
 
-def _check_admin(password: str) -> None:
-    token = os.environ.get("ADMIN_TOKEN")
-    if not token:
-        raise HTTPException(503, "admin endpoint disabled (set ADMIN_TOKEN)")
-    if not hmac.compare_digest(str(password or ""), str(token)):
-        raise HTTPException(401, "invalid admin password")
+def _check_admin(token: str) -> None:
+    """Verify admin token with constant-time comparison.
+    
+    SECURITY: Only accepts header authentication, not body password.
+    """
+    env_token = os.environ.get("ADMIN_TOKEN")
+    if not env_token:
+        raise HTTPException(404, "Not found")  # Stealth mode when disabled
+    if not hmac.compare_digest(str(token or ""), str(env_token)):
+        raise HTTPException(401, "Unauthorized")
 
 
 @app.post("/api/admin/run")
@@ -1156,17 +1190,14 @@ async def admin_run(req: AdminRequest,
                     x_admin_token: Optional[str] = Header(default=None)):
     """Salasanasuojattu manuaalinen liipaisin (Postman/curl).
 
-    Auth: body-kenttä `password` TAI header `X-Admin-Token`. Vertaa
-    ympäristömuuttujaan `ADMIN_TOKEN` (vakioaikainen vertailu). Jos
-    `ADMIN_TOKEN` puuttuu → 503 (endpoint pois käytöstä).
-
-    Esimerkki (Postman → POST {BACKEND}/api/admin/run, Body=raw JSON):
-        {
-          "password": "<ADMIN_TOKEN>",
-          "action": "all",
-          "fuel": "all",
-          "notify": true
-        }
+    SECURITY: Authentication via X-Admin-Token header ONLY (no body password).
+    Compares against ADMIN_TOKEN env variable using constant-time comparison.
+    
+    Esimerkki (curl):
+        curl -X POST "$BACKEND/api/admin/run" \
+          -H "X-Admin-Token: $ADMIN_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"action": "all", "fuel": "all", "notify": true}'
 
     action:
       "ping"    - vain auth-testi (ei sivuvaikutuksia)
@@ -1176,15 +1207,15 @@ async def admin_run(req: AdminRequest,
       "all"     - capture + predict (+ ntfy jos notify=true)
       "notify"  - lähetä ntfy uusimmista captureista
     """
-    _check_admin(req.password or x_admin_token or "")
-
+    _check_admin(x_admin_token or "")
+    
+    # SECURITY: Validate parameters against whitelist
     action = (req.action or "all").lower()
     if action not in ("ping", "capture", "predict", "all", "notify"):
-        raise HTTPException(400, f"unknown action {action!r}")
-    if req.fuel != "all" and req.fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {req.fuel}")
-    if req.region not in SUPPORTED_REGIONS:
-        raise HTTPException(400, f"unknown region {req.region}")
+        raise HTTPException(400, "Invalid action")
+    if req.fuel != "all":
+        validate_fuel(req.fuel)
+    validate_region(req.region)
 
     fuels = list(FUELS) if req.fuel == "all" else [req.fuel]
     out: dict = {
@@ -1286,18 +1317,36 @@ async def track_backfill(points: list[TrackBackfillPoint],
     skipped = []
     affected_fuels = set()
     for p in points:
-        if p.fuel not in FUELS:
-            skipped.append({"date": p.date, "fuel": p.fuel, "reason": "unknown fuel"})
+        # SECURITY: Validate fuel and region
+        try:
+            validate_fuel(p.fuel)
+            validate_region(p.region)
+        except HTTPException:
+            skipped.append({"date": p.date, "fuel": p.fuel, "reason": "invalid fuel or region"})
+            continue
+        
+        # SECURITY: Validate date format
+        try:
+            validate_date_format(p.date)
+        except HTTPException:
+            skipped.append({"date": p.date, "fuel": p.fuel, "reason": "invalid date format"})
             continue
         
         # SECURITY: Validate backfilled prices are within realistic bounds
-        if not (PRICE_MIN_SANITY <= p.actual_cheapest <= PRICE_MAX_SANITY):
+        try:
+            validate_price_bounds(p.actual_cheapest, PRICE_MIN_SANITY, PRICE_MAX_SANITY)
+        except HTTPException:
             skipped.append({
                 "date": p.date, 
                 "fuel": p.fuel, 
-                "reason": f"price {p.actual_cheapest} outside bounds [{PRICE_MIN_SANITY}, {PRICE_MAX_SANITY}]"
+                "reason": "price validation failed"  # Don't leak actual value
             })
             continue
+        
+        # SECURITY: Sanitize string fields
+        station = sanitize_string(p.actual_cheapest_station or "", 200)
+        city = sanitize_string(p.actual_cheapest_city or "", 100)
+        source = sanitize_string(p.actual_cheapest_source or "notification_archive", 100)
         
         doc = {
             "date": p.date,
@@ -1306,9 +1355,9 @@ async def track_backfill(points: list[TrackBackfillPoint],
             "region": p.region,
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "actual_cheapest": round(p.actual_cheapest, 3),
-            "actual_cheapest_station": p.actual_cheapest_station,
-            "actual_cheapest_city": p.actual_cheapest_city,
-            "actual_cheapest_source": p.actual_cheapest_source or "notification_archive",
+            "actual_cheapest_station": station,
+            "actual_cheapest_city": city,
+            "actual_cheapest_source": source,
             "stations_scanned": 0,
             "predicted_cheapest_for_today": None,
             "prediction_for_tomorrow_cheapest": None,
@@ -1370,8 +1419,8 @@ async def track_backfill(points: list[TrackBackfillPoint],
 
 @app.get("/api/track/history")
 async def track_history(fuel: str = Query("95E10"), days: int = Query(60, ge=1, le=365)):
-    if fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {fuel}")
+    # SECURITY: Validate fuel parameter
+    validate_fuel(fuel)
     cutoff = (tracker_mod.helsinki_today() - timedelta(days=days)).isoformat()
     cur = db.daily_tracker.find(
         {"fuel": fuel, "date": {"$gte": cutoff}},
@@ -1424,10 +1473,10 @@ async def fix_capture(req: FixCaptureRequest,
     If rerun_prediction=true (default), automatically reruns prediction for the affected fuel."""
     _check_admin(x_admin_token or "")
     
-    if req.fuel not in FUELS:
-        raise HTTPException(400, f"unknown fuel {req.fuel}")
-    if req.region not in SUPPORTED_REGIONS:
-        raise HTTPException(400, f"unknown region {req.region}")
+    # SECURITY: Validate inputs
+    validate_fuel_and_region(req.fuel, req.region)
+    validate_date_format(req.date)
+    validate_price_bounds(req.corrected_price, PRICE_MIN_SANITY, PRICE_MAX_SANITY)
     
     # Find the existing capture
     existing = await db.daily_tracker.find_one({

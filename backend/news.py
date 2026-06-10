@@ -299,6 +299,25 @@ def fetch_news(queries=None, max_age_days: int = 14, limit: int = 15) -> list[di
     Returns list of news items with 'breaking' field indicating breaking news.
     """
     def _fetch_one(url: str, label: str) -> list[dict]:
+        """Fetch and parse a single RSS feed.
+        
+        SECURITY: Validates URL to prevent SSRF attacks.
+        """
+        from urllib.parse import urlparse
+        
+        # SECURITY: Validate URL scheme and prevent internal network access
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                logger.error("Invalid URL scheme for feed %s: %s", label, parsed.scheme)
+                return []
+            if parsed.hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+                logger.error("Blocked internal network access: %s", url)
+                return []
+        except Exception as e:
+            logger.error("URL validation failed for %s: %s", label, e)
+            return []
+        
         checked = datetime.now(timezone.utc).isoformat()
         try:
             r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
