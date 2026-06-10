@@ -10,7 +10,7 @@
   push-notifier. UI in Finnish.
 - **Stack**: React (CRA) on Vercel · FastAPI + Motor (async MongoDB) on Railway
   · MongoDB Atlas (free M0).
-- **AI**: Claude Opus 4.8 via Anthropic-compatible proxy
+- **AI**: Claude Fable 5 via Anthropic-compatible proxy
   (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`) — invoked from
   `backend/predict.py` for the AI-prediction method.
 - **Data inputs**: **LIVE-GATHERED ONLY** — scrapes of `polttoaine.net` +
@@ -35,7 +35,7 @@ tell us — no hard-coded ±N ¢/L claim). The app:
    Vantaa, Tampere, Turku, Lahti) with cheapest **and average** per city.
 2. Predicts **tomorrow's** cheapest using **5 parallel methods** (MA, LR, Holt
    exp.smoothing, **fundamental_anchor** = live + Brent-EUR pass-through +
-   weekday + momentum, and Claude Opus 4.8 with geopolitical-risk handling) →
+   weekday + momentum, and Claude Fable 5 with geopolitical-risk handling) →
    a **data-quality-aware ensemble clamped to ±0.06 €/L of the live price**.
 3. Captures actuals at **14:00 and 21:00 Helsinki** (`SCHEDULED_HOURS` in
    `tracker.py`) and tracks prediction-vs-actual accuracy against **real
@@ -61,7 +61,7 @@ tell us — no hard-coded ±N ¢/L claim). The app:
                                           ┌──────────────────────┐         ┌──────────────────────┐
                                           │  ntfy.sh             │         │  Anthropic Claude    │
                                           │  topic: polttoaine   │         │  via proxy endpoint  │
-                                          │  bearer token auth   │         │  Opus 4.8 → Opus… │
+                                          │  bearer token auth   │         │  Fable 5 fallback    │
                                           └──────────────────────┘         └──────────────────────┘
 ```
 
@@ -110,7 +110,7 @@ The backend has NO frontend assets — pure API.
         ├── lib/
         │   ├── api.js     … axios wrappers for every backend route
         │   ├── utils.js   … fmtPrice, fmtDelta, fmtDateFi…
-        │   └── modelName.js … converts "claude-opus-4-8" → "Claude Opus 4.8"
+        │   └── modelName.js … converts "claude-fable-5" → "Claude Fable 5"
         └── components/
             ├── Card.jsx        … design-system primitives (Card, CardLabel, StatNumber, DeltaBadge)
             ├── FuelToggle.jsx  … 95E10 / Diesel toggle
@@ -203,7 +203,7 @@ Grouped logically. All routes are prefixed `/api`.
                     │      pass-through + weekday + momentum,     │
                     │      clamped ±0.06 €/L                      │
                     └─▶ ai_llm_predict()  Claude + geo-risk      │
-                          │  (Anthropic proxy, Opus 4.8 →         │
+                          │  (Anthropic proxy, Fable 5 →         │
                           │   Opus 4.7 → 4.6 → Sonnet/Haiku 4.5)  │
                           ▼
    ensemble = data-quality-aware weights (thin daily data → lean on
@@ -249,7 +249,7 @@ Model returns strict JSON; the function strips markdown fences, finds the first
 `{` and last `}`, parses, and returns a `dict` with `value`, `confidence_low/high`,
 `direction`, `explanation`, `key_drivers`, `model`.
 
-If Opus 4.8 fails (rate-limit / budget / network), it falls through to Opus
+If Fable 5 fails (rate-limit / budget / network), it falls through to Opus
 4.7, 4.6, Sonnet 4.5, then Haiku 4.5. Each gets 3 attempts.
 
 ## 8. Scrapers & Price Verification
@@ -353,9 +353,9 @@ CRA bakes env vars at build time → changing this requires a redeploy.
 | `MONGO_URL`          | yes      | MongoDB Atlas connection string |
 | `DB_NAME`            | yes      | `bensavahti` |
 | `ANTHROPIC_BASE_URL` | yes      | Anthropic-compatible proxy URL, e.g. `https://cc-vibe.com` |
-| `ANTHROPIC_AUTH_TOKEN`| yes     | Proxy bearer token for Claude Opus 4.8 |
+| `ANTHROPIC_AUTH_TOKEN`| yes     | Proxy bearer token for Claude Fable 5 |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | no | `1` recommended with the proxy |
-| `ANTHROPIC_MODEL`    | no       | Defaults to `claude-opus-4-8` |
+| `ANTHROPIC_MODEL`    | no       | Defaults to `claude-fable-5` |
 | `ANTHROPIC_NEWS_MODEL` | no     | Defaults to `ANTHROPIC_MODEL` |
 | `CORS_ORIGINS`       | no       | defaults to `*` |
 | `ADMIN_TOKEN`        | optional | enables `POST /api/admin/run` (unset → 503). Constant-time compared to body `password` / `X-Admin-Token` header |
@@ -398,7 +398,7 @@ Critical contract details:
 - Numeric fields are JSON floats (e.g. `1.857`), NOT strings
 - Timestamps are ISO-8601 with timezone
 - `data_sources` field is `null | {tracker_captures, combined_points, source:"live_scrape_only"}`
-- `methods.ai_llm.model` is the actual model id string (`claude-opus-4-8`) — `lib/modelName.js` converts it to display label
+- `methods.ai_llm.model` is the actual model id string (`claude-fable-5`) — `lib/modelName.js` converts it to display label
 
 ## 13. UI conventions
 

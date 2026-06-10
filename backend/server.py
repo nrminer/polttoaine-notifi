@@ -4,7 +4,7 @@ BensaVahti - polttoaineen hintaennustaja Suomeen.
 FastAPI-palvelin, joka:
   - Skrapeerää nykyhinnat (polttoaine.net + tankille.fi)
   - Tallentaa havaintoja MongoDB:hen
-  - Laskee 5 ennustetta + ensemble (MA, LR, Holt, fundamenttiankkuri, Claude Opus 4.8)
+  - Laskee 5 ennustetta + ensemble (MA, LR, Holt, fundamenttiankkuri, Claude Fable 5)
   - Hakee Brent + EUR/USD Yahoo Financelta
   - Tarjoaa REST-rajapinnan dashboardille
 """

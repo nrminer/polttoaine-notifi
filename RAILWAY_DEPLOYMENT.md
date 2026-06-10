@@ -39,8 +39,8 @@ Open the service → **Variables** tab → add these:
 | `ANTHROPIC_BASE_URL` | `https://cc-vibe.com` | ✅ yes (AI predictions use the proxy) |
 | `ANTHROPIC_AUTH_TOKEN` | Your proxy auth token | ✅ yes (AI predictions need it) |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1` | recommended for the proxy |
-| `ANTHROPIC_MODEL` | `claude-opus-4-8` | optional (default) |
-| `ANTHROPIC_NEWS_MODEL` | `claude-opus-4-8` | optional (defaults to `ANTHROPIC_MODEL`) |
+| `ANTHROPIC_MODEL` | `claude-fable-5` | optional (default) |
+| `ANTHROPIC_NEWS_MODEL` | `claude-fable-5` | optional (defaults to `ANTHROPIC_MODEL`) |
 | `CORS_ORIGINS` | `https://your-app.vercel.app` (or `*` for everything) | optional |
 | `PORT` | (Railway sets this automatically — don't override) | n/a |
 

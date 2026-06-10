@@ -12,6 +12,7 @@ test("formats prices and deltas for dashboard display", () => {
 test("formats fuel and model labels", () => {
   expect(fuelLabel("95E10")).toBe("95E10");
   expect(fuelLabel("diesel")).toBe("Diesel");
+  expect(formatModelName("claude-fable-5")).toBe("Claude Fable 5");
   expect(formatModelName("claude-opus-4-8")).toBe("Claude Opus 4.8");
   expect(formatModelName("claude-sonnet-4-5-20250929")).toBe("Claude Sonnet 4.5");
   expect(formatModelName(null)).toBeNull();

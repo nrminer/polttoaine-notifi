@@ -15,7 +15,7 @@ React frontend on **Vercel**, FastAPI backend on **Railway**, MongoDB on
 ## Tech stack
 - Frontend: React 18, Create React App, Tailwind CSS, Framer Motion, Recharts, axios
 - Backend: FastAPI 0.110, Uvicorn, Motor (async MongoDB), Pydantic 2.6
-- AI: Claude Opus 4.8 via an Anthropic-compatible proxy (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`), fallback chain to Claude Opus 4.7, Opus 4.6, Sonnet 4.5, and Haiku 4.5
+- AI: Claude Fable 5 via an Anthropic-compatible proxy (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`), fallback chain to Claude Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 4.5, and Haiku 4.5
 - Scrapers: polttoaine.net + tankille.fi (live, ≤24h)
 - Market data: Yahoo Finance (Brent, EUR/USD)
 
@@ -48,7 +48,7 @@ React frontend on **Vercel**, FastAPI backend on **Railway**, MongoDB on
 - `MONGO_URL` = Atlas connection string
 - `DB_NAME` = bensavahti
 - `ANTHROPIC_BASE_URL` = Anthropic-compatible proxy URL (for example `https://cc-vibe.com`)
-- `ANTHROPIC_AUTH_TOKEN` = proxy auth token (for Claude Opus 4.8 fallback chain)
+- `ANTHROPIC_AUTH_TOKEN` = proxy auth token (for Claude Fable 5 fallback chain)
 - `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` = `1` (recommended with the proxy)
 
 ## Prioritized backlog
