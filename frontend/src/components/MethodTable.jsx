@@ -14,7 +14,7 @@ const METHOD_COLORS = {
 
 const META = {
   moving_average: { label: "Liukuva keskiarvo", Icon: Activity, sub: "7 pv" },
-  linear_regression: { label: "Lineaarinen regressio", Icon: TrendingUp, sub: "30 pv" },
+  linear_regression: { label: "Lineaarinen regressio", Icon: TrendingUp, sub: "≤14 pv painotettu" },
   exp_smoothing: { label: "Eksp. tasoitus", Icon: Waves, sub: "Holt α=0.4" },
   fundamental_anchor: { label: "Fundamenttiankkuri", Icon: Anchor, sub: "Brent+FX" },
   ai_llm: { Icon: MessageSquareText },

@@ -194,7 +194,7 @@ Grouped logically. All routes are prefixed `/api`.
    └────────────────┬────────────────────────┘  news.fetch_news │
                     │ (all date-aware: +1 calendar day)         │
                     ├─▶ moving_average(7)        date-aware tail │
-                    ├─▶ linear_regression(30)    date-aware      │
+                    ├─▶ linear_regression(≤14)   recency-weighted │
                     ├─▶ exp_smoothing(α0.4,β0.2) date-aware tail │
                     ├─▶ fundamental_anchor()  live + Brent-EUR    │
                     │      pass-through + weekday + momentum,     │
@@ -408,7 +408,9 @@ Critical contract details:
    `_MAX_DAILY_MOVE` (0.06 €/L; expanded by tax step when applicable).
    None of these are Finland-measured — replace with data-calibrated
    coefficients once captures accumulate.
-3. `predict.py:moving_average(window=…)` / `linear_regression(lookback=…)`
+3. `predict.py:moving_average(window=…)` / `linear_regression` — recency-
+   weighted WLS over ≤`_LR_MAX_WINDOW` (14) daily-tail points, half-life
+   `_LR_HALFLIFE_DAYS` (5 d), bias self-correction, clamped ±`_MAX_DAILY_MOVE`
 4. `predict.py:ai_llm_predict.system_message` — 9 numbered priors (all
    explicitly labelled as uncalibrated; no fabricated tenure / specific
    Finland-unmeasured day-counts or c/L bands)

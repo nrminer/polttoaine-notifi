@@ -3,7 +3,7 @@ Polttoainehintojen ennustusalgoritmit Suomeen.
 
 Antaa rinnakkaisia ennusteita huomisen hinnalle:
     - moving_average     : N päivän liukuva keskiarvo (päivätason häntä)
-    - linear_regression  : pienimmän neliösumman trendi, projisoitu +1 KALENTERIPÄIVÄ
+    - linear_regression  : recency-painotettu PNS-trendi (≤14 pv häntä), +1 KALENTERIPÄIVÄ
     - exp_smoothing      : Holt-tyylinen taso + trendi (päivätason häntä)
     - fundamental_anchor : live-hinta + Brent-EUR-pass-through + viikonpäivä + momentum
     - ai_llm             : Claude Fable 5 + 10k token extended thinking (uutiset + geopoliittinen riski)
@@ -114,6 +114,29 @@ _REFINED_PASSTHROUGH_FRAC = 0.30  # ALKUPRIORI — vain hieman Brentiä korkeamp
 _BIAS_MIN_N = 8       # alle tämän → korjaus = 0 (estää melun)
 _BIAS_FULL_N = 25     # tällä otoksella koko bias vähennetään
 _BIAS_MAX = 0.020     # turvaraja ±2 snt/L (osa _MAX_DAILY_MOVE-budjetista)
+
+# --- Lineaarinen regressio: day-ahead-viritys ---
+# VALITTUJA INSINÖÖRIPRIOREJA, EI SUOMI-MITATTUJA. Toteutunut tarkkuus
+# (daily_tracker) osoitti tasapainoisen koko hännän OLS:n heikoimmaksi
+# menetelmäksi: kuukauden takainen hintaregiimi vetää huomisen trendiä.
+# Day-ahead-ikkunaan rajataan tuore osa hännästä ja painotetaan
+# eksponentiaalisesti tuoreutta; ennuste rajataan fysikaaliseen
+# päivämuutosbudjettiin (_MAX_DAILY_MOVE) kuten muutkin ankkurimenetelmät.
+_LR_MAX_WINDOW = 14       # max pistettä aidosta päivähännästä regressioon
+_LR_HALFLIFE_DAYS = 5.0   # recency-painon puoliintumisaika (pv)
+
+# --- Fundamental anchor: kohinanvaimennus ---
+# VALITTUJA INSINÖÖRIPRIOREJA, EI SUOMI-MITATTUJA. "Halvin asema Suomessa"
+# on yhden scrapen havainto jonka asemajoukko vaihtelee päivästä toiseen →
+# yksittäinen live-lukema on kohinainen syöte. Ankkuri sekoitetaan kevyesti
+# 3 pv mediaaniin (säilyttää ankkuroinnin, vaimentaa yksittäisen scrapen
+# poikkeaman). Momentum-slope ≤7 pisteestä on itsessään kohinainen
+# estimaatti → kutistetaan kohti nollaa ennen käyttöä (James-Stein-henkinen
+# shrinkage, kerroin valittu eikä mitattu).
+_ANCHOR_LIVE_W = 0.70     # live-hinnan paino; loppu 3 pv mediaanille
+_MOM_SHRINK = 0.5         # momentum-slopen kutistuskerroin
+_FA_BAND_MIN = 0.008      # kalibroidun luottamusvälin alaraja (€/L)
+_FA_BAND_MAX = 0.035      # kalibroidun luottamusvälin yläraja (€/L)
 
 # --- Empiirinen viikonpäivä-adj ---
 # Kun aitoa päivähäntää on tarpeeksi (ks. _WD_MIN_PER_DAY), lasketaan
@@ -244,8 +267,20 @@ def moving_average(prices: list[float], window: int = 7, dates=None) -> dict:
     }
 
 
-def linear_regression(prices: list[float], lookback: int = 30, dates=None) -> dict:
-    """Pienimmän neliösumman trendi, x = KALENTERIPÄIVÄ-offset, projisointi +1 pv.
+def linear_regression(prices: list[float], lookback: int = 30, dates=None,
+                      track_stats: dict | None = None) -> dict:
+    """Recency-painotettu pienimmän neliösumman trendi, x = KALENTERIPÄIVÄ-
+    offset, projisointi +1 pv.
+
+    Day-ahead-viritykset (priorit, ks. _LR_*-vakiot):
+      - aidosta päivähännästä käytetään enintään _LR_MAX_WINDOW tuoreinta
+        pistettä — vanha hintaregiimi ei saa vetää huomisen trendiä
+      - havainnot painotetaan eksponentiaalisesti tuoreuden mukaan
+        (puoliintumisaika _LR_HALFLIFE_DAYS pv)
+      - self-training: menetelmän toteutunut signed bias vähennetään
+        (sama _bias_correction-mekanismi kuin fundamental_anchorissa)
+      - tulos rajataan ±_MAX_DAILY_MOVE viimeisestä havainnosta — trendin
+        ekstrapolointi ei saa ylittää fysikaalista päivämuutosbudjettia
 
     Kun data on aitoa päivätason häntää, käytetään sitä; muuten viimeiset
     `lookback` pistettä mutta x silti päivinä (ei indeksinä) — jotta
@@ -259,6 +294,7 @@ def linear_regression(prices: list[float], lookback: int = 30, dates=None) -> di
     if dates and len(dates) == len(prices):
         dt = _daily_tail(dates, prices, max_gap=3, min_len=5)
         if len(dt) >= 5:
+            dt = dt[-_LR_MAX_WINDOW:]
             seg_dates = [x[0] for x in dt]
             yvals = [x[1] for x in dt]
         else:
@@ -289,18 +325,39 @@ def linear_regression(prices: list[float], lookback: int = 30, dates=None) -> di
                 "slope": 0.0,
                 "explanation": "Vain yksi aikapiste — trendi tasainen."}
 
-    slope, intercept = np.polyfit(x, y, 1)
+    # Eksponentiaalinen recency-paino; np.polyfit painottaa residuaalia
+    # kertoimella w ennen neliöintiä → sqrt(paino) antaa halutun WLS:n.
+    age = x[-1] - x
+    wts = np.power(0.5, age / _LR_HALFLIFE_DAYS)
+    slope, intercept = np.polyfit(x, y, 1, w=np.sqrt(wts))
     pred = float(slope * target_x + intercept)
     residuals = y - (slope * x + intercept)
-    sigma = max(float(np.std(residuals)), 0.005)
+    sigma = max(float(np.sqrt(np.average(residuals ** 2, weights=wts))), 0.005)
+
+    parts: list[str] = []
+    bias_adj = _bias_correction(track_stats, "linear_regression")
+    if abs(bias_adj) >= 0.0005:
+        pred += bias_adj
+        parts.append(f"itsekalibrointi {bias_adj*1000:+.1f} m€/L")
+
+    last = float(y[-1])
+    clamped = not (last - _MAX_DAILY_MOVE <= pred <= last + _MAX_DAILY_MOVE)
+    if clamped:
+        pred = max(last - _MAX_DAILY_MOVE, min(last + _MAX_DAILY_MOVE, pred))
+        parts.append(f"rajattu ±{_MAX_DAILY_MOVE*100:.0f} snt viime havainnosta")
+
     direction = "nouseva" if slope > 0 else ("laskeva" if slope < 0 else "tasainen")
+    expl = (f"Painotettu lineaarinen regressio {len(y)} pisteestä "
+            f"(½-aika {_LR_HALFLIFE_DAYS:g} pv), trendi {direction} "
+            f"({slope*1000:+.2f} m€/L/pv)")
+    if parts:
+        expl += " · " + ", ".join(parts)
     return {
         "value": round(pred, 4),
         "confidence_low": round(pred - 1.5 * sigma, 4),
         "confidence_high": round(pred + 1.5 * sigma, 4),
         "slope": round(float(slope), 6),
-        "explanation": (f"Lineaarinen regressio {len(y)} pisteestä, "
-                        f"trendi {direction} ({slope*1000:+.2f} m€/L/pv)."),
+        "explanation": expl + ".",
     }
 
 
@@ -372,12 +429,23 @@ def fundamental_anchor(dates, prices, live_anchor,
     Tulos rajataan ±0.06 €/L live-hinnasta — clamppia laajennetaan
     tunnetun verostepin verran kun se astuu voimaan."""
     p = _safe_prices(prices)
-    base = live_anchor if live_anchor is not None else (p[-1] if p else None)
-    if base is None:
+    base_live = live_anchor if live_anchor is not None else (p[-1] if p else None)
+    if base_live is None:
         return {"value": None, "confidence_low": None, "confidence_high": None,
                 "explanation": "Ei live-ankkuria fundamentaalimalliin."}
 
     parts: list[str] = []
+    dt = _daily_tail(dates, prices, max_gap=3, min_len=4)
+
+    # 0) kohinanvaimennettu ankkuri: yksittäinen "halvin Suomessa" -scrape
+    # on kohinainen (asemajoukko vaihtelee päivittäin) → sekoita live-hinta
+    # kevyesti 3 pv mediaaniin (_ANCHOR_LIVE_W on prior, ei mitattu).
+    base = base_live
+    if len(dt) >= 3:
+        med3 = float(np.median([x[1] for x in dt[-3:]]))
+        base = _ANCHOR_LIVE_W * base_live + (1.0 - _ANCHOR_LIVE_W) * med3
+        if abs(base - base_live) >= 0.0005:
+            parts.append(f"kohinanvaimennus {(base - base_live)*1000:+.1f} m€/L")
 
     # 1) Pass-through — refined-tuote ensisijainen, Brent fallback.
     # Käytetään moduulitason ENNALTA VALITTUJA priorikertoimia
@@ -406,14 +474,15 @@ def fundamental_anchor(dates, prices, live_anchor,
         if abs(crude_adj) >= 0.0005:
             parts.append(f"Brent-EUR {crude_adj*1000:+.1f} m€/L")
 
-    # 2) päivätason momentum AIDOSTA päivähännästä
+    # 2) päivätason momentum AIDOSTA päivähännästä — slope ≤7 pisteestä on
+    # kohinainen estimaatti, joten se kutistetaan kohti nollaa
+    # (_MOM_SHRINK) ennen lisäämistä.
     mom_adj = 0.0
-    dt = _daily_tail(dates, prices, max_gap=3, min_len=4)
     if len(dt) >= 4:
         seg = [x[1] for x in dt][-7:]
         xs = np.arange(len(seg), dtype=float)
         slope = float(np.polyfit(xs, np.array(seg, float), 1)[0])
-        mom_adj = max(-0.02, min(0.02, slope))
+        mom_adj = max(-0.02, min(0.02, _MOM_SHRINK * slope))
         if abs(mom_adj) >= 0.0005:
             parts.append(f"momentum {mom_adj*1000:+.1f} m€/L")
 
@@ -466,16 +535,26 @@ def fundamental_anchor(dates, prices, live_anchor,
         parts.append(f"itsekalibrointi {bias_adj*1000:+.1f} m€/L")
 
     pred = base + crude_adj + mom_adj + wd_adj + tax_adj + bias_adj
-    # Verostep on tunnettu eksogeeninen muutos → laajenna clamppia steppin verran
+    # Verostep on tunnettu eksogeeninen muutos → laajenna clamppia steppin
+    # verran. Clamp pysyy live-hinnan ympärillä (ei vaimennetun ankkurin):
+    # ±_MAX_DAILY_MOVE on määritelty suhteessa tämän päivän hintaan.
     clamp_band = _MAX_DAILY_MOVE + abs(tax_adj)
-    pred = max(base - clamp_band, min(base + clamp_band, pred))
+    pred = max(base_live - clamp_band, min(base_live + clamp_band, pred))
 
-    # Luottamusväli — UNCALIBRATED PRIOR. Nämä ovat ennalta valittuja
-    # leveyksiä, EI mittausdatasta johdettu kattavuus: 0.012 €/L = "tyypillinen
-    # pumpun päivämuutos on tätä pienempi", 0.020 €/L = "konfliktissa
-    # leveämpi". Kalibroidaan toteumadataan kun captureita on riittävästi
-    # (laske mallin systemaattisen virheen std → asetа band ≈ k·σ).
+    # Luottamusväli — kalibroidaan toteutuneeseen RMSE:hen kun otosta on
+    # riittävästi (band ≈ 1·σ, rajattu [_FA_BAND_MIN, _FA_BAND_MAX]).
+    # Ilman otosta priorileveydet: 0.012 €/L = "tyypillinen pumpun
+    # päivämuutos on tätä pienempi", 0.020 €/L = "konfliktissa leveämpi".
     band = 0.020 if conflict else 0.012
+    fa_rec = (track_stats or {}).get("fundamental_anchor") or {}
+    fa_rmse = fa_rec.get("rmse")
+    if fa_rmse is not None and int(fa_rec.get("n") or 0) >= _BIAS_MIN_N:
+        try:
+            band = max(_FA_BAND_MIN, min(_FA_BAND_MAX, float(fa_rmse)))
+            if conflict:
+                band = max(band, 0.020)
+        except (TypeError, ValueError):
+            pass
     expl = "Ankkuri " + f"{base:.3f} €/L"
     if parts:
         expl += " + " + ", ".join(parts)
@@ -1096,10 +1175,10 @@ async def predict_tomorrow(fuel: str,
     conflict = bool(_scan_conflict(news_headlines))
     n_daily = len(_daily_tail(dates, prices, max_gap=3, min_len=4))
 
-    ma = moving_average(prices, 7, dates=dates)
-    lr = linear_regression(prices, 30, dates=dates)
-    es = exp_smoothing(prices, dates=dates)
     track_stats = (track_record or {}).get("stats")
+    ma = moving_average(prices, 7, dates=dates)
+    lr = linear_regression(prices, 30, dates=dates, track_stats=track_stats)
+    es = exp_smoothing(prices, dates=dates)
     fa = fundamental_anchor(
         dates, prices, live_today_price, brent, eur_usd,
         brent_chg, eur_usd_chg, tomorrow_weekday, conflict=conflict,
