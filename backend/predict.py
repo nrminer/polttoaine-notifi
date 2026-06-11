@@ -6,7 +6,7 @@ Antaa rinnakkaisia ennusteita huomisen hinnalle:
     - linear_regression  : pienimmän neliösumman trendi, projisoitu +1 KALENTERIPÄIVÄ
     - exp_smoothing      : Holt-tyylinen taso + trendi (päivätason häntä)
     - fundamental_anchor : live-hinta + Brent-EUR-pass-through + viikonpäivä + momentum
-    - ai_llm             : Claude Fable 5 (uutiset + geopoliittinen riski)
+    - ai_llm             : Claude Fable 5 + 10k token extended thinking (uutiset + geopoliittinen riski)
     - weekly_cycle       : viikoittainen hinnoittelurytmi (hypyt, syklivaihe)
 
 Sekä datalaatutietoinen ensemble-yhdistelmä, joka ankkuroidaan live-hintaan.
@@ -507,7 +507,8 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                          tax_events: list[dict] | None = None,
                          tax_step_eur_l: float | None = None,
                          track_record: dict | None = None) -> dict:
-    """Claude Fable 5 -ennuste. Hoitaa ETUPAINOTTEISEN geopoliittisen riskin:
+    """Claude Fable 5 -ennuste (extended thinking, 10k token budget). 
+    Hoitaa ETUPAINOTTEISEN geopoliittisen riskin:
     konflikti-/tarjontahäiriöuutiset jotka Brent ei vielä täysin hinnoittele."""
     if not os.environ.get("ANTHROPIC_AUTH_TOKEN") and not os.environ.get("ANTHROPIC_API_KEY"):
         return {"value": None, "confidence_low": None, "confidence_high": None,
@@ -862,12 +863,21 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     for model in models_to_try:
         for attempt in range(3):
             try:
+                # Enable extended thinking for Fable 5 (max reasoning)
+                thinking_config = None
+                if "fable" in model.lower():
+                    thinking_config = {
+                        "type": "enabled",
+                        "budget_tokens": 10000
+                    }
+                
                 text = await send_message(
                     system_message=system_message,
                     user_message=prompt,
                     model=model,
                     max_tokens=1200,
                     temperature=0.2,
+                    thinking=thinking_config,
                 )
 
                 raw = text.strip()

@@ -41,6 +41,7 @@ async def send_message(
     max_tokens: int = 1200,
     temperature: float = 0.2,
     timeout_seconds: int = 90,
+    thinking: dict | None = None,
 ) -> str:
     """Send one Messages API request and return the text response."""
     return await asyncio.to_thread(
@@ -51,6 +52,7 @@ async def send_message(
         max_tokens=max_tokens,
         temperature=temperature,
         timeout_seconds=timeout_seconds,
+        thinking=thinking,
     )
 
 
@@ -89,6 +91,7 @@ def _send_message_sync(
     max_tokens: int,
     temperature: float,
     timeout_seconds: int,
+    thinking: dict | None = None,
 ) -> str:
     payload = {
         "model": model,
@@ -97,6 +100,10 @@ def _send_message_sync(
         "system": system_message,
         "messages": [{"role": "user", "content": user_message}],
     }
+    
+    # Add extended thinking for reasoning-capable models
+    if thinking is not None:
+        payload["thinking"] = thinking
 
     url = _endpoint()
     response = requests.post(

@@ -10,7 +10,7 @@
   push-notifier. UI in Finnish.
 - **Stack**: React (CRA) on Vercel · FastAPI + Motor (async MongoDB) on Railway
   · MongoDB Atlas (free M0).
-- **AI**: Claude Fable 5 via Anthropic-compatible proxy
+- **AI**: Claude Fable 5 with extended thinking (10k token reasoning budget) via Anthropic-compatible proxy
   (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`) — invoked from
   `backend/predict.py` for the AI-prediction method.
 - **Data inputs**: **LIVE-GATHERED ONLY** — scrapes of `polttoaine.net` +
@@ -35,7 +35,7 @@ tell us — no hard-coded ±N ¢/L claim). The app:
    Vantaa, Tampere, Turku, Lahti) with cheapest **and average** per city.
 2. Predicts **tomorrow's** cheapest using **5 parallel methods** (MA, LR, Holt
    exp.smoothing, **fundamental_anchor** = live + Brent-EUR pass-through +
-   weekday + momentum, and Claude Fable 5 with geopolitical-risk handling) →
+   weekday + momentum, and Claude Fable 5 with extended thinking + geopolitical-risk handling) →
    a **data-quality-aware ensemble clamped to ±0.06 €/L of the live price**.
 3. Captures actuals at **14:00 and 21:00 Helsinki** (`SCHEDULED_HOURS` in
    `tracker.py`) and tracks prediction-vs-actual accuracy against **real
@@ -203,7 +203,7 @@ Grouped logically. All routes are prefixed `/api`.
                     │      pass-through + weekday + momentum,     │
                     │      clamped ±0.06 €/L                      │
                     └─▶ ai_llm_predict()  Claude + geo-risk      │
-                          │  (Anthropic proxy, Fable 5 →         │
+                          │  (Anthropic proxy, Fable 5 + 10k reasoning →  │
                           │   Opus 4.7 → 4.6 → Sonnet/Haiku 4.5)  │
                           ▼
    ensemble = data-quality-aware weights (thin daily data → lean on
