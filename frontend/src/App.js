@@ -1,48 +1,49 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Fuel,
-  RefreshCw,
-  ArrowUpRight,
-  ArrowDownRight,
-  ArrowDown,
-  Minus,
-  Clock,
-  Globe,
-  Sun,
-  Moon,
   Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Bell,
   CheckCircle2,
+  Clock,
   Database,
+  Fuel,
+  Gauge,
+  Globe,
   MapPin,
+  Minus,
+  Moon,
+  Newspaper,
+  RefreshCw,
   ShieldCheck,
+  Sun,
+  TrendingUp,
 } from "lucide-react";
 
 import "./App.css";
-import { Card, CardLabel, StatNumber, DeltaBadge } from "./components/Card";
+import { Card, CardLabel } from "./components/Card";
 import FuelToggle from "./components/FuelToggle";
 import TrackingChart from "./components/TrackingChart";
 import CityAverageChart from "./components/CityAverageChart";
 import MethodTable from "./components/MethodTable";
-
 import AiAnalysis from "./components/AiAnalysis";
 import RegionalGrid from "./components/RegionalGrid";
 import AccuracyTracker from "./components/AccuracyTracker";
 import FactorsCard from "./components/FactorsCard";
+import NewsCard from "./components/NewsCard";
 import { ConfidenceStrip } from "./components/ConfidenceStrip";
 import {
-  fetchCurrent,
-  fetchHistory,
-  fetchFactors,
-  runPrediction,
-  fetchLatestPrediction,
-  fetchRegional,
   fetchAccuracy,
+  fetchCurrent,
+  fetchFactors,
+  fetchHistory,
+  fetchLatestPrediction,
   fetchNews,
+  fetchRegional,
   fetchTrackHistory,
 } from "./lib/api";
-import { fmtDateTimeFi, fmtDateFi } from "./lib/utils";
-import NewsCard from "./components/NewsCard";
+import { fmtDateFi, fmtDateTimeFi, fmtPrice } from "./lib/utils";
 import { useRealtimeUpdates } from "./hooks/useRealtimeUpdates";
 
 const CHART_CITIES = [
@@ -54,148 +55,385 @@ const CHART_CITIES = [
   "Turku",
   "Lahti",
 ];
+const CITY_AVERAGE_CITIES = CHART_CITIES.filter((city) => city !== "Suomi");
+
 const CHART_RANGES = [
-  { value: 14, label: "14 PV" },
-  { value: 30, label: "30 PV" },
+  { value: 14, label: "14 pv" },
+  { value: 30, label: "30 pv" },
   { value: 90, label: "Kaikki" },
 ];
+
 const CHART_SLOTS = [
   { value: "all", label: "Molemmat" },
   { value: 14, label: "14:00" },
   { value: 21, label: "21:00" },
 ];
-const HISTORY_RANGE_DAYS = 90;
 
-/* Reusable filter button used in chart controls.
-   h-9 (36px) + py implicit hit area pushes effective tap target near 44px;
-   on touch devices users get the bigger area without visual bulk. */
+const HISTORY_RANGE_DAYS = 90;
+const IMPORTANT_NEWS_HOLD_HOURS = 24;
+const NEWS_DISPLAY_LIMIT = 12;
+
+const METHOD_RAIL = [
+  { key: "fundamental_anchor", label: "Ankkuri", detail: "Brent + FX" },
+  { key: "ai_llm", label: "Uutiset", detail: "Claude" },
+  { key: "exp_smoothing", label: "Holt", detail: "tasoitus" },
+  { key: "linear_regression", label: "Regressio", detail: "trendi" },
+  { key: "moving_average", label: "MA7", detail: "keskiarvo" },
+];
+
+const SOURCE_ROWS = [
+  { name: "tankille.fi", role: "ensisijainen kaupunkilähde", tone: "green" },
+  { name: "polttoaine.net", role: "ristitarkistus", tone: "blue" },
+  { name: "Yahoo Finance", role: "Brent + EUR/USD", tone: "cyan" },
+  { name: "RSS-uutiset", role: "AI-konteksti", tone: "amber" },
+];
+
+function newsIdentity(item) {
+  const raw = item?.link || item?.title || "";
+  return raw.toString().trim().toLowerCase().slice(0, 220);
+}
+
+function isRetainedImportantNews(item) {
+  const age = Number(item?.age_hours ?? 999);
+  return (
+    Number.isFinite(age) &&
+    age <= IMPORTANT_NEWS_HOLD_HOURS &&
+    (item?.pinned_important || item?.breaking || Number(item?.severity || 0) >= 4)
+  );
+}
+
+function mergeNewsItems(predictionItems = [], liveItems = []) {
+  const seen = new Set();
+  const merged = [];
+  const sources = [
+    ...liveItems.filter(isRetainedImportantNews),
+    ...predictionItems.filter(isRetainedImportantNews),
+    ...predictionItems,
+    ...liveItems,
+  ];
+
+  for (const item of sources) {
+    const key = newsIdentity(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+
+  return merged.slice(0, NEWS_DISPLAY_LIMIT);
+}
+
 function FilterBtn({ active, onClick, children, testId }) {
   return (
     <button
       data-testid={testId}
       onClick={onClick}
       type="button"
-      className={`px-3 h-9 min-w-[2.5rem] font-mono text-[11px] font-semibold rounded-md border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-1 ${
-        active
-          ? "bg-brand text-white border-brand shadow-sm"
-          : "bg-transparent text-secondary border-line hover:border-brand/50 hover:text-ink"
-      }`}
+      className={`filter-btn ${active ? "filter-btn--active" : ""}`}
     >
       {children}
     </button>
   );
 }
 
-/* Method abbreviations used in the dark hero prediction card.
-   Kept short so the card reads as an operator view, not marketing copy. */
-const DARK_METHODS = [
-  { key: "fundamental_anchor", label: "ANKKURI" },
-  { key: "ai_llm",             label: "UUTISET" },
-  { key: "exp_smoothing",      label: "HOLT" },
-  { key: "linear_regression",  label: "REGR." },
-  { key: "moving_average",     label: "MA·7" },
-];
-
-function deltaColorDark(d) {
-  if (d == null) return "text-slate-500";
-  if (d > 0.0005)  return "text-red-300";
-  if (d < -0.0005) return "text-emerald-300";
-  return "text-slate-400";
-}
-function deltaFmtSnt(d) {
-  if (d == null) return "—";
-  const v = d * 100;
-  const sign = v > 0 ? "+" : v < 0 ? "−" : "";
-  return `${sign}${Math.abs(v).toFixed(1)} snt`;
+function formatCents(delta) {
+  if (delta === null || delta === undefined || isNaN(delta)) return "—";
+  const cents = Number(delta) * 100;
+  if (Math.abs(cents) < 0.05) return "0.0 snt";
+  return `${cents > 0 ? "+" : "−"}${Math.abs(cents).toFixed(1)} snt`;
 }
 
-const LANDING_SOURCES = [
-  {
-    name: "tankille.fi",
-    label: "ensisijainen kaupunkidata",
-    detail: "halvin + keskiarvo",
-    accent: "emerald",
-  },
-  {
-    name: "polttoaine.net",
-    label: "ristitarkistus",
-    detail: "kansallinen otanta",
-    accent: "amber",
-  },
-  {
-    name: "Yahoo Finance",
-    label: "markkinatekijät",
-    detail: "Brent + EUR/USD",
-    accent: "sky",
-  },
-  {
-    name: "Omat mittaukset",
-    label: "toteumavertailu",
-    detail: "klo 14 + 21",
-    accent: "slate",
-  },
-];
+function formatPercent(value) {
+  if (value === null || value === undefined || isNaN(value)) return "—";
+  return `${Number(value).toFixed(0)}%`;
+}
 
-function LandingMetric({ icon: Icon, label, value, detail, testId }) {
+function getNextDay(isoDate) {
+  if (!isoDate) return null;
+  const d = new Date(`${isoDate.slice(0, 10)}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatSlotLabel(point) {
+  if (!point?.date) return "ei aikaleimaa";
+  const date = fmtDateFi(point.date);
+  const hour = point.hour != null ? `klo ${String(point.hour).padStart(2, "0")}:00` : "";
+  return [date, hour].filter(Boolean).join(" · ");
+}
+
+function directionFor(delta) {
+  if (delta === null || delta === undefined || isNaN(delta)) {
+    return { label: "odottaa dataa", tone: "neutral", Icon: Minus };
+  }
+  if (delta > 0.0005) return { label: `kallistuu ${formatCents(delta)}/L`, tone: "up", Icon: ArrowUpRight };
+  if (delta < -0.0005) return { label: `halpenee ${formatCents(delta)}/L`, tone: "down", Icon: ArrowDownRight };
+  return { label: "tasainen", tone: "neutral", Icon: Minus };
+}
+
+function DirectionPill({ delta }) {
+  const { Icon, label, tone } = directionFor(delta);
   return (
-    <motion.div
-      data-testid={testId}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: "easeOut" }}
-      className="landing-metric"
-    >
-      <div className="landing-metric-icon">
-        <Icon size={15} />
-      </div>
-      <div className="min-w-0">
-        <div className="landing-metric-label">{label}</div>
-        <div className="landing-metric-value">{value}</div>
-        {detail && <div className="landing-metric-detail">{detail}</div>}
-      </div>
-    </motion.div>
+    <span data-testid="direction-pill" className={`direction-pill direction-pill--${tone}`}>
+      <Icon size={14} strokeWidth={2.6} />
+      {label}
+    </span>
   );
 }
 
-function LandingSourceRow({ source, delay = 0 }) {
+function StatusChip({ icon: Icon, label, tone = "blue", testId }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.42, ease: "easeOut" }}
-      className={`landing-source-row landing-source-${source.accent}`}
-    >
-      <span className="landing-source-dot" />
-      <div className="min-w-0 flex-1">
-        <div className="landing-source-name">{source.name}</div>
-        <div className="landing-source-label">{source.label}</div>
-      </div>
-      <span className="landing-source-detail">{source.detail}</span>
-    </motion.div>
+    <span data-testid={testId} className={`status-chip status-chip--${tone}`}>
+      {Icon && <Icon size={13} strokeWidth={2.4} />}
+      {label}
+    </span>
   );
 }
 
-function LandingBars({ series }) {
-  const bars = series.length
-    ? series
-    : Array.from({ length: 12 }, (_, i) => ({
-        value: null,
-        height: 34 + ((i * 17) % 44),
-        muted: true,
-      }));
+function MetricTile({ icon: Icon, label, value, detail, tone = "blue", testId }) {
+  return (
+    <div className={`metric-tile metric-tile--${tone}`} data-testid={testId}>
+      <div className="metric-tile__icon">
+        <Icon size={16} strokeWidth={2.4} />
+      </div>
+      <div className="metric-tile__body">
+        <div className="metric-tile__label">{label}</div>
+        <div className="metric-tile__value">{value}</div>
+        {detail && <div className="metric-tile__detail">{detail}</div>}
+      </div>
+    </div>
+  );
+}
+
+function DataPlane({ current, prediction, tracking, sourceCount, series }) {
+  const [activeIndex, setActiveIndex] = useState(null);
+  const captureRows = tracking?.rows?.length ?? 0;
+  const dataSources = prediction?.data_sources;
+  const confidence = prediction?.prediction_confidence;
+  const latest = current?.fetched_at || confidence?.most_recent_scrape;
+  const visibleSeries = series.slice(-14);
+  const latestPoint = visibleSeries[visibleSeries.length - 1] ?? null;
+  const firstPoint = visibleSeries[0]?.value ?? null;
+  const lastPoint = visibleSeries[visibleSeries.length - 1]?.value ?? null;
+  const latestMeasurementDate = latestPoint?.date ? fmtDateFi(latestPoint.date) : null;
+  const trendDelta = firstPoint != null && lastPoint != null ? lastPoint - firstPoint : null;
+  const values = visibleSeries.map((point) => point.value).filter(Number.isFinite);
+  const activePoint =
+    activeIndex != null && visibleSeries[activeIndex]?.value != null
+      ? visibleSeries[activeIndex]
+      : null;
+  const activePrev =
+    activeIndex != null && activeIndex > 0 && visibleSeries[activeIndex - 1]?.value != null
+      ? visibleSeries[activeIndex - 1]
+      : null;
+  const activeDelta =
+    activePoint && activePrev ? activePoint.value - activePrev.value : null;
+  const minValue = values.length ? Math.min(...values) : null;
+  const maxValue = values.length ? Math.max(...values) : null;
+  const sampleLabel = values.length ? `${values.length} viime mittauksessa` : "viime mittauksissa";
+  const trendLabel =
+    trendDelta == null || values.length < 2
+      ? "odottaa mittauksia"
+      : trendDelta > 0.0005
+      ? `${formatCents(trendDelta)} ${sampleLabel}`
+      : trendDelta < -0.0005
+      ? `${formatCents(trendDelta)} ${sampleLabel}`
+      : `vakaa ${sampleLabel}`;
 
   return (
-    <div className="landing-bars" aria-hidden="true">
-      {bars.map((bar, idx) => (
-        <motion.span
-          key={`${bar.value ?? "pending"}-${idx}`}
-          initial={{ scaleY: 0.35, opacity: 0 }}
-          animate={{ scaleY: 1, opacity: bar.muted ? 0.28 : 1 }}
-          transition={{ delay: idx * 0.035, duration: 0.38, ease: "easeOut" }}
-          style={{ height: `${bar.height}%` }}
-          className={bar.muted ? "is-muted" : ""}
+    <aside className="data-plane" data-testid="landing-data-plane">
+      <div className="data-plane__header">
+        <div>
+          <div className="mono-label">Datan tila</div>
+          <h2>Live-ankkuri</h2>
+        </div>
+        <StatusChip
+          icon={current?.stale ? Clock : CheckCircle2}
+          label={current?.stale ? "välimuisti" : "tuore"}
+          tone={current?.stale ? "amber" : "green"}
         />
-      ))}
+      </div>
+
+      <div className="data-plane__grid">
+        <div>
+          <span>Lähteet</span>
+          <strong>{sourceCount ?? "—"}</strong>
+        </div>
+        <div>
+          <span>Asemat</span>
+          <strong>{current?.stations_count ?? "—"}</strong>
+        </div>
+        <div>
+          <span>Mittaukset</span>
+          <strong>{captureRows}</strong>
+        </div>
+        <div>
+          <span>Päiväpisteet</span>
+          <strong>{dataSources?.combined_points ?? prediction?.n_daily_points ?? "—"}</strong>
+        </div>
+      </div>
+
+      <div className="micro-trend" data-testid="data-plane-trend">
+        <div className="micro-trend__head">
+          <div>
+            <span>Viimeiset mittaukset</span>
+            <strong className={trendDelta > 0 ? "is-up" : trendDelta < 0 ? "is-down" : ""}>
+              {trendLabel}
+            </strong>
+          </div>
+          <div className="micro-trend__latest tnum">
+            {lastPoint != null ? `${fmtPrice(lastPoint)} €/L` : "—"}
+            {latestMeasurementDate && <small>{latestMeasurementDate}</small>}
+          </div>
+        </div>
+        <div
+          className="micro-chart"
+          role="img"
+          aria-label={
+            lastPoint != null
+              ? `Viimeisten mittausten hintakehitys. Viimeisin mittaus ${latestMeasurementDate || ""}: ${fmtPrice(lastPoint)} euroa litralta.`
+              : "Viimeisten mittausten hintakehitys odottaa dataa."
+          }
+        >
+          {(visibleSeries.length
+            ? visibleSeries
+            : Array.from({ length: 14 }, (_, i) => ({ height: 24 + ((i * 13) % 54), muted: true }))
+          ).map((bar, idx) => (
+            <button
+              type="button"
+              key={`${bar.value ?? "empty"}-${idx}`}
+              className={`${bar.muted ? "is-muted" : ""} ${activeIndex === idx ? "is-active" : ""}`}
+              style={{ height: `${bar.height}%` }}
+              title={bar.value != null ? `${fmtPrice(bar.value)} €/L` : "ei dataa"}
+              aria-label={
+                bar.value != null
+                  ? `${formatSlotLabel(bar)}, ${fmtPrice(bar.value)} euroa litralta`
+                  : "ei dataa"
+              }
+              onMouseEnter={() => setActiveIndex(idx)}
+              onFocus={() => setActiveIndex(idx)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onBlur={() => setActiveIndex(null)}
+            />
+          ))}
+          {activePoint && (
+            <div className="micro-chart__tooltip" role="tooltip">
+              <span>{formatSlotLabel(activePoint)}</span>
+              <strong>{fmtPrice(activePoint.value)} €/L</strong>
+              <small className={activeDelta > 0 ? "is-up" : activeDelta < 0 ? "is-down" : ""}>
+                {activeDelta != null ? `${formatCents(activeDelta)} edellisestä` : "ensimmäinen piste"}
+              </small>
+            </div>
+          )}
+        </div>
+        <div className="micro-trend__scale">
+          <span>{minValue != null ? fmtPrice(minValue) : "—"}</span>
+          <span>{maxValue != null ? fmtPrice(maxValue) : "—"}</span>
+        </div>
+      </div>
+
+      <div className="source-stack">
+        {SOURCE_ROWS.map((source) => (
+          <div key={source.name} className={`source-row source-row--${source.tone}`}>
+            <span />
+            <div>
+              <strong>{source.name}</strong>
+              <small>{source.role}</small>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="data-plane__footer">
+        <Clock size={13} />
+        {latest ? fmtDateTimeFi(latest) : "odottaa ensimmäistä onnistunutta hakua"}
+      </div>
+    </aside>
+  );
+}
+
+function MethodRail({ prediction, anchor }) {
+  return (
+    <div className="method-rail" data-testid="dark-method-grid">
+      <div className="method-rail__head">
+        <span>Menetelmä</span>
+        <span>Arvio</span>
+        <span>Δ live</span>
+        <span>Paino</span>
+      </div>
+      {METHOD_RAIL.map((method) => {
+        const row = prediction?.methods?.[method.key] || {};
+        const value = row.value;
+        const delta = value != null && anchor != null ? value - anchor : null;
+        const weight = prediction?.ensemble?.weights?.[method.key];
+        const weightPct = weight != null ? Math.max(0, Math.min(100, Math.round(weight * 100))) : null;
+        return (
+          <div key={method.key} className="method-rail__row">
+            <div>
+              <strong>{method.label}</strong>
+              <small>{method.detail}</small>
+            </div>
+            <span className="tnum">{value != null ? fmtPrice(value) : "—"}</span>
+            <span className={`tnum method-rail__delta ${delta > 0 ? "is-up" : delta < 0 ? "is-down" : ""}`}>
+              {formatCents(delta)}
+            </span>
+            <span className="method-meter" title={weightPct != null ? `${weightPct}%` : "ei painoa"}>
+              <i style={{ width: `${weightPct ?? 0}%` }} />
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TrackingFooter({ summary, fuel }) {
+  if (!summary) return null;
+  const { n_compared, mae, within_2c_pct, today_actual, tomorrow_prediction, today_date } = summary;
+  return (
+    <div data-testid="tracking-footer" className="tracking-footer">
+      <MetricTile
+        icon={Fuel}
+        label={`Tänään ${today_date ? fmtDateFi(today_date) : ""}`}
+        value={
+          <>
+            <span>{today_actual != null ? fmtPrice(today_actual) : "—"}</span>
+            <small>€/L</small>
+          </>
+        }
+        detail="viimeisin toteuma"
+        tone="blue"
+      />
+      <MetricTile
+        icon={TrendingUp}
+        label={`Huominen ${fuel}`}
+        value={
+          <>
+            <span data-testid="tomorrow-cheapest-prediction">{tomorrow_prediction != null ? fmtPrice(tomorrow_prediction) : "—"}</span>
+            <small>€/L</small>
+          </>
+        }
+        detail="tallennettu ennuste"
+        tone="cyan"
+      />
+      <MetricTile
+        icon={Gauge}
+        label="Keskivirhe"
+        value={
+          <>
+            <span>{mae != null ? `±${(mae * 100).toFixed(1)}` : "—"}</span>
+            <small>snt</small>
+          </>
+        }
+        detail={n_compared > 0 ? `${n_compared} vertailua` : "kerää dataa"}
+        tone="green"
+      />
+      <MetricTile
+        icon={ShieldCheck}
+        label="Osumat ±2 snt"
+        value={<span>{within_2c_pct != null ? formatPercent(within_2c_pct) : "—"}</span>}
+        detail="toteumaan nähden"
+        tone="amber"
+      />
     </div>
   );
 }
@@ -213,12 +451,13 @@ export default function App() {
   const [chartCity, setChartCity] = useState("Suomi");
   const [chartRange, setChartRange] = useState(90);
   const [chartSlot, setChartSlot] = useState("all");
+  const [cityAverageCities, setCityAverageCities] = useState(CITY_AVERAGE_CITIES);
   const [loading, setLoading] = useState({});
   const [error, setError] = useState(null);
   const [theme, setTheme] = useState(() => {
     if (typeof window === "undefined") return "dark";
-    const t = window.localStorage.getItem("theme");
-    return t === "light" || t === "dark" ? t : "dark";
+    const saved = window.localStorage.getItem("theme");
+    return saved === "light" || saved === "dark" ? saved : "dark";
   });
 
   useEffect(() => {
@@ -227,42 +466,45 @@ export default function App() {
     try {
       window.localStorage.setItem("theme", theme);
     } catch (e) {
-      /* ignore quota / privacy-mode errors */
+      // Ignore storage errors in private browsing modes.
     }
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", isDark ? "#0A0F1C" : "#FFFFFF");
+    if (meta) meta.setAttribute("content", isDark ? "#0e1320" : "#f8fafc");
   }, [theme]);
 
-  const toggleTheme = useCallback(
-    () => setTheme((t) => (t === "dark" ? "light" : "dark")),
-    []
+  const setLoad = useCallback((key, value) => {
+    setLoading((state) => ({ ...state, [key]: value }));
+  }, []);
+
+  const loadCurrent = useCallback(
+    async (selectedFuel) => {
+      setLoad("current", true);
+      try {
+        const { data } = await fetchCurrent(selectedFuel);
+        setCurrent(data);
+      } catch (e) {
+        console.warn("current failed", e);
+      } finally {
+        setLoad("current", false);
+      }
+    },
+    [setLoad]
   );
 
-  const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
-
-  const loadCurrent = useCallback(async (f) => {
-    setLoad("current", true);
-    try {
-      const { data } = await fetchCurrent(f);
-      setCurrent(data);
-    } catch (e) {
-      console.warn("current failed", e);
-    } finally {
-      setLoad("current", false);
-    }
-  }, []);
-
-  const loadHistory = useCallback(async (f, r) => {
-    setLoad("history", true);
-    try {
-      const { data } = await fetchHistory(f, "Suomi", r);
-      setHistory(data.rows || []);
-    } catch (e) {
-      console.warn("history failed", e);
-    } finally {
-      setLoad("history", false);
-    }
-  }, []);
+  const loadHistory = useCallback(
+    async (selectedFuel, days) => {
+      setLoad("history", true);
+      try {
+        const { data } = await fetchHistory(selectedFuel, "Suomi", days);
+        setHistory(data.rows || []);
+      } catch (e) {
+        console.warn("history failed", e);
+      } finally {
+        setLoad("history", false);
+      }
+    },
+    [setLoad]
+  );
 
   const loadFactors = useCallback(async () => {
     setLoad("factors", true);
@@ -274,79 +516,81 @@ export default function App() {
     } finally {
       setLoad("factors", false);
     }
-  }, []);
+  }, [setLoad]);
 
-  const loadPrediction = useCallback(async (f, fresh = false) => {
-    setLoad("prediction", true);
-    try {
-      if (fresh) {
-        const { data } = await runPrediction(f, "Suomi");
-        setPrediction(data);
-      } else {
-        const { data } = await fetchLatestPrediction(f, "Suomi");
+  const loadPrediction = useCallback(
+    async (selectedFuel) => {
+      setLoad("prediction", true);
+      try {
+        const { data } = await fetchLatestPrediction(selectedFuel, "Suomi");
         if (data.available) {
           setPrediction({
-            fuel: data.fuel,
-            region: data.region,
-            generated_at: data.generated_at,
-            target_date: data.target_date,
-            current_price: data.current_price,
-            live_anchor: data.live_anchor,
-            ensemble: data.ensemble,
-            methods: data.methods,
-            brent: data.brent,
-            eur_usd: data.eur_usd,
-            data_sources: data.data_sources,
-            // rikkaampi konteksti (taustamuuttujat + self-training)
-            conflict_signal: data.conflict_signal,
-            calendar_event: data.calendar_event,
-            n_daily_points: data.n_daily_points,
-            product_label: data.product_label,
-            product_usd_gal: data.product_usd_gal,
-            product_chg: data.product_chg,
-            crack_eur_l: data.crack_eur_l,
-            tax_events: data.tax_events,
-            tax_step_eur_l: data.tax_step_eur_l,
-            self_training: data.self_training,
-            news_headlines: data.news_headlines,
-            // NEW: confidence metadata
-            prediction_confidence: data.prediction_confidence,
+              fuel: data.fuel,
+              region: data.region,
+              generated_at: data.generated_at,
+              target_date: data.target_date,
+              current_price: data.current_price,
+              live_anchor: data.live_anchor,
+              ensemble: data.ensemble,
+              methods: data.methods,
+              brent: data.brent,
+              eur_usd: data.eur_usd,
+              data_sources: data.data_sources,
+              conflict_signal: data.conflict_signal,
+              calendar_event: data.calendar_event,
+              n_daily_points: data.n_daily_points,
+              product_label: data.product_label,
+              product_usd_gal: data.product_usd_gal,
+              product_chg: data.product_chg,
+              crack_eur_l: data.crack_eur_l,
+              tax_events: data.tax_events,
+              tax_step_eur_l: data.tax_step_eur_l,
+              self_training: data.self_training,
+              news_headlines: data.news_headlines,
+              prediction_confidence: data.prediction_confidence,
           });
         } else {
           setPrediction(null);
         }
+      } catch (e) {
+        console.warn("prediction failed", e);
+        setError(e.response?.data?.detail || "Ennusteen ajaminen epäonnistui");
+      } finally {
+        setLoad("prediction", false);
       }
-    } catch (e) {
-      console.warn("prediction failed", e);
-      setError(e.response?.data?.detail || "Ennusteen ajaminen epäonnistui");
-    } finally {
-      setLoad("prediction", false);
-    }
-  }, []);
+    },
+    [setLoad]
+  );
 
-  const loadRegional = useCallback(async (f) => {
-    setLoad("regional", true);
-    try {
-      const { data } = await fetchRegional(f);
-      setRegional(data);
-    } catch (e) {
-      console.warn("regional failed", e);
-    } finally {
-      setLoad("regional", false);
-    }
-  }, []);
+  const loadRegional = useCallback(
+    async (selectedFuel) => {
+      setLoad("regional", true);
+      try {
+        const { data } = await fetchRegional(selectedFuel);
+        setRegional(data);
+      } catch (e) {
+        console.warn("regional failed", e);
+      } finally {
+        setLoad("regional", false);
+      }
+    },
+    [setLoad]
+  );
 
-  const loadAccuracy = useCallback(async (f) => {
-    setLoad("accuracy", true);
-    try {
-      const { data } = await fetchAccuracy(f, "Suomi", 30);
-      setAccuracy(data);
-    } catch (e) {
-      console.warn("accuracy failed", e);
-    } finally {
-      setLoad("accuracy", false);
-    }
-  }, []);
+  const loadAccuracy = useCallback(
+    async (selectedFuel) => {
+      setLoad("accuracy", true);
+      try {
+        const { data } = await fetchAccuracy(selectedFuel, "Suomi", 30);
+        setAccuracy(data);
+      } catch (e) {
+        console.warn("accuracy failed", e);
+      } finally {
+        setLoad("accuracy", false);
+      }
+    },
+    [setLoad]
+  );
 
   const loadNews = useCallback(async () => {
     setLoad("news", true);
@@ -358,70 +602,64 @@ export default function App() {
     } finally {
       setLoad("news", false);
     }
-  }, []);
+  }, [setLoad]);
 
-  const loadTracking = useCallback(async (f) => {
-    setLoad("tracking", true);
-    try {
-      const { data } = await fetchTrackHistory(f, 90);
-      setTracking(data);
-    } catch (e) {
-      console.warn("tracking failed", e);
-    } finally {
-      setLoad("tracking", false);
-    }
-  }, []);
+  const loadTracking = useCallback(
+    async (selectedFuel) => {
+      setLoad("tracking", true);
+      try {
+        const { data } = await fetchTrackHistory(selectedFuel, 90);
+        setTracking(data);
+      } catch (e) {
+        console.warn("tracking failed", e);
+      } finally {
+        setLoad("tracking", false);
+      }
+    },
+    [setLoad]
+  );
 
-  // Real-time updates via SSE - defined AFTER all load functions
-  const handleRealtimeUpdate = useCallback((update) => {
-    console.log('[App] Real-time update received:', update);
-    
-    if (update.type === 'prediction') {
-      // Prediction was updated - reload prediction and tracking data
-      const updatedFuel = update.data?.fuel;
-      if (updatedFuel === fuel) {
+  const handleRealtimeUpdate = useCallback(
+    (update) => {
+      const payloadFuel = update.data?.fuel || update.data?.fuels?.[0]?.fuel;
+      if (payloadFuel && payloadFuel !== fuel) return;
+
+      if (update.type === "prediction") {
         loadPrediction(fuel, false);
         loadTracking(fuel);
-      }
-    } else if (update.type === 'correction') {
-      // Data was corrected - reload everything for affected fuel
-      const correctedFuel = update.data?.fuel || update.data?.fuels?.[0]?.fuel;
-      if (correctedFuel === fuel) {
+      } else if (update.type === "capture") {
+        loadCurrent(fuel);
+        loadTracking(fuel);
+      } else if (update.type === "correction") {
         loadCurrent(fuel);
         loadHistory(fuel, HISTORY_RANGE_DAYS);
         loadPrediction(fuel, false);
         loadTracking(fuel);
         loadAccuracy(fuel);
       }
-    } else if (update.type === 'capture') {
-      // New capture - reload current prices and tracking
-      const capturedFuel = update.data?.fuel;
-      if (capturedFuel === fuel) {
-        loadCurrent(fuel);
-        loadTracking(fuel);
-      }
-    }
-  }, [fuel, loadPrediction, loadTracking, loadCurrent, loadHistory, loadAccuracy]);
+    },
+    [fuel, loadAccuracy, loadCurrent, loadHistory, loadPrediction, loadTracking]
+  );
 
-  useRealtimeUpdates(handleRealtimeUpdate);
+  const realtime = useRealtimeUpdates(handleRealtimeUpdate);
 
   useEffect(() => {
-    (async () => {
-      await Promise.all([
-        loadCurrent(fuel),
-        loadHistory(fuel, HISTORY_RANGE_DAYS),
-        loadFactors(),
-        loadPrediction(fuel, false),
-        loadRegional(fuel),
-        loadAccuracy(fuel),
-        loadNews(),
-        loadTracking(fuel),
-      ]);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fuel]);
+    setError(null);
+    Promise.all([
+      loadCurrent(fuel),
+      loadHistory(fuel, HISTORY_RANGE_DAYS),
+      loadFactors(),
+      loadPrediction(fuel, false),
+      loadRegional(fuel),
+      loadAccuracy(fuel),
+      loadNews(),
+      loadTracking(fuel),
+    ]);
+  }, [fuel, loadAccuracy, loadCurrent, loadFactors, loadHistory, loadNews, loadPrediction, loadRegional, loadTracking]);
 
-  const handleRefreshAll = async () => {
+  const isLoading = Object.values(loading).some(Boolean);
+
+  const handleRefreshAll = useCallback(async () => {
     setError(null);
     await Promise.all([
       loadCurrent(fuel),
@@ -431,113 +669,140 @@ export default function App() {
       loadTracking(fuel),
       loadNews(),
     ]);
-  };
+  }, [fuel, loadCurrent, loadFactors, loadHistory, loadNews, loadRegional, loadTracking]);
+
+  const allCityAveragesSelected = cityAverageCities.length === CITY_AVERAGE_CITIES.length;
+  const toggleCityAverageCity = useCallback((city) => {
+    setCityAverageCities((selected) => {
+      if (selected.includes(city)) {
+        return selected.length > 1 ? selected.filter((item) => item !== city) : selected;
+      }
+      return CITY_AVERAGE_CITIES.filter((item) => item === city || selected.includes(item));
+    });
+  }, []);
 
   const todayMin = current?.national_min;
   const cheapAvg = current?.cheap_sample_avg;
-  const tomorrowCheapest = tracking?.summary?.tomorrow_prediction;
-  const cheapestDelta = useMemo(() => {
-    if (todayMin == null) return null;
-    const rows = tracking?.rows || [];
-    if (rows.length < 2) return null;
-    const prev = rows[rows.length - 2];
-    if (prev?.actual_cheapest == null) return null;
-    return todayMin - prev.actual_cheapest;
-  }, [todayMin, tracking]);
-  const tomorrowVal = tomorrowCheapest;
-  const tomorrowDelta = tomorrowVal != null && todayMin != null ? tomorrowVal - todayMin : null;
+  const forecastAnchor =
+    prediction?.current_price ?? prediction?.live_anchor ?? cheapAvg ?? todayMin ?? null;
+  const tomorrowVal =
+    prediction?.ensemble?.value ?? tracking?.summary?.tomorrow_prediction ?? null;
+  const tomorrowDelta =
+    tomorrowVal != null && forecastAnchor != null ? tomorrowVal - forecastAnchor : null;
+  const targetDate =
+    prediction?.target_date || getNextDay(tracking?.summary?.today_date) || null;
+
+  const cheapestCity = useMemo(() => {
+    const regionalRows = regional?.rows || [];
+    const regionalWinner = regionalRows
+      .filter((row) => row.price != null)
+      .sort((a, b) => a.price - b.price)[0];
+    if (regionalWinner?.region) return regionalWinner.region;
+
+    if (!current?.by_city) return null;
+    const entries = Object.entries(current.by_city)
+      .filter(([, value]) => value?.min != null)
+      .sort((a, b) => a[1].min - b[1].min);
+    return entries[0]?.[0] || null;
+  }, [current, regional]);
+
+  const sourceCount = useMemo(() => {
+    if (current?.stations?.length) {
+      return new Set(current.stations.map((station) => station.source).filter(Boolean)).size;
+    }
+    const citySources = Object.values(current?.by_city || {}).flatMap((city) => city.sources || []);
+    if (citySources.length) return new Set(citySources.map((source) => source.source).filter(Boolean)).size;
+    return null;
+  }, [current]);
+
+  const landingSeries = useMemo(() => {
+    const trackerPoints = (tracking?.rows || [])
+      .filter((row) => row.actual_cheapest != null)
+      .slice(-14)
+      .map((row) => ({
+        value: Number(row.actual_cheapest),
+        date: row.date,
+        hour: row.hour,
+      }))
+      .filter((point) => Number.isFinite(point.value));
+    const historyPoints = (history || [])
+      .slice(-14)
+      .map((row) => ({
+        value: Number(row.price),
+        date: row.date || row.ts?.slice(0, 10),
+        hour: row.hour,
+      }))
+      .filter((point) => Number.isFinite(point.value));
+    const points = trackerPoints.length >= 3 ? trackerPoints : historyPoints;
+    if (!points.length) return [];
+    const values = points.map((point) => point.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(max - min, 0.001);
+    return points.map((point) => ({
+      ...point,
+      height: 18 + ((point.value - min) / span) * 74,
+    }));
+  }, [history, tracking]);
 
   const filteredTrackingRows = useMemo(() => {
     const rows = tracking?.rows || [];
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - chartRange);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
-    return rows.filter((r) => {
-      if (r.date < cutoffStr) return false;
-      if (chartSlot !== "all" && (r.hour ?? 20) !== chartSlot) return false;
+    return rows.filter((row) => {
+      if (row.date < cutoffStr) return false;
+      if (chartSlot !== "all" && (row.hour ?? 20) !== chartSlot) return false;
       return true;
     });
-  }, [tracking, chartRange, chartSlot]);
+  }, [chartRange, chartSlot, tracking]);
 
-  const isLoading = Object.values(loading).some(Boolean);
-  const cheapestCity = useMemo(() => {
-    if (!current?.by_city) return null;
-    const entries = Object.entries(current.by_city)
-      .filter(([, value]) => value?.min != null)
-      .sort((a, b) => a[1].min - b[1].min);
-    return entries[0]?.[0] || null;
-  }, [current]);
-  const landingSeries = useMemo(() => {
-    const trackerValues = (tracking?.rows || [])
-      .filter((row) => row.actual_cheapest != null)
-      .slice(-12)
-      .map((row) => Number(row.actual_cheapest))
-      .filter((value) => Number.isFinite(value));
-    const historyValues = (history || [])
-      .slice(-12)
-      .map((row) => Number(row.price))
-      .filter((value) => Number.isFinite(value));
-    const values = trackerValues.length >= 3 ? trackerValues : historyValues;
-    if (!values.length) return [];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = Math.max(max - min, 0.001);
-    return values.map((value) => ({
-      value,
-      height: 22 + ((value - min) / span) * 72,
-    }));
-  }, [tracking, history]);
   const comparedCount = tracking?.summary?.n_compared ?? 0;
-  const sourceCount = useMemo(() => {
-    if (!current?.stations || current.stations.length === 0) return null;
-    const uniqueSources = new Set(current.stations.map(s => s.source));
-    return uniqueSources.size;
-  }, [current]);
-  const scrapeTime = current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "odottaa dataa";
   const accuracyBadge =
     tracking?.summary?.mae != null
       ? `±${(tracking.summary.mae * 100).toFixed(1)} snt keskivirhe`
-      : "kerääntyy";
+      : "tarkkuus kertyy";
+  const scrapeTime = current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "odottaa dataa";
+  const generatedTime = prediction?.generated_at ? fmtDateTimeFi(prediction.generated_at) : "ei tallennettua ennustetta";
+  const predictionNews = prediction?.news_headlines;
+  const displayNews = useMemo(
+    () => mergeNewsItems(predictionNews || [], news),
+    [predictionNews, news]
+  );
 
   return (
-    <div className="app-shell relative">
-      <a href="#main-content" className="skip-link">
-        Siirry pääsisältöön
+    <div className="app-shell">
+      <a href="#dashboard" className="skip-link">
+        Siirry sisältöön
       </a>
-      {/* TOP BAR */}
-      <header className="app-header backdrop-blur-xl sticky top-0 z-30">
-        <div className="max-w-[1480px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-brand text-white flex items-center justify-center shadow-glow-brand">
-              <Fuel size={16} strokeWidth={2.4} />
-            </div>
-            <div>
-              <div className="font-display font-black tracking-tighter text-xl leading-none text-ink">
-                BENSAVAHTI
-              </div>
-              <div className="font-mono text-[11px] text-muted uppercase tracking-[0.18em] mt-1">
-                95E10 + Diesel · huominen ennuste
-              </div>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-2 px-3 h-9 rounded-lg bg-surface font-mono text-xs text-secondary">
-              <Clock size={12} />
-              {current?.fetched_at ? fmtDateTimeFi(current.fetched_at) : "—"}
-              {current?.stale && (
-                <span className="ml-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[11px] rounded-md">
-                  VÄLIMUISTI
-                </span>
-              )}
-            </div>
+      <header className="app-header">
+        <div className="app-header__inner">
+          <a href="#dashboard" className="brand-lockup" data-testid="brand-link">
+            <span>
+              <strong>BensaVahti</strong>
+              <small>Livehinnat ja huomisen ennuste</small>
+            </span>
+          </a>
+
+          <nav className="top-nav" aria-label="Päänavigaatio">
+            <a href="#forecast">Ennuste</a>
+            <a href="#charts">Historia</a>
+            <a href="#cities">Kaupungit</a>
+            <a href="#signals">Signaalit</a>
+          </nav>
+
+          <div className="header-actions">
+            <span className="header-time">
+              <Clock size={13} />
+              {scrapeTime}
+            </span>
             <button
               data-testid="theme-toggle-btn"
-              onClick={toggleTheme}
+              onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
               type="button"
-              aria-label={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
-              title={theme === "dark" ? "Vaalea teema" : "Tumma teema"}
-              className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-line hover:bg-surface transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
+              aria-label={theme === "dark" ? "Vaihda vaaleaan teemaan" : "Vaihda tummaan teemaan"}
+              className="icon-btn"
             >
               {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
@@ -546,7 +811,7 @@ export default function App() {
               onClick={handleRefreshAll}
               disabled={isLoading}
               type="button"
-              className="inline-flex items-center gap-2 px-3 h-10 rounded-lg border border-line hover:bg-surface text-sm font-mono font-semibold transition-colors disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
+              className="command-btn command-btn--ghost"
             >
               <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
               Päivitä
@@ -555,719 +820,331 @@ export default function App() {
         </div>
       </header>
 
-      {/* LANDING */}
-      <section
-        id="main-content"
-        className="landing-hero px-6 md:px-10"
-        data-testid="landing-hero"
-      >
-        <div className="max-w-[1480px] mx-auto landing-hero-inner">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: "easeOut" }}
-            className="landing-copy"
-          >
-            <h1 className="landing-title">
-              BensaVahti
-            </h1>
-            <p className="landing-lead">
-              Halvimmat 95E10- ja dieselhinnat, kaupunkikeskiarvot,
-              toteutuneet mittaukset ja huomisen rajattu hinta-arvio yhdessä
-              näkymässä.
-            </p>
-
-            <div className="landing-actions">
-              <a href="#dashboard" className="landing-primary-action">
-                <ArrowDown size={16} />
-                Näytä hinnat
-              </a>
+      <main id="dashboard" className="dashboard-shell landing-hero" data-testid="landing-hero">
+        <section className="command-deck" aria-labelledby="dashboard-title">
+          <div className="command-deck__top">
+            <div>
+              <div className="eyebrow">Aether Fuel Dashboard</div>
+              <h1 id="dashboard-title">BensaVahti</h1>
+            </div>
+            <div className="command-deck__controls">
+              <FuelToggle value={fuel} onChange={setFuel} />
               <button
                 data-testid="landing-refresh-btn"
                 onClick={handleRefreshAll}
                 disabled={isLoading}
                 type="button"
-                className="landing-secondary-action"
+                className="command-btn command-btn--ghost"
               >
-                <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
-                Päivitä data
+                <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+                Synkronoi
               </button>
             </div>
-
-            <div className="landing-metrics" aria-label="Datalaadun yhteenveto">
-              <LandingMetric
-                icon={Database}
-                label="Otanta"
-                value={current?.stations_count != null ? `${current.stations_count} asemaa` : "odottaa"}
-                detail={sourceCount != null ? `${sourceCount} lähdettä käytössä` : "live-lähteet"}
-                testId="landing-sample-metric"
-              />
-              <LandingMetric
-                icon={Clock}
-                label="Viimeisin scrape"
-                value={scrapeTime}
-                detail={current?.stale ? "välimuistista" : current?.fetched_at ? "live-haku valmis" : "odottaa live-hakua"}
-                testId="landing-scrape-metric"
-              />
-              <LandingMetric
-                icon={CheckCircle2}
-                label="Ennustetarkkuus"
-                value={accuracyBadge}
-                detail={`${comparedCount} toteutunutta vertailua`}
-                testId="landing-accuracy-metric"
-              />
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 22, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: 0.08, duration: 0.6, ease: "easeOut" }}
-            className="landing-data-plane"
-            data-testid="landing-data-plane"
-          >
-            <div className="landing-plane-top">
-              <div>
-                <div className="landing-plane-eyebrow">Datan tila</div>
-                <div className="landing-plane-title">Lähteet ja viimeisin haku</div>
-              </div>
-            </div>
-
-            <div className="landing-price-strip">
-              <div>
-                <div className="landing-price-label">Tänään · halvin</div>
-                <div className="landing-price-value tnum">
-                  {todayMin != null ? todayMin.toFixed(3) : "—"}
-                  <span>€/L</span>
-                </div>
-                <div className="landing-price-note">
-                  {cheapestCity ? <><MapPin size={12} /> {cheapestCity}</> : "kaupunkidata odottaa"}
-                </div>
-              </div>
-              <div>
-                <div className="landing-price-label">Huomenna · arvio</div>
-                <div className="landing-price-value tnum is-accent">
-                  {tomorrowCheapest != null ? tomorrowCheapest.toFixed(3) : "—"}
-                  <span>€/L</span>
-                </div>
-                <div className="landing-price-note">
-                  {tomorrowDelta != null ? `${deltaFmtSnt(tomorrowDelta)}/L vs. tänään` : "ennuste odottaa"}
-                </div>
-              </div>
-            </div>
-
-            <div className="landing-chart-block">
-              <div className="landing-chart-head">
-                <span>mittaustrendi</span>
-                <span>{landingSeries.length ? `${landingSeries.length} pistettä` : "ei vielä dataa"}</span>
-              </div>
-              <LandingBars series={landingSeries} />
-            </div>
-
-            <div className="landing-source-list">
-              {LANDING_SOURCES.map((source, idx) => (
-                <LandingSourceRow
-                  key={source.name}
-                  source={source}
-                  delay={0.16 + idx * 0.06}
-                />
-              ))}
-            </div>
-
-            <div className="landing-plane-footer">
-              <span><Activity size={13} /> 14:00 + 21:00 Helsinki</span>
-              <span><ShieldCheck size={13} /> poikkeamat suodatetaan</span>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* HERO */}
-      <section
-        id="dashboard"
-        className="max-w-[1480px] mx-auto px-6 md:px-10 pt-10 md:pt-16 pb-8"
-      >
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-7">
-            <CardLabel className="mb-3">Suomi · huomisen pumppuhinta-arvio</CardLabel>
-            <h2 className="font-display text-4xl md:text-5xl font-black tracking-normal leading-[1.02]">
-              Hinnat ja huomisen ennuste
-            </h2>
-            <p className="text-secondary text-base md:text-lg mt-5 max-w-xl leading-relaxed">
-              Tuoreimmat hinnat, mittaushistoria ja mallien välinen vertailu
-              yhdessä näkymässä.
-            </p>
-
-            {/* Context chips: real numbers, not marketing copy */}
-            <div className="mt-5 flex flex-wrap items-center gap-2 font-mono text-[11px]">
-              {prediction?.n_daily_points != null && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
-                  <span className="text-muted">päivähäntä</span>
-                  <span className="text-ink font-semibold tnum">{prediction.n_daily_points} pv</span>
-                </span>
-              )}
-              {current?.stations_count != null && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-surface border border-line text-secondary">
-                  <span className="text-muted">otanta</span>
-                  <span className="text-ink font-semibold tnum">{current.stations_count} as.</span>
-                </span>
-              )}
-              {prediction?.conflict_signal && (
-                <span
-                  data-testid="geopol-chip"
-                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-amber-50 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-400/30 text-amber-800 dark:text-amber-200 font-semibold"
-                  title="Uutisista poimittu konflikti-/tarjontahäiriösignaali — leveämpi epävarmuusväli."
-                >
-                  geopol. signaali
-                </span>
-              )}
-              {prediction?.calendar_event?.name && (
-                <span
-                  data-testid="calendar-chip"
-                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-sky-50 dark:bg-sky-500/15 border border-sky-300 dark:border-sky-400/30 text-sky-800 dark:text-sky-200 font-semibold"
-                  title={
-                    prediction.calendar_event.kind === "holiday"
-                      ? "Huominen on pyhäpäivä — kysyntä tyypillisesti matala (kuten sunnuntaina)."
-                      : "Huominen on aattopäivä — matkustus- ja tankkauspäivä, kysyntä koholla."
-                  }
-                >
-                  {prediction.calendar_event.name}
-                </span>
-              )}
-            </div>
-
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <FuelToggle value={fuel} onChange={setFuel} />
-              <div
-                data-testid="auto-schedule-info"
-                className="inline-flex items-center gap-2 px-3 h-10 rounded-lg bg-surface text-secondary font-mono text-xs font-semibold border border-line"
-              >
-                <Clock size={14} />
-                Päivittyy klo 14 ja 21 (Helsinki)
-              </div>
-              {error && (
-                <span data-testid="error-banner" className="text-signalUp font-mono text-xs bg-signalUpBg px-2.5 py-1 rounded-md">
-                  {error}
-                </span>
-              )}
-            </div>
           </div>
 
-          <div className="col-span-12 lg:col-span-5">
-            <Card testId="hero-today-card" className="p-7 h-full">
-              <CardLabel className="mb-2">Tänään · halvin asema Suomessa</CardLabel>
-              <div className="flex items-end justify-between">
-                <StatNumber value={todayMin} testId="today-cheapest-price" />
-                <DeltaBadge delta={cheapestDelta} />
-              </div>
-              <div className="mt-1 text-[11px] font-mono text-secondary line-clamp-1">
-                {current?.by_city && Object.entries(current.by_city).sort((a,b)=>a[1].min-b[1].min)[0]?.[0]
-                  ? `Halvin kaupunki: ${Object.entries(current.by_city).sort((a,b)=>a[1].min-b[1].min)[0][0]}`
-                  : "—"}
-              </div>
-              <div className="mt-6 grid grid-cols-2 gap-4 tick-row border-t border-line pt-5">
-                <div>
-                  <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-                    Huominen · halvin ennuste
-                  </div>
-                  <div
-                    className="hero-num tnum text-2xl mt-1 text-brand"
-                    data-testid="tomorrow-cheapest-price-hero"
-                  >
-                    {tomorrowCheapest != null ? tomorrowCheapest.toFixed(3) : "—"}
-                    <span className="text-secondary text-xs ml-1">€/L</span>
-                  </div>
-                </div>
-                <div className="pl-5">
-                  <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-                    Halvimpien asemien ka.
-                  </div>
-                  <div className="hero-num tnum text-2xl mt-1">
-                    {cheapAvg != null ? cheapAvg.toFixed(3) : "—"}
-                    <span className="text-secondary text-xs ml-1">€/L</span>
-                  </div>
-                  {current?.stations_count != null && (
-                    <div className="font-mono text-[11px] text-muted mt-0.5">
-                      {current.stations_count} asemaa otoksessa
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-4 text-[11px] text-muted font-mono leading-relaxed">
-                Lähteet: polttoaine.net + tankille.fi (live, ≤ 24 h) · päivittyy automaattisesti klo 14 ja 21
-              </div>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* TOMORROW PREDICTION (large) */}
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
-        <Card
-          testId="tomorrow-prediction-card"
-          dark
-          className="instrument-card p-7 md:p-10 relative"
-        >
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none rounded-xl"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(15, 23, 42, 0.38), rgba(15, 23, 42, 0))",
-            }}
-          />
-          <div className="relative z-10 grid grid-cols-12 gap-6 items-start">
-            <div className="col-span-12 md:col-span-5">
-              <CardLabel className="text-accent">
-                Huominen · {prediction?.target_date ? fmtDateFi(prediction.target_date) : "—"}
-              </CardLabel>
-              <div className="mt-3 font-display text-[64px] md:text-[88px] font-black tracking-tightest leading-none text-white">
-                {tomorrowVal != null ? tomorrowVal.toFixed(3) : "—"}
-              </div>
-              <div className="mt-2 font-mono text-sm text-slate-300">
-                €/L · {prediction?.fuel || fuel} · ensemble-arvio
-              </div>
-              <div className="mt-5 flex items-center gap-3">
-                <DirectionPill delta={tomorrowDelta} />
-                {prediction?.ensemble?.spread != null && (
-                  <span className="font-mono text-xs text-slate-400">
-                    hajonta ±{prediction.ensemble.spread.toFixed(3)} €/L
-                  </span>
-                )}
-                {prediction?.ensemble?.breaking_news_severity > 0 && (
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-mono text-[10px] font-bold uppercase tracking-wider ${
-                    prediction.ensemble.breaking_news_severity >= 7 
-                      ? 'bg-red-900/40 border border-red-700/50 text-red-200'
-                      : prediction.ensemble.breaking_news_severity >= 4
-                      ? 'bg-orange-900/40 border border-orange-700/50 text-orange-200'
-                      : 'bg-yellow-900/40 border border-yellow-700/50 text-yellow-200'
-                  }`}>
-                    <Activity size={10} strokeWidth={2.8} />
-                    {prediction.ensemble.breaking_news_severity >= 7 ? 'KRIITTINEN UUTINEN' :
-                     prediction.ensemble.breaking_news_severity >= 4 ? 'MERKITTÄVÄ UUTINEN' : 'UUTISSIGNAALI'}
-                  </span>
-                )}
-              </div>
-
-              {/* NEW: ConfidenceStrip below direction pill */}
-              {current && (
-                <div className="mt-4">
-                  <ConfidenceStrip
-                    mostRecentScrape={current.fetched_at}
-                    sourcesCount={sourceCount}
-                    stationsCount={current.stations_count}
-                    predictionMAE={tracking?.summary?.mae}
-                    className="text-slate-300"
-                  />
-                </div>
-              )}
+          {error && (
+            <div className="error-banner" data-testid="error-banner">
+              {error}
             </div>
+          )}
 
-            <div className="col-span-12 md:col-span-7 md:border-l md:border-slate-700/60 md:pl-8">
-              <div className="flex items-center justify-between mb-4">
-                <CardLabel className="text-slate-400">Mistä arvio rakentuu</CardLabel>
-                {prediction?.current_price != null && (
-                  <span className="font-mono text-[11px] text-slate-500">
-                    suhteessa live · <span className="tnum text-slate-300">{prediction.current_price.toFixed(3)}</span>
-                  </span>
-                )}
-              </div>
-              <div className="space-y-1.5" data-testid="dark-method-grid">
-                <div className="grid grid-cols-[5.5rem_1fr_4rem_3rem] md:grid-cols-[6rem_1fr_4.5rem_3.5rem] items-center gap-3 pb-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                  <span>menetelmä</span>
-                  <span>arvio</span>
-                  <span className="text-right">Δ live</span>
-                  <span className="text-right">paino</span>
-                </div>
-                {DARK_METHODS.map(({ key, label }) => {
-                  const m = prediction?.methods?.[key];
-                  const v = m?.value;
-                  const live = prediction?.current_price ?? prediction?.live_anchor;
-                  const d = v != null && live != null ? v - live : null;
-                  const w = prediction?.ensemble?.weights?.[key];
-                  const sub =
-                    key === "ai_llm"
-                      ? "uutiset + kielimalliarvio"
-                      : key === "fundamental_anchor"
-                      ? "Brent + RBOB/HO + FX"
-                      : null;
-                  return (
-                    <div
-                      key={key}
-                      className="grid grid-cols-[5.5rem_1fr_4rem_3rem] md:grid-cols-[6rem_1fr_4.5rem_3.5rem] items-center gap-3 py-1.5 border-b border-slate-700/40 last:border-b-0"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-300">
-                          {label}
-                        </div>
-                        {sub && (
-                          <div className="font-mono text-[11px] text-slate-500 truncate" title={sub}>
-                            {sub}
-                          </div>
-                        )}
-                      </div>
-                      <div className="font-mono tnum text-slate-100 text-sm md:text-base">
-                        {v != null ? v.toFixed(3) : "—"}
-                        <span className="text-slate-500 text-[11px] ml-1">€/L</span>
-                      </div>
-                      <div className={`font-mono tnum text-[11px] text-right ${deltaColorDark(d)}`}>
-                        {deltaFmtSnt(d)}
-                      </div>
-                      <div className="font-mono tnum text-[11px] text-right text-slate-500">
-                        {w != null ? `${Math.round(w * 100)}%` : ""}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-2 font-mono text-[11px]">
-                {prediction?.crack_eur_l != null && (
-                  <span
-                    className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-white/5 border border-slate-700/60 text-slate-300"
-                    title="Crack-spread: jalostettu tuote − Brent (EUR/L). Positiivinen = jalostusmarginaali laajenee → pumppupaine ylös."
-                  >
-                    <span className="text-slate-500">crack</span>
-                    <span className={`tnum font-semibold ${prediction.crack_eur_l >= 0 ? "text-amber-300" : "text-slate-200"}`}>
-                      {prediction.crack_eur_l >= 0 ? "+" : ""}{prediction.crack_eur_l.toFixed(3)} €/L
-                    </span>
-                  </span>
-                )}
-                {prediction?.product_label && prediction?.product_chg != null && (
-                  <span
-                    className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-white/5 border border-slate-700/60 text-slate-300"
-                    title="Jalostetun tuotteen (RBOB / NY Harbor ULSD) ≈5 päivän muutos. Day-ahead-pääsignaali."
-                  >
-                    <span className="text-slate-500">{prediction.product_label.startsWith("RBOB") ? "RBOB" : "ULSD"} ~5pv</span>
-                    <span className={`tnum font-semibold ${prediction.product_chg >= 0 ? "text-red-300" : "text-emerald-300"}`}>
-                      {prediction.product_chg >= 0 ? "+" : ""}{(prediction.product_chg * 100).toFixed(1)}%
-                    </span>
-                  </span>
-                )}
-                {prediction?.tax_step_eur_l && Math.abs(prediction.tax_step_eur_l) > 0.0001 && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-amber-500/15 border border-amber-400/30 text-amber-200 font-semibold">
-                    veroaskel {prediction.tax_step_eur_l >= 0 ? "+" : ""}{(prediction.tax_step_eur_l * 100).toFixed(2)} snt/L
-                  </span>
-                )}
-              </div>
-
-              <div
-                data-testid="auto-info-pill"
-                className="mt-5 inline-flex items-center gap-2 px-4 h-9 rounded-lg bg-white/5 text-slate-300 border border-slate-700/60 font-semibold text-sm"
-              >
-                <Clock size={14} />
-                Päivittyy automaattisesti klo 14 ja 21 Helsingin aikaa
-              </div>
-            </div>
-          </div>
-        </Card>
-      </section>
-
-      {/* CHART + METHOD COMPARE */}
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
-        <div className="grid grid-cols-12 gap-6">
-          <Card span="col-span-12 lg:col-span-8" className="p-6" testId="tracking-chart-card">
-            <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
-              <div>
-                <CardLabel>Ennuste vs. toteutunut · halvin asema</CardLabel>
-                <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                  {fuel} · automaattinen mittaus klo 14 ja 21 (Helsinki)
-                </h3>
-                <p className="text-[11px] text-muted font-mono mt-1">
-                  {chartCity === "Suomi"
-                    ? "Vain todellisia havaintoja. Sininen = päivän halvin asema, harmaa risti = edellisen päivän ennuste, keltainen = huomisen ennuste."
-                    : `${chartCity}: sininen = kaupungin halvin asema, oranssi katkoviiva = kaupungin keskihinta. Kertyy klo 14 ja 21 mittauksista.`}
-                </p>
-              </div>
-              <div
-                data-testid="schedule-pill"
-                className="inline-flex items-center gap-2 px-3 h-8 rounded-lg bg-surface text-secondary font-mono text-[11px] font-semibold border border-line"
-              >
-                <Clock size={11} />
-                {tracking?.summary?.today_date
-                  ? `viim. mittaus: ${tracking.summary.today_date} klo ${
-                      tracking.summary.today_captured_at
-                        ? (() => {
-                            const dt = new Date(tracking.summary.today_captured_at);
-                            return `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
-                          })()
-                        : tracking.summary.today_hour != null
-                        ? `${String(tracking.summary.today_hour).padStart(2, "0")}:00`
-                        : "—"
-                    }`
-                  : "odottaa ensimmäistä mittausta"}
-              </div>
-            </div>
-
-            {/* CHART FILTERS */}
-            <div
-              data-testid="chart-filters"
-              className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-4 pb-4 border-b border-line"
+          <div className="cockpit-grid">
+            <Card
+              dark
+              testId="tomorrow-prediction-card"
+              className="forecast-panel"
+              id="forecast"
             >
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
-                  Alue
-                </span>
-                {CHART_CITIES.map((c) => (
-                  <FilterBtn
-                    key={c}
-                    active={chartCity === c}
-                    onClick={() => setChartCity(c)}
-                    testId={`chart-city-${c}`}
-                  >
-                    {c}
-                  </FilterBtn>
-                ))}
+              <div className="forecast-panel__header">
+                <div>
+                  <CardLabel className="text-accent">Huomisen hintaennuste</CardLabel>
+                  <h2>{fuel} · {targetDate ? fmtDateFi(targetDate) : "seuraava päivä"}</h2>
+                </div>
+                <DirectionPill delta={tomorrowDelta} />
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
-                  Jakso
-                </span>
-                {CHART_RANGES.map((r) => (
-                  <FilterBtn
-                    key={r.value}
-                    active={chartRange === r.value}
-                    onClick={() => setChartRange(r.value)}
-                  >
-                    {r.label}
-                  </FilterBtn>
-                ))}
+              <div className="forecast-readout">
+                <div>
+                  <span className="forecast-readout__label">Tänään · live-ankkuri</span>
+                  <strong className="tnum" data-testid="today-cheapest-price">
+                    {todayMin != null ? fmtPrice(todayMin) : "—"}
+                    <small>€/L</small>
+                  </strong>
+                  <p>{cheapestCity ? `Halvin kaupunki: ${cheapestCity}` : "livehaku käynnistyy taustalla"}</p>
+                </div>
+                <div className="forecast-readout__main">
+                  <span className="forecast-readout__label">Huomenna · ensemble</span>
+                  <strong className="tnum" data-testid="tomorrow-cheapest-price-hero">
+                    {tomorrowVal != null ? fmtPrice(tomorrowVal) : "—"}
+                    <small>€/L</small>
+                  </strong>
+                  <p data-testid="forecast-delta">{formatCents(tomorrowDelta)} suhteessa ankkuriin</p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-muted mr-1">
-                  Mittaus
-                </span>
-                {CHART_SLOTS.map((s) => (
-                  <FilterBtn
-                    key={s.value}
-                    active={chartSlot === s.value}
-                    onClick={() => setChartSlot(s.value)}
-                  >
-                    {s.label}
-                  </FilterBtn>
-                ))}
+              <div className="forecast-meta">
+                <StatusChip
+                  icon={Database}
+                  label={`${prediction?.data_sources?.tracker_captures ?? tracking?.rows?.length ?? 0} mittausta`}
+                  tone="blue"
+                />
+                <StatusChip icon={ShieldCheck} label={accuracyBadge} tone="green" />
+                {prediction?.conflict_signal && (
+                  <StatusChip icon={Newspaper} label="geopolitiikka mukana" tone="amber" testId="geopol-chip" />
+                )}
+                {prediction?.calendar_event && (
+                  <StatusChip icon={Clock} label="kalenteritapahtuma" tone="cyan" testId="calendar-chip" />
+                )}
+                <StatusChip
+                  icon={realtime.isConnected ? CheckCircle2 : Bell}
+                  label={realtime.isConnected ? "livepäivitykset" : "automaattiset mittaukset klo 14 ja 21"}
+                  tone={realtime.isConnected ? "green" : "blue"}
+                  testId="auto-schedule-info"
+                />
               </div>
-            </div>
 
-            <TrackingChart
-              rows={filteredTrackingRows}
-              city={chartCity}
-              tomorrow={
-                tracking?.summary?.tomorrow_prediction != null && tracking?.summary?.today_date
-                  ? {
-                      date: getNextDay(tracking.summary.today_date),
-                      value: tracking.summary.tomorrow_prediction,
-                    }
-                  : null
-              }
+              <MethodRail prediction={prediction} anchor={forecastAnchor} />
+
+              {current && (
+                <ConfidenceStrip
+                  mostRecentScrape={current.fetched_at}
+                  sourcesCount={sourceCount}
+                  stationsCount={current.stations_count}
+                  predictionMAE={tracking?.summary?.mae}
+                  className="forecast-confidence"
+                />
+              )}
+            </Card>
+
+            <DataPlane
+              current={current}
+              prediction={prediction}
+              tracking={tracking}
+              sourceCount={sourceCount}
+              series={landingSeries}
             />
-            <TrackingFooter summary={tracking?.summary} fuel={fuel} />
-          </Card>
+          </div>
+        </section>
 
-          <div className="col-span-12 lg:col-span-4">
+        <section className="metric-grid" aria-label="Live-yhteenveto">
+          <MetricTile
+            icon={Fuel}
+            label="Halvin koko Suomessa"
+            value={
+              <>
+                <span data-testid="current-min-price">{todayMin != null ? fmtPrice(todayMin) : "—"}</span>
+                <small>€/L</small>
+              </>
+            }
+            detail={cheapestCity ? `${cheapestCity} johtaa otosta` : "ei vielä kaupunkitietoa"}
+            tone="blue"
+          />
+          <MetricTile
+            icon={Gauge}
+            label="Halpojen otoksen keskiarvo"
+            value={
+              <>
+                <span data-testid="cheap-sample-avg">{cheapAvg != null ? fmtPrice(cheapAvg) : "—"}</span>
+                <small>€/L</small>
+              </>
+            }
+            detail="käytetään ankkurina ennusteessa"
+            tone="cyan"
+          />
+          <MetricTile
+            icon={MapPin}
+            label="Kaupunkivoittaja"
+            value={<span data-testid="cheapest-city">{cheapestCity || "—"}</span>}
+            detail={regional?.rows?.length ? `${regional.rows.length} kaupunkia` : "odottaa aluehakua"}
+            tone="green"
+          />
+          <MetricTile
+            icon={BarChart3}
+            label="Vertailuhistoria"
+            value={<span>{comparedCount}</span>}
+            detail={comparedCount ? accuracyBadge : "mittauksia kertyy klo 14 ja 21"}
+            tone="amber"
+          />
+        </section>
+
+        <section id="charts" className="dashboard-section">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">Historia</div>
+              <h2>Ennuste vastaan toteutunut</h2>
+            </div>
+            <span data-testid="schedule-pill" className="section-pill">
+              <Clock size={13} />
+              {tracking?.summary?.today_date
+                ? `viimeisin mittaus ${fmtDateFi(tracking.summary.today_date)}`
+                : "odottaa ensimmäistä mittausta"}
+            </span>
+          </div>
+
+          <div className="chart-layout">
+            <Card testId="tracking-chart-card" className="panel-pad tracking-chart-panel">
+              <div className="panel-head">
+                <div>
+                  <CardLabel>{fuel} · halvin asema</CardLabel>
+                  <h3>{chartCity === "Suomi" ? "Kansallinen hintajälki" : `${chartCity} · halvin ja keskiarvo`}</h3>
+                </div>
+              </div>
+
+              <div data-testid="chart-filters" className="filter-grid">
+                <div>
+                  <span>Alue</span>
+                  {CHART_CITIES.map((city) => (
+                    <FilterBtn
+                      key={city}
+                      active={chartCity === city}
+                      onClick={() => setChartCity(city)}
+                      testId={`chart-city-${city}`}
+                    >
+                      {city}
+                    </FilterBtn>
+                  ))}
+                </div>
+                <div>
+                  <span>Jakso</span>
+                  {CHART_RANGES.map((range) => (
+                    <FilterBtn
+                      key={range.value}
+                      active={chartRange === range.value}
+                      onClick={() => setChartRange(range.value)}
+                      testId={`chart-range-${range.value}`}
+                    >
+                      {range.label}
+                    </FilterBtn>
+                  ))}
+                </div>
+                <div>
+                  <span>Mittaus</span>
+                  {CHART_SLOTS.map((slot) => (
+                    <FilterBtn
+                      key={slot.value}
+                      active={chartSlot === slot.value}
+                      onClick={() => setChartSlot(slot.value)}
+                      testId={`chart-slot-${slot.value}`}
+                    >
+                      {slot.label}
+                    </FilterBtn>
+                  ))}
+                </div>
+              </div>
+
+              <TrackingChart
+                rows={filteredTrackingRows}
+                city={chartCity}
+                tomorrow={
+                  tomorrowVal != null && tracking?.summary?.today_date
+                    ? {
+                        date: getNextDay(tracking.summary.today_date),
+                        value: tomorrowVal,
+                        confidence_range: {
+                          low: prediction?.ensemble?.confidence_low,
+                          high: prediction?.ensemble?.confidence_high,
+                        },
+                      }
+                    : null
+                }
+              />
+              <TrackingFooter summary={tracking?.summary} fuel={fuel} />
+            </Card>
+
             <MethodTable result={prediction} />
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ALL-CITIES AVERAGE */}
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
-        <Card testId="city-average-card" className="p-6">
-          <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
+        <section className="dashboard-section">
+          <Card testId="city-average-card" className="panel-pad">
+            <div className="panel-head">
+              <div>
+                <CardLabel>Kaikkien kaupunkien keskihinta</CardLabel>
+                <h3>{fuel} · kaupunkien keskiarvo ja markkinaliike</h3>
+              </div>
+              <div className="city-average-filters" data-testid="city-average-filters">
+                <FilterBtn
+                  active={allCityAveragesSelected}
+                  onClick={() => setCityAverageCities(CITY_AVERAGE_CITIES)}
+                  testId="city-average-all"
+                >
+                  Kaikki
+                </FilterBtn>
+                {CITY_AVERAGE_CITIES.map((city) => (
+                  <FilterBtn
+                    key={city}
+                    active={cityAverageCities.includes(city)}
+                    onClick={() => toggleCityAverageCity(city)}
+                    testId={`city-average-${city}`}
+                  >
+                    {city}
+                  </FilterBtn>
+                ))}
+              </div>
+            </div>
+            <CityAverageChart
+              rows={filteredTrackingRows}
+              cities={cityAverageCities}
+              marketDelta={
+                tomorrowVal != null && tracking?.summary?.today_actual != null
+                  ? tomorrowVal - tracking.summary.today_actual
+                  : null
+              }
+              tomorrowDate={tracking?.summary?.today_date ? getNextDay(tracking.summary.today_date) : null}
+            />
+          </Card>
+        </section>
+
+        <section id="cities" className="dashboard-section">
+          <div className="section-heading">
             <div>
-              <CardLabel>Kaikkien kaupunkien keskihinta</CardLabel>
-              <h3 className="font-display text-2xl font-bold tracking-tight mt-1">
-                {fuel} · kaupunkien keskihinta + huomisen arvio
-              </h3>
-              <p className="text-[11px] text-muted font-mono mt-1">
-                Ohuet viivat = yksittäisen kaupungin keskihinta (klo 14 ja 21
-                mittauksista). Paksu sininen = kaikkien kaupunkien keskiarvo.
-                Keltainen katkoviiva = huomisen arvio (kaikkien ka. + ennustettu
-                markkinaliike). Käyttää samoja suodattimia kuin yllä.
-              </p>
+              <div className="eyebrow">Asemat</div>
+              <h2>Kaupunkikohtainen vertailu</h2>
             </div>
           </div>
-          <CityAverageChart
-            rows={filteredTrackingRows}
-            marketDelta={
-              tracking?.summary?.tomorrow_prediction != null &&
-              tracking?.summary?.today_actual != null
-                ? tracking.summary.tomorrow_prediction -
-                  tracking.summary.today_actual
-                : null
-            }
-            tomorrowDate={
-              tracking?.summary?.today_date
-                ? getNextDay(tracking.summary.today_date)
-                : null
-            }
-          />
-        </Card>
-      </section>
+          <RegionalGrid data={regional} fuel={fuel} cityData={current?.by_city} />
+        </section>
 
-      {/* NEWS CONTEXT */}
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-7">
-            <AiAnalysis
-              ai={prediction?.methods?.ai_llm}
-              brent={prediction?.brent ?? factors?.brent?.latest}
-              eurUsd={prediction?.eur_usd ?? factors?.eur_usd?.latest}
-              anchor={prediction?.current_price ?? prediction?.live_anchor}
-            />
+        <section id="signals" className="dashboard-section">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">Signaalit</div>
+              <h2>AI, markkinat ja uutiset</h2>
+            </div>
+            <span className="section-pill">
+              <Activity size={13} />
+              ennuste luotu {generatedTime}
+            </span>
           </div>
-          <div className="col-span-12 lg:col-span-5">
-            <NewsCard items={prediction?.news_headlines?.length ? prediction.news_headlines : news} />
+
+          <div className="signals-grid">
+            <div className="signals-column">
+              <AiAnalysis
+                ai={prediction?.methods?.ai_llm}
+                brent={prediction?.brent ?? factors?.brent?.latest}
+                eurUsd={prediction?.eur_usd ?? factors?.eur_usd?.latest}
+                anchor={forecastAnchor}
+              />
+              <FactorsCard factors={factors} prediction={prediction} />
+            </div>
+            <div className="signals-column">
+              <NewsCard items={displayNews} />
+              <AccuracyTracker data={accuracy} />
+            </div>
           </div>
+        </section>
+      </main>
+
+      <footer className="app-footer">
+        <div>
+          <Globe size={13} />
+          Datalähteet: polttoaine.net · tankille.fi · Yahoo Finance · RSS
         </div>
-      </section>
-
-      {/* REGIONAL + FACTORS + ACCURACY */}
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-8">
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12">
-            <RegionalGrid data={regional} fuel={fuel} cityData={current?.by_city} />
-          </div>
-        </div>
-      </section>
-
-      <section className="max-w-[1480px] mx-auto px-6 md:px-10 pb-16">
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-5">
-            <FactorsCard factors={factors} prediction={prediction} />
-          </div>
-          <div className="col-span-12 lg:col-span-7">
-            <AccuracyTracker data={accuracy} />
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="border-t border-line bg-surface">
-        <div className="max-w-[1480px] mx-auto px-6 md:px-10 py-6 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-secondary">
-          <div className="flex items-center gap-2">
-            <Globe size={12} />
-            Datalähteet: polttoaine.net · tankille.fi · Yahoo Finance (Brent, EUR/USD)
-          </div>
-          <div>
-            <span className="text-muted">v2.0 · BensaVahti · tarkkuus ei ole taattu</span>
-          </div>
-          <div className="w-full text-muted" data-testid="privacy-notice">
-            Tietosuoja: emme kerää sinusta tietoja itse — vain alustojen (Railway, Vercel) automaattisesti keräämät tiedot.{" "}
-            <a href="/privacy.html" className="underline hover:text-secondary transition-colors" data-testid="privacy-link">
-              Lue tietosuojaseloste
-            </a>
-          </div>
+        <span>v2.0 · BensaVahti · ennuste ei ole takuu hinnasta</span>
+        <div data-testid="privacy-notice">
+          <a href="/privacy.html" data-testid="privacy-link">Tietosuoja</a>
         </div>
       </footer>
     </div>
-  );
-}
-
-function getNextDay(isoDate) {
-  if (!isoDate) return null;
-  // Parse as UTC noon so the +1 day never shifts across a date boundary
-  // regardless of the viewer's timezone.
-  const d = new Date(`${isoDate.slice(0, 10)}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function TrackingFooter({ summary, fuel }) {
-  if (!summary) return null;
-  const {
-    n_compared,
-    mae,
-    within_2c_pct,
-    today_actual,
-    tomorrow_prediction,
-    today_date,
-  } = summary;
-  return (
-    <div
-      data-testid="tracking-footer"
-      className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-line pt-4"
-    >
-      <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          Tänään · {today_date ? today_date.slice(8, 10) + "." + today_date.slice(5, 7) + "." : "—"}
-        </div>
-        <div className="font-mono tnum text-lg font-bold mt-1">
-          {today_actual != null ? today_actual.toFixed(3) : "—"}
-          <span className="text-secondary text-xs ml-1">€/L</span>
-        </div>
-      </div>
-      <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          Huominen ({fuel})
-        </div>
-        <div
-          className="font-mono tnum text-lg font-bold mt-1 text-brand"
-          data-testid="tomorrow-cheapest-prediction"
-        >
-          {tomorrow_prediction != null ? tomorrow_prediction.toFixed(3) : "—"}
-          <span className="text-secondary text-xs ml-1">€/L</span>
-        </div>
-      </div>
-      <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          Keskivirhe
-        </div>
-        <div className="font-mono tnum text-lg font-bold mt-1">
-          {mae != null ? `±${(mae * 100).toFixed(1)}` : "—"}
-          <span className="text-secondary text-xs ml-1">snt</span>
-        </div>
-        <div className="font-mono text-[11px] text-muted mt-0.5">
-          {n_compared > 0 ? `${n_compared} vertailua` : "kerää dataa"}
-        </div>
-      </div>
-      <div className="bg-surface rounded-lg p-3 border border-line">
-        <div className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          Osumat ±2 snt sisällä
-        </div>
-        <div className="font-mono tnum text-lg font-bold mt-1">
-          {within_2c_pct != null ? `${within_2c_pct.toFixed(0)}%` : "—"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DirectionPill({ delta }) {
-  if (delta === null || delta === undefined || isNaN(delta)) {
-    return (
-      <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 text-slate-300 font-mono text-xs border border-slate-700/50">
-        <Minus size={12} /> ei dataa
-      </span>
-    );
-  }
-  const n = Number(delta);
-  if (n > 0.0005)
-    return (
-      <span
-        data-testid="direction-pill"
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30 font-mono text-xs font-semibold"
-      >
-        <ArrowUpRight size={14} strokeWidth={2.6} /> kallistuu +{(n * 100).toFixed(1)} snt/L
-      </span>
-    );
-  if (n < -0.0005)
-    return (
-      <span
-        data-testid="direction-pill"
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-semibold"
-      >
-        <ArrowDownRight size={14} strokeWidth={2.6} /> halpenee {Math.abs(n * 100).toFixed(1)} snt/L
-      </span>
-    );
-  return (
-    <span
-      data-testid="direction-pill"
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 text-slate-200 border border-slate-700/50 font-mono text-xs"
-    >
-      <Minus size={12} /> tasainen
-    </span>
   );
 }

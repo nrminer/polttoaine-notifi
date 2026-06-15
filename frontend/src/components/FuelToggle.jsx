@@ -1,5 +1,5 @@
 import React from "react";
-import { Fuel, Droplet } from "lucide-react";
+import { Droplet, Fuel } from "lucide-react";
 import { cn } from "../lib/utils";
 
 const FUELS = [
@@ -10,7 +10,7 @@ const FUELS = [
 export default function FuelToggle({ value, onChange, testIdPrefix = "fuel" }) {
   return (
     <div
-      className="inline-flex bg-surface p-1 rounded-lg border border-line"
+      className="fuel-switch"
       role="tablist"
       aria-label="Polttoaine"
       data-testid={`${testIdPrefix}-toggle`}
@@ -25,12 +25,7 @@ export default function FuelToggle({ value, onChange, testIdPrefix = "fuel" }) {
             aria-selected={active}
             onClick={() => onChange(id)}
             data-testid={`${testIdPrefix}-toggle-${id.toLowerCase()}`}
-            className={cn(
-              "px-4 h-9 inline-flex items-center gap-2 font-mono text-sm font-semibold rounded-md transition-all duration-200",
-              active
-                ? "bg-brand text-white shadow-sm"
-                : "text-secondary hover:text-ink hover:bg-white/60"
-            )}
+            className={cn("fuel-switch__button", active && "fuel-switch__button--active")}
           >
             <Icon size={14} strokeWidth={2.4} />
             {label}

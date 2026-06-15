@@ -147,9 +147,9 @@ export default function RegionalGrid({ data, fuel, cityData }) {
             <div
               key={row.region}
               data-testid={`region-cell-${row.region}`}
-              className={`rounded-xl p-4 border transition-all duration-200 hover:shadow-card-hover ${
+              className={`rounded-xl p-4 border transition-colors duration-200 ${
                 isCheapest
-                  ? "border-accent bg-accent/5 ring-1 ring-accent/30"
+                  ? "border-accent bg-accent/5"
                   : "border-line bg-surface hover:border-brand/20"
               }`}
             >

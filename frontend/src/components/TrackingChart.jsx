@@ -48,7 +48,7 @@ export default function TrackingChart({
   rows = [],
   tomorrow,
   city = "Suomi",
-  height = 320,
+  height = "var(--tracking-chart-height, 360px)",
 }) {
   const isCity = city && city !== "Suomi";
 

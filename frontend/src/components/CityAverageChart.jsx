@@ -52,10 +52,12 @@ function TooltipBody({ active, payload, label }) {
 
 export default function CityAverageChart({
   rows = [],
+  cities = CITIES,
   marketDelta = null,
   tomorrowDate = null,
   height = 320,
 }) {
+  const selectedCities = CITIES.filter((city) => cities.includes(city));
   const data = rows.map((r) => {
     const hour = r.hour ?? 20;
     const slot = `${r.date} ${String(hour).padStart(2, "0")}`;
@@ -65,7 +67,7 @@ export default function CityAverageChart({
     for (const c of CITIES) {
       const a = bc[c] && typeof bc[c].average === "number" ? bc[c].average : null;
       point[c] = a;
-      if (a != null) vals.push(a);
+      if (selectedCities.includes(c) && a != null) vals.push(a);
     }
     point.allAvg =
       vals.length > 0
@@ -97,7 +99,7 @@ export default function CityAverageChart({
   }
 
   const prices = data
-    .flatMap((d) => [d.allAvg, d.projected, ...CITIES.map((c) => d[c])])
+    .flatMap((d) => [d.allAvg, d.projected, ...selectedCities.map((c) => d[c])])
     .filter((v) => v !== null && v !== undefined);
 
   if (prices.length === 0) {
@@ -151,7 +153,7 @@ export default function CityAverageChart({
             }}
           />
 
-          {CITIES.map((c) => (
+          {selectedCities.map((c) => (
             <Line
               key={c}
               type="monotone"

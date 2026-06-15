@@ -2,6 +2,8 @@ import React from "react";
 import { Newspaper, ExternalLink, Clock, AlertTriangle } from "lucide-react";
 import { Card, CardLabel } from "./Card";
 
+const IMPORTANT_NEWS_HOLD_HOURS = 24;
+
 function ageLabel(h) {
   if (h == null) return "—";
   if (h < 1) return "juuri nyt";
@@ -23,17 +25,29 @@ function AgeBadge({ h }) {
   );
 }
 
-function BreakingBadge() {
+function isImportantNews(item) {
+  const age = Number(item?.age_hours ?? 999);
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2 py-1 rounded-md bg-red-100 text-red-700 border border-red-200 animate-pulse">
+    Number.isFinite(age) &&
+    age <= IMPORTANT_NEWS_HOLD_HOURS &&
+    (item?.pinned_important || item?.breaking || Number(item?.severity || 0) >= 4)
+  );
+}
+
+function BreakingBadge({ ageHours }) {
+  const isFresh = Number(ageHours ?? 999) <= 6;
+  return (
+    <span className={`inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2 py-1 rounded-md bg-red-100 text-red-700 border border-red-200 ${
+      isFresh ? "animate-pulse" : ""
+    }`}>
       <AlertTriangle size={10} strokeWidth={2.8} />
-      JUURI NYT
+      {isFresh ? "JUURI NYT" : "TÄRKEÄ"}
     </span>
   );
 }
 
 export default function NewsCard({ items = [], fetchedAt }) {
-  const breakingItems = items.filter(it => it.breaking && (it.age_hours || 999) <= 6);
+  const breakingItems = items.filter(isImportantNews);
   const hasBreaking = breakingItems.length > 0;
   const maxSeverity = hasBreaking ? Math.max(...breakingItems.map(it => it.severity || 0)) : 0;
   const severityLabel = maxSeverity >= 7 ? 'kriittinen' : maxSeverity >= 4 ? 'merkittävä' : 'kohtalainen';
@@ -96,7 +110,9 @@ export default function NewsCard({ items = [], fetchedAt }) {
         </div>
       ) : (
         <ul className="space-y-1" data-testid="news-list">
-          {items.map((it, idx) => (
+          {items.map((it, idx) => {
+            const important = isImportantNews(it);
+            return (
             <li
               key={idx}
               data-testid={`news-item-${idx}`}
@@ -106,17 +122,17 @@ export default function NewsCard({ items = [], fetchedAt }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`group flex gap-3 items-start p-2.5 rounded-lg hover:bg-surface transition-colors -mx-1 ${
-                  it.breaking && (it.age_hours || 999) <= 6 ? 'bg-red-50 border border-red-100' : ''
+                  important ? 'bg-red-50 border border-red-100' : ''
                 }`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2 mb-1">
                     <p className={`text-sm font-semibold leading-snug line-clamp-2 group-hover:text-brand transition-colors flex-1 ${
-                      it.breaking && (it.age_hours || 999) <= 6 ? 'text-red-900' : 'text-ink'
+                      important ? 'text-red-900' : 'text-ink'
                     }`}>
                       {it.title}
                     </p>
-                    {it.breaking && (it.age_hours || 999) <= 6 && <BreakingBadge />}
+                    {important && <BreakingBadge ageHours={it.age_hours} />}
                   </div>
                   <div className="mt-1 flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -132,7 +148,8 @@ export default function NewsCard({ items = [], fetchedAt }) {
                 />
               </a>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

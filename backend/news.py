@@ -19,8 +19,9 @@ import re
 import html
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from threading import Lock
 from defusedxml.ElementTree import fromstring
 from llm_client import configured_news_model, is_llm_configured, send_message
 
@@ -78,6 +79,13 @@ FEEDS = [
 # näkyvät tästä (/api/news → feed_health) sen sijaan että ne katoaisivat
 # hiljaa uutiskatteesta.
 _FEED_HEALTH: dict[str, dict] = {}
+
+# Breaking/important market news should stay available to the predictor and UI
+# for a full day even when a busy RSS feed pushes it below the normal limit.
+IMPORTANT_NEWS_HOLD_HOURS = 24.0
+IMPORTANT_NEWS_MIN_SEVERITY = 4
+_IMPORTANT_NEWS_CACHE: dict[str, dict] = {}
+_IMPORTANT_NEWS_CACHE_LOCK = Lock()
 
 
 def feed_health() -> dict:
@@ -223,6 +231,133 @@ def _calculate_severity(title: str, desc: str) -> int:
     return min(score, 10)
 
 
+def _parse_iso_dt(value) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _age_hours(item: dict) -> float | None:
+    age = item.get("age_hours")
+    try:
+        if age is not None:
+            return float(age)
+    except (TypeError, ValueError):
+        pass
+    published = _parse_iso_dt(item.get("published"))
+    if not published:
+        return None
+    return (datetime.now(timezone.utc) - published).total_seconds() / 3600.0
+
+
+def _news_key(item: dict) -> str:
+    raw = item.get("link") or item.get("title") or ""
+    return re.sub(r"\s+", " ", str(raw)).strip().lower()[:220]
+
+
+def is_important_news_item(
+    item: dict,
+    max_age_hours: float = IMPORTANT_NEWS_HOLD_HOURS,
+    min_severity: int = IMPORTANT_NEWS_MIN_SEVERITY,
+) -> bool:
+    """Breaking or high-severity items remain pinned for the hold window."""
+    age = _age_hours(item)
+    if age is None or age > max_age_hours:
+        return False
+    severity = int(item.get("severity") or 0)
+    return bool(item.get("breaking")) or severity >= min_severity
+
+
+def _with_current_age(item: dict) -> dict:
+    out = dict(item)
+    age = _age_hours(out)
+    if age is not None:
+        out["age_hours"] = age
+    return out
+
+
+def _public_news_item(item: dict) -> dict:
+    return {key: value for key, value in item.items() if not key.startswith("_")}
+
+
+def _purge_important_cache_locked(now: datetime) -> None:
+    expired_keys = []
+    for key, item in _IMPORTANT_NEWS_CACHE.items():
+        until = _parse_iso_dt(item.get("important_until"))
+        if until is None:
+            seen_at = _parse_iso_dt(item.get("_important_cached_at")) or now
+            until = seen_at + timedelta(hours=IMPORTANT_NEWS_HOLD_HOURS)
+        if until <= now:
+            expired_keys.append(key)
+    for key in expired_keys:
+        _IMPORTANT_NEWS_CACHE.pop(key, None)
+
+
+def _refresh_important_news_cache(items: list[dict]) -> None:
+    now = datetime.now(timezone.utc)
+    with _IMPORTANT_NEWS_CACHE_LOCK:
+        _purge_important_cache_locked(now)
+        for item in items:
+            current = _with_current_age(item)
+            if not is_important_news_item(current):
+                continue
+            key = _news_key(current)
+            if not key:
+                continue
+            published = _parse_iso_dt(current.get("published"))
+            important_until = (published or now) + timedelta(hours=IMPORTANT_NEWS_HOLD_HOURS)
+            if important_until <= now:
+                continue
+            cached = dict(current)
+            cached["pinned_important"] = True
+            cached["important_until"] = important_until.isoformat()
+            cached["_important_cached_at"] = now.isoformat()
+            _IMPORTANT_NEWS_CACHE[key] = cached
+
+
+def _cached_important_news_items() -> list[dict]:
+    now = datetime.now(timezone.utc)
+    with _IMPORTANT_NEWS_CACHE_LOCK:
+        _purge_important_cache_locked(now)
+        return [_public_news_item(_with_current_age(item)) for item in _IMPORTANT_NEWS_CACHE.values()]
+
+
+def _prioritized_news_with_retention(items: list[dict], limit: int) -> list[dict]:
+    _refresh_important_news_cache(items)
+    combined = []
+    seen = set()
+    for item in [*items, *_cached_important_news_items()]:
+        current = _public_news_item(_with_current_age(item))
+        key = _news_key(current)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        combined.append(current)
+
+    def sort_key(item: dict):
+        age = _age_hours(item)
+        safe_age = age if age is not None else 999999.0
+        important = is_important_news_item(item)
+        return (
+            0 if important else 1,
+            -int(item.get("severity") or 0),
+            safe_age,
+            str(item.get("title") or ""),
+        )
+
+    combined.sort(key=sort_key)
+    return combined[:max(0, int(limit or 0))]
+
+
 def _sanitize_text(text: str) -> str:
     """Remove control characters and escape HTML to prevent prompt injection."""
     # Remove control characters, keep only printable
@@ -357,8 +492,7 @@ def fetch_news(queries=None, max_age_days: int = 14, limit: int = 15) -> list[di
         seen.add(key)
         matched.append(it)
 
-    matched.sort(key=lambda x: x["age_hours"])
-    return matched[:limit]
+    return _prioritized_news_with_retention(matched, limit)
 
 
 def has_breaking_news(items: list[dict], max_age_hours: float = 6.0, min_severity: int = 4) -> bool:

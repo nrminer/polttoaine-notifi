@@ -11,8 +11,18 @@ const METHOD_LABEL = {
   ensemble: "Yhdistelmä",
 };
 
+const METHOD_EXPLAIN = {
+  moving_average: "Lasketaan viimeisten toteutuneiden mittausten liukuvasta keskiarvosta ja verrataan saman päivän toteumaan.",
+  linear_regression: "Sovittaa viimeaikaiseen hintasarjaan trendiviivan ja mittaa, kuinka kauas trendiennuste jäi toteumasta.",
+  exp_smoothing: "Painottaa uusimpia mittauksia vanhoja enemmän ja vertaa tasoitettua ennustetta toteutuneeseen hintaan.",
+  fundamental_anchor: "Käyttää livehintaa ankkurina ja lisää Brent-, valuutta-, viikonpäivä- ja momenttivaikutuksia ennen toteumavertailua.",
+  ai_llm: "Käyttää uutis- ja markkinakontekstia muiden signaalien rinnalla ja pisteytetään toteutunutta hintaa vasten.",
+  ensemble: "Yhdistää menetelmien arviot painotetuksi ennusteeksi. Tämä on päämittari, jota verrataan toteumaan.",
+};
+
 export default function AccuracyTracker({ data }) {
   const [showDetails, setShowDetails] = useState(false);
+  const [activeMethod, setActiveMethod] = useState(null);
   const summary = data?.summary || {};
   const ensembleStats = summary.ensemble;
 
@@ -109,21 +119,43 @@ export default function AccuracyTracker({ data }) {
               </thead>
               <tbody>
                 {entries.map(([key, s]) => (
-                  <tr
-                    key={key}
-                    data-testid={`accuracy-row-${key}`}
-                    className="border-b border-line last:border-b-0 transition-colors hover:bg-surface/60"
-                  >
-                    <td className="py-3 px-3">
-                      <span className="text-xs text-ink">{METHOD_LABEL[key] || key}</span>
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono tnum text-xs font-medium">
-                      ±{(s.mae * 100).toFixed(1)} snt
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono tnum text-xs text-secondary">
-                      {s.within_2c_pct != null ? `${s.within_2c_pct.toFixed(0)}%` : "—"}
-                    </td>
-                  </tr>
+                  <React.Fragment key={key}>
+                    <tr
+                      tabIndex={0}
+                      data-testid={`accuracy-row-${key}`}
+                      className={`border-b border-line last:border-b-0 transition-colors hover:bg-surface/60 cursor-pointer ${
+                        activeMethod === key ? "bg-surface/70" : ""
+                      }`}
+                      onMouseEnter={() => setActiveMethod(key)}
+                      onFocus={() => setActiveMethod(key)}
+                      onClick={() => setActiveMethod(key)}
+                    >
+                      <td className="py-3 px-3">
+                        <span className="text-xs text-ink">{METHOD_LABEL[key] || key}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tnum text-xs font-medium">
+                        ±{(s.mae * 100).toFixed(1)} snt
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tnum text-xs text-secondary">
+                        {s.within_2c_pct != null ? `${s.within_2c_pct.toFixed(0)}%` : "—"}
+                      </td>
+                    </tr>
+                    {activeMethod === key && (
+                      <tr className="border-b border-line last:border-b-0 bg-surface/35">
+                        <td colSpan={3} className="px-3 pb-3">
+                          <div className="accuracy-row-detail" role="tooltip">
+                            <strong>{METHOD_LABEL[key] || key}</strong>
+                            <p>{METHOD_EXPLAIN[key] || "Menetelmän virhe lasketaan vertaamalla tallennettua ennustetta toteutuneeseen hintaan."}</p>
+                            <div>
+                              <span>{s.n} vertailua</span>
+                              <span>keskipoikkeama {Math.abs(s.mae * 100).toFixed(1)} snt</span>
+                              <span>{s.within_2c_pct != null ? `${s.within_2c_pct.toFixed(0)}% osui ±2 snt sisään` : "osumaprosentti odottaa dataa"}</span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

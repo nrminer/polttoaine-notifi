@@ -14,10 +14,10 @@ module.exports = {
         signalUpBg: "#FEE2E2",
         signalDown: "#10B981",
         signalDownBg: "#D1FAE5",
-        brand: "#002FA7",
-        brandHover: "#002380",
-        accent: "#FDE047",
-        nordDark: "#0F172A",
+        brand: "#2563EB",
+        brandHover: "#1D4ED8",
+        accent: "#4CD7F6",
+        nordDark: "#0E1320",
         // Cycle phase colors
         cycleStable: "#10B981",
         cycleRising: "#F59E0B",
@@ -29,8 +29,8 @@ module.exports = {
         recommendNeutral: "#6B7280",
       },
       fontFamily: {
-        display: ['"Cabinet Grotesk"', '"Recoleta"', "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-        body: ['"IBM Plex Sans"', "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        display: ['"Inter"', "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        body: ['"Inter"', "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
       },
       fontSize: {
