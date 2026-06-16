@@ -4,8 +4,6 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
-  Bell,
-  CheckCircle2,
   Clock,
   Database,
   Fuel,
@@ -91,6 +89,79 @@ const SOURCE_ROWS = [
 function newsIdentity(item) {
   const raw = item?.link || item?.title || "";
   return raw.toString().trim().toLowerCase().slice(0, 220);
+}
+
+const CONFLICT_NEWS_KEYWORDS = [
+  "pakote",
+  "pakott",
+  "saarto",
+  "embargo",
+  "tuotantoleikk",
+  "rajoit",
+  "opec",
+  "hormuz",
+  "lahi-it",
+  "lähi-it",
+  "iran",
+  "israel",
+  "ukrain",
+  "venaj",
+  "venäj",
+  "red sea",
+  "punainenmeri",
+  "houthi",
+  "sota",
+  "hyökk",
+  "isku",
+  "war",
+  "strike",
+  "sanction",
+  "blockade",
+  "attack",
+  "supply",
+  "outage",
+  "refinery fire",
+  "jalostamo",
+];
+
+function getNewsTitle(item) {
+  return item?.title || item?.headline || item?.name || "";
+}
+
+function formatNewsAge(ageHours) {
+  const age = Number(ageHours);
+  if (!Number.isFinite(age)) return null;
+  if (age < 1) return "alle 1 h sitten";
+  if (age < 48) return `${Math.round(age)} h sitten`;
+  return `${Math.round(age / 24)} pv sitten`;
+}
+
+function isGeopoliticalNewsItem(item) {
+  const text = [
+    item?.title,
+    item?.headline,
+    item?.summary,
+    item?.description,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return Boolean(text) && CONFLICT_NEWS_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
+function collectGeopoliticalNews(predictionItems = [], liveItems = []) {
+  const seen = new Set();
+  const items = [];
+
+  for (const item of [...predictionItems, ...liveItems]) {
+    if (!isGeopoliticalNewsItem(item)) continue;
+    const key = newsIdentity(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+  }
+
+  return items.slice(0, 4);
 }
 
 function isRetainedImportantNews(item) {
@@ -180,11 +251,48 @@ function DirectionPill({ delta }) {
   );
 }
 
-function StatusChip({ icon: Icon, label, tone = "blue", testId }) {
+function GeopoliticalNewsTooltip({ items }) {
   return (
-    <span data-testid={testId} className={`status-chip status-chip--${tone}`}>
+    <span className="status-chip__tooltip-content">
+      <strong>Hintaan vaikuttavat geopoliittiset uutiset</strong>
+      {items.length ? (
+        <span className="status-chip__tooltip-list">
+          {items.map((item, index) => {
+            const title = getNewsTitle(item);
+            const meta = [item?.source, formatNewsAge(item?.age_hours)].filter(Boolean).join(" - ");
+            return (
+              <span className="status-chip__tooltip-item" key={newsIdentity(item) || index}>
+                <span>{title}</span>
+                {meta && <small>{meta}</small>}
+              </span>
+            );
+          })}
+        </span>
+      ) : (
+        <span className="status-chip__tooltip-empty">
+          Geopoliittinen riskisignaali on mukana ennusteessa, mutta yksittaista uutisotsikkoa ei palautunut datasta.
+        </span>
+      )}
+    </span>
+  );
+}
+
+function StatusChip({ icon: Icon, label, tone = "blue", testId, tooltip }) {
+  const tooltipId = tooltip && testId ? `${testId}-tooltip` : undefined;
+  return (
+    <span
+      data-testid={testId}
+      className={`status-chip status-chip--${tone}${tooltip ? " status-chip--has-tooltip" : ""}`}
+      tabIndex={tooltip ? 0 : undefined}
+      aria-describedby={tooltipId}
+    >
       {Icon && <Icon size={13} strokeWidth={2.4} />}
       {label}
+      {tooltip && (
+        <span id={tooltipId} className="status-chip__tooltip" role="tooltip">
+          {tooltip}
+        </span>
+      )}
     </span>
   );
 }
@@ -246,11 +354,6 @@ function DataPlane({ current, prediction, tracking, sourceCount, series }) {
           <div className="mono-label">Datan tila</div>
           <h2>Live-ankkuri</h2>
         </div>
-        <StatusChip
-          icon={current?.stale ? Clock : CheckCircle2}
-          label={current?.stale ? "välimuisti" : "tuore"}
-          tone={current?.stale ? "amber" : "green"}
-        />
       </div>
 
       <div className="data-plane__grid">
@@ -641,7 +744,7 @@ export default function App() {
     [fuel, loadAccuracy, loadCurrent, loadHistory, loadPrediction, loadTracking]
   );
 
-  const realtime = useRealtimeUpdates(handleRealtimeUpdate);
+  useRealtimeUpdates(handleRealtimeUpdate);
 
   useEffect(() => {
     setError(null);
@@ -769,6 +872,10 @@ export default function App() {
     () => mergeNewsItems(predictionNews || [], news),
     [predictionNews, news]
   );
+  const geopoliticalNews = useMemo(
+    () => collectGeopoliticalNews(predictionNews || [], news),
+    [predictionNews, news]
+  );
 
   return (
     <div className="app-shell">
@@ -829,16 +936,6 @@ export default function App() {
             </div>
             <div className="command-deck__controls">
               <FuelToggle value={fuel} onChange={setFuel} />
-              <button
-                data-testid="landing-refresh-btn"
-                onClick={handleRefreshAll}
-                disabled={isLoading}
-                type="button"
-                className="command-btn command-btn--ghost"
-              >
-                <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-                Synkronoi
-              </button>
             </div>
           </div>
 
@@ -890,17 +987,17 @@ export default function App() {
                 />
                 <StatusChip icon={ShieldCheck} label={accuracyBadge} tone="green" />
                 {prediction?.conflict_signal && (
-                  <StatusChip icon={Newspaper} label="geopolitiikka mukana" tone="amber" testId="geopol-chip" />
+                  <StatusChip
+                    icon={Newspaper}
+                    label="geopolitiikka mukana"
+                    tone="amber"
+                    testId="geopol-chip"
+                    tooltip={<GeopoliticalNewsTooltip items={geopoliticalNews} />}
+                  />
                 )}
                 {prediction?.calendar_event && (
                   <StatusChip icon={Clock} label="kalenteritapahtuma" tone="cyan" testId="calendar-chip" />
                 )}
-                <StatusChip
-                  icon={realtime.isConnected ? CheckCircle2 : Bell}
-                  label={realtime.isConnected ? "livepäivitykset" : "automaattiset mittaukset klo 14 ja 21"}
-                  tone={realtime.isConnected ? "green" : "blue"}
-                  testId="auto-schedule-info"
-                />
               </div>
 
               <MethodRail prediction={prediction} anchor={forecastAnchor} />

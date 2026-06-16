@@ -441,6 +441,7 @@ html:not(.dark) .forecast-readout > div {
 
 .status-chip,
 .direction-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -479,6 +480,81 @@ html:not(.dark) .forecast-readout > div {
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.1);
   border-color: rgba(245, 158, 11, 0.24);
+}
+
+.status-chip--has-tooltip {
+  cursor: help;
+  outline: none;
+}
+
+.status-chip--has-tooltip:focus-visible {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+.status-chip__tooltip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 40;
+  width: min(360px, 82vw);
+  padding: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 12px;
+  background: rgba(12, 18, 32, 0.98);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+  color: rgb(var(--c-secondary));
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  white-space: normal;
+}
+
+.status-chip--has-tooltip:hover .status-chip__tooltip,
+.status-chip--has-tooltip:focus-visible .status-chip__tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.status-chip__tooltip-content,
+.status-chip__tooltip-list,
+.status-chip__tooltip-item,
+.status-chip__tooltip-empty {
+  display: block;
+}
+
+.status-chip__tooltip-content strong {
+  display: block;
+  margin-bottom: 9px;
+  color: rgb(var(--c-ink));
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.status-chip__tooltip-list {
+  display: grid;
+  gap: 8px;
+}
+
+.status-chip__tooltip-item {
+  padding-left: 10px;
+  border-left: 2px solid rgba(245, 158, 11, 0.5);
+}
+
+.status-chip__tooltip-item small {
+  display: block;
+  margin-top: 3px;
+  color: rgb(var(--c-muted));
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  font-weight: 800;
 }
 
 .direction-pill--up {
