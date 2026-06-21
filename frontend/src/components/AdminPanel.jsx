@@ -122,7 +122,7 @@ export default function AdminPanel({ onClose }) {
     setResult(null);
 
     try {
-      const data = await testNotification();
+      await testNotification();
       setResult({
         type: 'success',
         message: 'Testi-ilmoitus lähetetty'
