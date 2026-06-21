@@ -908,16 +908,6 @@ export default function App() {
               {scrapeTime}
             </span>
             <button
-              data-testid="admin-panel-btn"
-              onClick={() => setShowAdminPanel(true)}
-              type="button"
-              aria-label="Avaa ylläpitopaneeli"
-              className="icon-btn"
-              title="Ylläpito"
-            >
-              <Settings size={16} />
-            </button>
-            <button
               data-testid="theme-toggle-btn"
               onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
               type="button"
@@ -1253,6 +1243,22 @@ export default function App() {
         <span>v2.0 · BensaVahti · ennuste ei ole takuu hinnasta</span>
         <div data-testid="privacy-notice">
           <a href="/privacy.html" data-testid="privacy-link">Tietosuoja</a>
+          <span style={{ margin: '0 8px', opacity: 0.3 }}>·</span>
+          <button
+            onClick={() => setShowAdminPanel(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              padding: 0,
+              font: 'inherit'
+            }}
+            data-testid="admin-panel-link"
+          >
+            Ylläpito
+          </button>
         </div>
       </footer>
 
