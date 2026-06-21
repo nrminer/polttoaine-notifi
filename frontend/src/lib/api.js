@@ -82,3 +82,31 @@ export const runTrackCapture = (fuel) =>
 export const runTrackCaptureAll = () => api.post(`/track/run-all`);
 export const seedHistory = (days, force) =>
   api.post(`/seed`, null, { params: { days, force } });
+
+// Admin endpoints
+export const fixCapture = (token, date, hour, fuel, correctedPrice, reason) =>
+  api.post(`/admin/fix-capture`, {
+    date,
+    hour,
+    fuel,
+    region: "Suomi",
+    corrected_price: correctedPrice,
+    reason
+  }, {
+    headers: { 'X-Admin-Token': token }
+  });
+
+export const triggerAdminAction = (token, action, fuel, notify = false) =>
+  api.post(`/admin/run`, {
+    password: token,
+    action,
+    fuel,
+    region: "Suomi",
+    notify
+  });
+
+export const runTrackingAll = (notify = false) =>
+  api.post(`/track/run-all`, null, { params: { notify } });
+
+export const testNotification = () =>
+  api.post(`/notify/test`);

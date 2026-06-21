@@ -14,6 +14,7 @@ import {
   Moon,
   Newspaper,
   RefreshCw,
+  Settings,
   ShieldCheck,
   Sun,
   TrendingUp,
@@ -28,6 +29,7 @@ import MethodTable from "./components/MethodTable";
 import AiAnalysis from "./components/AiAnalysis";
 import RegionalGrid from "./components/RegionalGrid";
 import AccuracyTracker from "./components/AccuracyTracker";
+import AdminPanel from "./components/AdminPanel";
 import FactorsCard from "./components/FactorsCard";
 import NewsCard from "./components/NewsCard";
 import { ConfidenceStrip } from "./components/ConfidenceStrip";
@@ -557,6 +559,7 @@ export default function App() {
   const [cityAverageCities, setCityAverageCities] = useState(CITY_AVERAGE_CITIES);
   const [loading, setLoading] = useState({});
   const [error, setError] = useState(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [theme, setTheme] = useState(() => {
     if (typeof window === "undefined") return "dark";
     const saved = window.localStorage.getItem("theme");
@@ -905,6 +908,16 @@ export default function App() {
               {scrapeTime}
             </span>
             <button
+              data-testid="admin-panel-btn"
+              onClick={() => setShowAdminPanel(true)}
+              type="button"
+              aria-label="Avaa ylläpitopaneeli"
+              className="icon-btn"
+              title="Ylläpito"
+            >
+              <Settings size={16} />
+            </button>
+            <button
               data-testid="theme-toggle-btn"
               onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
               type="button"
@@ -1242,6 +1255,8 @@ export default function App() {
           <a href="/privacy.html" data-testid="privacy-link">Tietosuoja</a>
         </div>
       </footer>
+
+      {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
     </div>
   );
 }

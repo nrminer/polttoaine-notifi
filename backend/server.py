@@ -44,6 +44,9 @@ from security_utils import (
     sanitize_string, redact_secrets, validate_price_bounds, validate_date_format,
     ALLOWED_FUELS, ALLOWED_REGIONS
 )
+from audit_log import (
+    log_admin_action, log_failed_auth, get_failed_auth_count, clear_failed_auth
+)
 
 # ---------------- konfiguraatio ----------------
 
@@ -294,7 +297,24 @@ class PredictionRequest(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "service": "bensavahti", "time": datetime.now(timezone.utc).isoformat()}
+    """Health check endpoint with database connectivity test."""
+    health_status = {
+        "ok": True,
+        "service": "bensavahti",
+        "time": datetime.now(timezone.utc).isoformat(),
+        "database": "unknown"
+    }
+    
+    # Test database connection
+    try:
+        await db.command("ping")
+        health_status["database"] = "connected"
+    except Exception as e:
+        health_status["ok"] = False
+        health_status["database"] = "disconnected"
+        health_status["error"] = str(e)[:100]
+    
+    return health_status
 
 
 @app.get("/api/meta")
@@ -310,8 +330,8 @@ async def meta():
 
 @app.post("/api/seed")
 async def seed_history(days: int = 365, force: bool = False,
+                       request: Request = None,
                        x_admin_token: Optional[str] = Header(default=None)):
-    _check_admin(x_admin_token or "")
     """Historiallinen seedaus on POISTETTU KÄYTÖSTÄ.
 
     Tilastokeskuksen (Statfin) data on vanhaa eikä sitä enää käytetä.
@@ -325,6 +345,8 @@ async def seed_history(days: int = 365, force: bool = False,
 
     `days` ja `force` ovat no-op.
     """
+    client_ip = get_remote_address(request)
+    await _check_admin(x_admin_token or "", client_ip, "/api/seed")
     purged = await db.history.delete_many({"source": {
         "$in": ["simulated", "statfin+interp", "statfin",
                 "statfin+extrap", "statfin_monthly"]
@@ -1172,16 +1194,31 @@ class AdminRequest(BaseModel):
     notify: bool = False
 
 
-def _check_admin(token: str) -> None:
-    """Verify admin token with constant-time comparison.
+async def _check_admin(token: str, client_ip: str, endpoint: str) -> None:
+    """Verify admin token with constant-time comparison and failed auth tracking.
     
-    SECURITY: Only accepts header authentication, not body password.
+    SECURITY: 
+    - Constant-time comparison prevents timing attacks
+    - Tracks failed attempts and locks out after 5 failures in 10 minutes
+    - Logs failed attempts for forensics
     """
     env_token = os.environ.get("ADMIN_TOKEN")
     if not env_token:
         raise HTTPException(404, "Not found")  # Stealth mode when disabled
+    
+    # Check if IP is locked out
+    failed_count = await get_failed_auth_count(db, client_ip, window_minutes=10)
+    if failed_count >= 5:
+        await log_failed_auth(db, client_ip, endpoint)
+        raise HTTPException(429, "Too many failed attempts. Try again later.")
+    
+    # Verify token
     if not hmac.compare_digest(str(token or ""), str(env_token)):
+        await log_failed_auth(db, client_ip, endpoint)
         raise HTTPException(401, "Unauthorized")
+    
+    # Clear failed attempts on success
+    await clear_failed_auth(db, client_ip)
 
 
 @app.post("/api/admin/run")
@@ -1208,7 +1245,8 @@ async def admin_run(req: AdminRequest,
       "all"     - capture + predict (+ ntfy jos notify=true)
       "notify"  - lähetä ntfy uusimmista captureista
     """
-    _check_admin(x_admin_token or "")
+    client_ip = get_remote_address(request)
+    await _check_admin(x_admin_token or "", client_ip, "/api/admin/run")
     
     # SECURITY: Validate parameters against whitelist
     action = (req.action or "all").lower()
@@ -1228,6 +1266,9 @@ async def admin_run(req: AdminRequest,
 
     if action == "ping":
         out["ok"] = True
+        # Audit log
+        await log_admin_action(db, "ping", x_admin_token or "", client_ip, 
+                              {"action": action}, "success")
         return out
 
     captured: list[dict] = []
@@ -1280,6 +1321,10 @@ async def admin_run(req: AdminRequest,
             out["ntfy_sent"] = False
             out["ntfy_error"] = f"{type(e).__name__}: {str(e)[:200]}"
 
+    # Audit log successful action
+    await log_admin_action(db, f"admin_run_{action}", x_admin_token or "", client_ip,
+                          {"action": action, "fuel": req.fuel, "notify": req.notify}, "success")
+
     return out
 
 
@@ -1306,7 +1351,8 @@ async def track_backfill(points: list[TrackBackfillPoint],
     (date, hour, fuel, region).
     If clear=true, wipe daily_tracker first (use to reset bad / fake data).
     If rerun_prediction=true (default), automatically rerun predictions for affected fuels."""
-    _check_admin(x_admin_token or "")
+    client_ip = get_remote_address(request)
+    await _check_admin(x_admin_token or "", client_ip, "/api/track/backfill")
     if len(points) > MAX_BACKFILL_POINTS:
         raise HTTPException(400, f"max {MAX_BACKFILL_POINTS} points per request")
     cleared = 0
@@ -1472,12 +1518,16 @@ async def fix_capture(req: FixCaptureRequest,
     """Fix a bad capture by replacing the price with a corrected value.
     Stores the original scraped price for audit trail.
     If rerun_prediction=true (default), automatically reruns prediction for the affected fuel."""
-    _check_admin(x_admin_token or "")
+    client_ip = get_remote_address(request)
+    await _check_admin(x_admin_token or "", client_ip, "/api/admin/fix-capture")
     
     # SECURITY: Validate inputs
     validate_fuel_and_region(req.fuel, req.region)
     validate_date_format(req.date)
     validate_price_bounds(req.corrected_price, PRICE_MIN_SANITY, PRICE_MAX_SANITY)
+    
+    # SECURITY: Sanitize reason field to prevent XSS
+    sanitized_reason = sanitize_string(req.reason)
     
     # Find the existing capture
     existing = await db.daily_tracker.find_one({
@@ -1488,6 +1538,9 @@ async def fix_capture(req: FixCaptureRequest,
     })
     
     if not existing:
+        await log_admin_action(db, "fix_capture", x_admin_token or "", client_ip,
+                              {"date": req.date, "hour": req.hour, "fuel": req.fuel}, 
+                              "failure", error="Capture not found")
         raise HTTPException(404, f"No capture found for {req.fuel} on {req.date} @{req.hour:02d}h")
     
     original_price = existing.get("actual_cheapest")
@@ -1505,7 +1558,7 @@ async def fix_capture(req: FixCaptureRequest,
                 "actual_cheapest": round(req.corrected_price, 3),
                 "fixed_at": datetime.now(timezone.utc).isoformat(),
                 "original_scraped_price": original_price,
-                "fix_reason": req.reason,
+                "fix_reason": sanitized_reason,
                 "manually_corrected": True
             }
         }
@@ -1544,16 +1597,24 @@ async def fix_capture(req: FixCaptureRequest,
             "corrected_price": req.corrected_price,
         })
     
-    return {
+    response = {
         "ok": result.modified_count > 0,
         "date": req.date,
         "hour": req.hour,
         "fuel": req.fuel,
         "original_price": original_price,
         "corrected_price": req.corrected_price,
-        "reason": req.reason,
+        "reason": sanitized_reason,
         "prediction_rerun": prediction_result if rerun_prediction else None
     }
+    
+    # Audit log successful fix
+    await log_admin_action(db, "fix_capture", x_admin_token or "", client_ip,
+                          {"date": req.date, "hour": req.hour, "fuel": req.fuel, 
+                           "original_price": original_price, "corrected_price": req.corrected_price},
+                          "success")
+    
+    return response
 
 
 @app.post("/api/admin/reboot")
