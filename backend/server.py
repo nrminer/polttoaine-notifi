@@ -7,6 +7,7 @@ FastAPI-palvelin, joka:
   - Laskee 5 ennustetta + ensemble (MA, LR, Holt, fundamenttiankkuri, Claude Fable 5)
   - Hakee Brent + EUR/USD Yahoo Financelta
   - Tarjoaa REST-rajapinnan dashboardille
+  - Sisältää admin-työkalut virheellisten hintojen korjaamiseen
 """
 import asyncio
 import hmac
