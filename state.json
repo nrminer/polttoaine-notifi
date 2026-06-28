@@ -3,38 +3,38 @@
     [
       "95E10",
       "Helsinki",
-      1.849
+      1.839
     ],
     [
       "95E10",
       "Vantaa",
-      1.865
+      1.838
     ],
     [
       "95E10",
       "Espoo",
-      null
+      1.924
     ],
     [
       "diesel",
       "Helsinki",
-      1.887
-    ],
-    [
-      "diesel",
-      "Vantaa",
       1.877
     ],
     [
       "diesel",
+      "Vantaa",
+      1.867
+    ],
+    [
+      "diesel",
       "Espoo",
-      null
+      1.945
     ],
     [
       "diesel_any",
       null,
-      1.837
+      1.778
     ]
   ],
-  "last_run": "2026-06-28T15:51:03.650941+00:00"
+  "last_run": "2026-06-28T17:11:16.634695+00:00"
 }
