@@ -7,13 +7,13 @@ export function Card({ children, className = "", testId, dark = false, span = ""
   const reduce = useReducedMotion();
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0, y: 10 }}
+      initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={reduce ? undefined : { opacity: 1, y: 0 }}
-      transition={reduce ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      transition={reduce ? { duration: 0 } : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       data-testid={testId}
       className={cn(
-        "relative overflow-hidden glass-panel text-ink",
-        dark && "glass-panel-strong",
+        "relative overflow-hidden station-panel text-ink",
+        dark && "station-panel--hero",
         span,
         className
       )}
@@ -38,10 +38,10 @@ export function CardLabel({ children, className = "", ...rest }) {
   );
 }
 
-export function StatNumber({ value, suffix = " €/L", digits = 3, testId, className = "" }) {
+export function StatNumber({ value, suffix = " EUR/L", digits = 3, testId, className = "" }) {
   const formatted =
     value === null || value === undefined || isNaN(value)
-      ? "—"
+      ? "-"
       : Number(value).toFixed(digits);
   return (
     <div
@@ -56,10 +56,10 @@ export function StatNumber({ value, suffix = " €/L", digits = 3, testId, class
   );
 }
 
-export function DeltaBadge({ delta, unit = "€/L", suffix = "" }) {
+export function DeltaBadge({ delta, unit = "EUR/L", suffix = "" }) {
   if (delta === null || delta === undefined || isNaN(delta)) {
     return (
-      <span className="inline-flex items-center gap-1 font-mono text-xs px-2.5 py-1 rounded-md bg-white/5 text-secondary border border-line">
+      <span className="inline-flex items-center gap-1 font-mono text-xs px-2.5 py-1 bg-white/5 text-secondary border border-line">
         <Minus size={11} strokeWidth={2.6} />
       </span>
     );
@@ -74,11 +74,11 @@ export function DeltaBadge({ delta, unit = "€/L", suffix = "" }) {
     ? "bg-signalDownBg text-signalDown border border-signalDown/20"
     : "bg-white/5 text-secondary border border-line";
   const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
-  const sign = up ? "+" : down ? "−" : "";
+  const sign = up ? "+" : down ? "-" : "";
   const formatted = Math.abs(n).toFixed(3);
 
   return (
-    <span className={cn("inline-flex items-center gap-1 font-mono text-xs font-semibold px-2.5 py-1 rounded-md", cls)}>
+    <span className={cn("inline-flex items-center gap-1 font-mono text-xs font-semibold px-2.5 py-1", cls)}>
       <Icon size={11} strokeWidth={2.8} />
       {sign}
       {formatted} {unit}

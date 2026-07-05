@@ -14,7 +14,6 @@ import {
   Moon,
   Newspaper,
   RefreshCw,
-  Settings,
   ShieldCheck,
   Sun,
   TrendingUp,
@@ -23,6 +22,7 @@ import {
 import "./App.css";
 import { Card, CardLabel } from "./components/Card";
 import FuelToggle from "./components/FuelToggle";
+import FuelPumpCalculator from "./components/FuelPumpCalculator";
 import TrackingChart from "./components/TrackingChart";
 import CityAverageChart from "./components/CityAverageChart";
 import MethodTable from "./components/MethodTable";
@@ -33,6 +33,7 @@ import AdminPanel from "./components/AdminPanel";
 import FactorsCard from "./components/FactorsCard";
 import NewsCard from "./components/NewsCard";
 import { ConfidenceStrip } from "./components/ConfidenceStrip";
+import SplitFlapPrice from "./components/SplitFlapPrice";
 import {
   fetchAccuracy,
   fetchCurrent,
@@ -546,6 +547,7 @@ function TrackingFooter({ summary, fuel }) {
 export default function App() {
   const [fuel, setFuel] = useState("95E10");
   const [current, setCurrent] = useState(null);
+  const [pumpPrices, setPumpPrices] = useState({ petrol95: null, diesel: null });
   const [history, setHistory] = useState([]);
   const [factors, setFactors] = useState(null);
   const [prediction, setPrediction] = useState(null);
@@ -596,6 +598,15 @@ export default function App() {
     },
     [setLoad]
   );
+
+  const loadPumpPrices = useCallback(async () => {
+    try {
+      const [petrol95, diesel] = await Promise.all([fetchCurrent("95E10"), fetchCurrent("diesel")]);
+      setPumpPrices({ petrol95: petrol95.data, diesel: diesel.data });
+    } catch (e) {
+      console.warn("pump prices failed", e);
+    }
+  }, []);
 
   const loadHistory = useCallback(
     async (selectedFuel, days) => {
@@ -735,16 +746,18 @@ export default function App() {
         loadTracking(fuel);
       } else if (update.type === "capture") {
         loadCurrent(fuel);
+        loadPumpPrices();
         loadTracking(fuel);
       } else if (update.type === "correction") {
         loadCurrent(fuel);
+        loadPumpPrices();
         loadHistory(fuel, HISTORY_RANGE_DAYS);
         loadPrediction(fuel, false);
         loadTracking(fuel);
         loadAccuracy(fuel);
       }
     },
-    [fuel, loadAccuracy, loadCurrent, loadHistory, loadPrediction, loadTracking]
+    [fuel, loadAccuracy, loadCurrent, loadHistory, loadPrediction, loadPumpPrices, loadTracking]
   );
 
   useRealtimeUpdates(handleRealtimeUpdate);
@@ -753,6 +766,7 @@ export default function App() {
     setError(null);
     Promise.all([
       loadCurrent(fuel),
+      loadPumpPrices(),
       loadHistory(fuel, HISTORY_RANGE_DAYS),
       loadFactors(),
       loadPrediction(fuel, false),
@@ -761,7 +775,7 @@ export default function App() {
       loadNews(),
       loadTracking(fuel),
     ]);
-  }, [fuel, loadAccuracy, loadCurrent, loadFactors, loadHistory, loadNews, loadPrediction, loadRegional, loadTracking]);
+  }, [fuel, loadAccuracy, loadCurrent, loadFactors, loadHistory, loadNews, loadPrediction, loadPumpPrices, loadRegional, loadTracking]);
 
   const isLoading = Object.values(loading).some(Boolean);
 
@@ -769,13 +783,14 @@ export default function App() {
     setError(null);
     await Promise.all([
       loadCurrent(fuel),
+      loadPumpPrices(),
       loadHistory(fuel, HISTORY_RANGE_DAYS),
       loadFactors(),
       loadRegional(fuel),
       loadTracking(fuel),
       loadNews(),
     ]);
-  }, [fuel, loadCurrent, loadFactors, loadHistory, loadNews, loadRegional, loadTracking]);
+  }, [fuel, loadCurrent, loadFactors, loadHistory, loadNews, loadPumpPrices, loadRegional, loadTracking]);
 
   const allCityAveragesSelected = cityAverageCities.length === CITY_AVERAGE_CITIES.length;
   const toggleCityAverageCity = useCallback((city) => {
@@ -934,7 +949,7 @@ export default function App() {
         <section className="command-deck" aria-labelledby="dashboard-title">
           <div className="command-deck__top">
             <div>
-              <div className="eyebrow">Aether Fuel Dashboard</div>
+              <div className="eyebrow">Asemataulu</div>
               <h1 id="dashboard-title">BensaVahti</h1>
             </div>
             <div className="command-deck__controls">
@@ -963,21 +978,25 @@ export default function App() {
                 <DirectionPill delta={tomorrowDelta} />
               </div>
 
-              <div className="forecast-readout">
+              <div className="departure-readout">
                 <div>
-                  <span className="forecast-readout__label">Tänään · live-ankkuri</span>
-                  <strong className="tnum" data-testid="today-cheapest-price">
-                    {todayMin != null ? fmtPrice(todayMin) : "—"}
-                    <small>€/L</small>
-                  </strong>
+                  <span className="departure-readout__label">Tänään - live-ankkuri</span>
+                  <SplitFlapPrice
+                    value={todayMin}
+                    testId="today-cheapest-price"
+                    ariaLabel={todayMin != null ? `Tänään halvin ${fmtPrice(todayMin)} euroa litralta` : "Tänään hinta odottaa dataa"}
+                    className="split-flap-price--compact"
+                  />
                   <p>{cheapestCity ? `Halvin kaupunki: ${cheapestCity}` : "livehaku käynnistyy taustalla"}</p>
                 </div>
-                <div className="forecast-readout__main">
-                  <span className="forecast-readout__label">Huomenna · ensemble</span>
-                  <strong className="tnum" data-testid="tomorrow-cheapest-price-hero">
-                    {tomorrowVal != null ? fmtPrice(tomorrowVal) : "—"}
-                    <small>€/L</small>
-                  </strong>
+                <div className="departure-readout__main">
+                  <span className="departure-readout__label">Huomenna - ensemble</span>
+                  <SplitFlapPrice
+                    value={tomorrowVal}
+                    testId="tomorrow-cheapest-price-hero"
+                    ariaLabel={tomorrowVal != null ? `Huomisen ennuste ${fmtPrice(tomorrowVal)} euroa litralta` : "Huomisen ennuste odottaa dataa"}
+                    className="split-flap-price--hero"
+                  />
                   <p data-testid="forecast-delta">{formatCents(tomorrowDelta)} suhteessa ankkuriin</p>
                 </div>
               </div>
@@ -1066,6 +1085,11 @@ export default function App() {
             tone="amber"
           />
         </section>
+
+        <FuelPumpCalculator
+          petrol95={pumpPrices.petrol95 || (fuel === "95E10" ? current : null)}
+          diesel={pumpPrices.diesel || (fuel === "diesel" ? current : null)}
+        />
 
         <section id="charts" className="dashboard-section">
           <div className="section-heading">
@@ -1266,3 +1290,5 @@ export default function App() {
     </div>
   );
 }
+
+
