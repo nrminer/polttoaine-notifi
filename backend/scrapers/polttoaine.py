@@ -3,8 +3,11 @@ Scraper for polttoaine.net - the "20 cheapest" page, per fuel kind.
 The site is latin1-encoded with a simple HTML table.
 """
 import re
+from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
+
+from forecast_contract import HELSINKI
 
 BASE_URL = "https://polttoaine.net/index.php?cmd=20halvinta"
 HEADERS = {
@@ -38,6 +41,23 @@ def _extract_chain(station_name: str) -> str:
         if chain in name_upper:
             return chain.capitalize() if chain not in ["ABC", "SEO"] else chain
     return ""
+
+
+def _freshness_hours(date_text: str, now: datetime | None = None) -> float:
+    """Convert polttoaine.net's DD.MM. report date to a conservative age."""
+    match = re.match(r"^\s*(\d{1,2})\.(\d{1,2})\.?\s*$", date_text or "")
+    if not match:
+        return 999.0
+    now = (now or datetime.now(HELSINKI)).astimezone(HELSINKI)
+    day, month = map(int, match.groups())
+    try:
+        reported = datetime(now.year, month, day, tzinfo=HELSINKI)
+        if reported.date() > now.date() + timedelta(days=2):
+            reported = reported.replace(year=now.year - 1)
+    except ValueError:
+        return 999.0
+    age = (now - reported).total_seconds() / 3600
+    return age if age >= 0 else 999.0
 
 
 def fetch_prices(fuel: str = "95E10") -> list:
@@ -82,6 +102,7 @@ def fetch_prices(fuel: str = "95E10") -> list:
             "address": address,
             "price": price,
             "date": date_cell,
+            "age_hours": _freshness_hours(date_cell),
             "fuel": fuel,
             "source": "polttoaine.net",
             "chain": _extract_chain(station),

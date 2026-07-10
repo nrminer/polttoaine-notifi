@@ -13,8 +13,6 @@ that can impact fuel prices (OPEC decisions, Middle East conflicts, sanctions, e
 ENHANCED v2: AI-powered relevance scoring to calculate fuel price impact probability.
 """
 from __future__ import annotations
-import asyncio
-import json
 import re
 import html
 import requests
@@ -23,7 +21,6 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from threading import Lock
 from defusedxml.ElementTree import fromstring
-from llm_client import configured_news_model, is_llm_configured, send_message
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BensaVahti/2.0)"}
 TIMEOUT = 12
@@ -529,152 +526,3 @@ def get_max_severity(items: list[dict], max_age_hours: float = 6.0) -> int:
     if not breaking:
         return 0
     return max(item.get("severity", 0) for item in breaking)
-
-
-async def calculate_relevance_with_ai(items: list[dict], batch_size: int = 10) -> list[dict]:
-    """Use AI to calculate fuel price impact relevance for each news item.
-    
-    Adds three fields to each item:
-    - relevance_score (0-100): probability this will affect Finnish fuel prices
-    - impact_direction ("up", "down", "neutral"): expected price movement
-    - impact_magnitude ("low", "medium", "high"): expected size of impact
-    
-    Returns items with AI analysis populated. If AI unavailable, returns unchanged.
-    """
-    if not is_llm_configured():
-        return items
-    
-    system_message = (
-        "Olet energiamarkkinoiden analyytikko, joka arvioi uutisten vaikutusta "
-        "Suomen vähittäispolttoaineiden pumppuhintoihin (95E10 bensiini ja diesel). "
-        "Arvioi JOKAINEN uutinen seuraavasti:\n\n"
-        "1. RELEVANCE_SCORE (0-100): Kuinka todennäköisesti tämä uutinen vaikuttaa "
-        "Suomen pumppuhintoihin seuraavan 1-7 päivän aikana?\n"
-        "   - 80-100: Suora vaikutus (OPEC-päätökset, verot, Suomen huoltoasemat)\n"
-        "   - 60-79: Vahva epäsuora (raakaöljyhinta, jalostamot, geopolitiikka)\n"
-        "   - 40-59: Kohtalainen (energiamarkkinat yleisesti, valuutta)\n"
-        "   - 20-39: Heikko (pitkän aikavälin trendit, spekulaatio)\n"
-        "   - 0-19: Ei merkitystä (ei liity energiaan tai vain keskustelua)\n\n"
-        "2. IMPACT_DIRECTION: Odotettu suunta\n"
-        "   - 'up': hinta nousee (tarjonnan väheneminen, kysyntä kasvaa, vero nousee)\n"
-        "   - 'down': hinta laskee (tarjonta kasvaa, kysyntä vähenee)\n"
-        "   - 'neutral': ei selvää suuntaa tai vastakkaiset voimat\n\n"
-        "3. IMPACT_MAGNITUDE: Odotettu vaikutuksen suuruus\n"
-        "   - 'high': >5 senttiä/litra (veronkorotus, suuri tarjontahäiriö)\n"
-        "   - 'medium': 2-5 senttiä/litra (OPEC-päätökset, geopoliittiset kriisit)\n"
-        "   - 'low': <2 senttiä/litra (pienet markkinaliikkeet, trendit)\n\n"
-        "Palauta VAIN JSON-array, yksi objekti per uutinen:\n"
-        '[{"relevance_score": 85, "impact_direction": "up", "impact_magnitude": "medium", '
-        '"reasoning": "OPEC leikkaa tuotantoa"}, ...]'
-    )
-    
-    # Process in batches to avoid token limits
-    analyzed_items = []
-    for i in range(0, len(items), batch_size):
-        batch = items[i:i+batch_size]
-        
-        # Build prompt with numbered articles
-        prompt_parts = ["Analysoi seuraavat uutiset:\n"]
-        for idx, item in enumerate(batch, 1):
-            age_str = f"{int(item['age_hours'])}h sitten" if item.get('age_hours') else "?"
-            prompt_parts.append(
-                f"{idx}. [{age_str}] {item['title']}\n"
-                f"   Lähde: {item['source']}\n"
-                f"   Kuvaus: {item['description'][:150]}\n"
-            )
-        prompt = "\n".join(prompt_parts)
-        
-        try:
-            response = await send_message(
-                system_message=system_message,
-                user_message=prompt,
-                model=configured_news_model(),
-                max_tokens=900,
-                temperature=0.0,
-            )
-            
-            # Parse JSON response
-            raw = response.strip()
-            if raw.startswith("```"):
-                raw = raw.strip("`")
-                if raw.lower().startswith("json"):
-                    raw = raw[4:].strip()
-            first = raw.find("[")
-            last = raw.rfind("]")
-            if first != -1 and last > first:
-                raw = raw[first:last + 1]
-            
-            analyses = json.loads(raw)
-            
-            # Merge analyses back into items
-            for idx, analysis in enumerate(analyses):
-                if idx < len(batch):
-                    batch[idx]["relevance_score"] = analysis.get("relevance_score", 0)
-                    batch[idx]["impact_direction"] = analysis.get("impact_direction", "neutral")
-                    batch[idx]["impact_magnitude"] = analysis.get("impact_magnitude", "low")
-                    batch[idx]["ai_reasoning"] = analysis.get("reasoning", "")
-            
-            analyzed_items.extend(batch)
-            
-        except Exception as e:
-            # If AI fails, return items with no relevance scores
-            for item in batch:
-                item["relevance_score"] = None
-                item["impact_direction"] = None
-                item["impact_magnitude"] = None
-            analyzed_items.extend(batch)
-            continue
-    
-    return analyzed_items
-
-
-def fetch_news_with_ai_relevance(
-    queries=None, 
-    max_age_days: int = 14, 
-    limit: int = 20,
-    min_relevance: int = 40,
-    use_ai: bool = True
-) -> list[dict]:
-    """Fetch news and optionally calculate AI relevance scores.
-    
-    Args:
-        queries: Deprecated, kept for compatibility
-        max_age_days: Maximum age of news items
-        limit: Maximum number of items to return AFTER filtering by relevance
-        min_relevance: Minimum relevance score (0-100) to include
-        use_ai: Whether to use AI for relevance scoring (requires ANTHROPIC_AUTH_TOKEN)
-    
-    Returns:
-        List of news items sorted by relevance_score (if AI used) or age_hours
-    """
-    # First fetch all matching news
-    all_news = fetch_news(queries, max_age_days, limit=100)  # Get more initially
-    
-    if not use_ai or not is_llm_configured():
-        # Return without AI analysis
-        return all_news[:limit]
-    
-    # Calculate AI relevance asynchronously
-    try:
-        analyzed = asyncio.run(calculate_relevance_with_ai(all_news))
-        
-        # Filter by minimum relevance
-        filtered = [
-            item for item in analyzed 
-            if item.get("relevance_score") is not None 
-            and item["relevance_score"] >= min_relevance
-        ]
-        
-        # Sort by relevance score (highest first), then by recency
-        filtered.sort(
-            key=lambda x: (
-                -(x.get("relevance_score") or 0),  # Negative for descending
-                x.get("age_hours") or 999
-            )
-        )
-        
-        return filtered[:limit]
-        
-    except Exception:
-        # Fallback to non-AI version
-        return all_news[:limit]

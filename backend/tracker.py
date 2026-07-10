@@ -12,15 +12,12 @@ The frontend graph plots these rows over time:
   - predicted_cheapest_for_today (dot — yesterday's call for today)
   - prediction_for_tomorrow (next-day forecast)
 
-Additionally, silent scrapes run at configurable hours (default 6,8,10,12,16,18,20,22)
-to capture observations without predictions or notifications.
 """
 from __future__ import annotations
 import asyncio
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import predict as predict_mod
 import factors as factors_mod
@@ -29,118 +26,52 @@ import notify as notify_mod
 import tax_events as tax_events_mod
 import learn as learn_mod
 import price_verification as verification_mod
-import accuracy_utils as accuracy_mod
-import traffic as traffic_mod
-import weather as weather_mod
+from pymongo.errors import DuplicateKeyError
+from forecast_contract import (
+    HELSINKI,
+    MODEL_VERSION,
+    TARGET_HOUR,
+    daily_series,
+    target_date,
+)
 from scrapers import polttoaine, tankille
-from validation import validate_scraped_data
+from validation import filter_fresh_rows, validate_scraped_data
 
 logger = logging.getLogger("bensavahti.tracker")
-
-try:
-    HELSINKI = ZoneInfo("Europe/Helsinki")
-except ZoneInfoNotFoundError:
-    try:
-        from dateutil import tz
-
-        HELSINKI = tz.gettz("Europe/Helsinki")
-    except Exception:
-        HELSINKI = timezone(timedelta(hours=2), "Europe/Helsinki")
 
 # Päivittäiset ajastetut captureajat (Helsinki-aika) — ennuste + ilmoitus
 SCHEDULED_HOURS = (14, 21)
 
-# Hiljaiset skraappausajat (Helsinki-aika) — vain havainto, ei ennustetta tai ilmoitusta
-def _parse_silent_hours() -> tuple[int, ...]:
-    """Parse SILENT_SCRAPE_HOURS from env (comma-separated integers)."""
-    raw = os.environ.get("SILENT_SCRAPE_HOURS", "6,8,10,12,16,18,20,22")
-    if not raw.strip():
-        return ()
-    try:
-        return tuple(sorted(set(int(h.strip()) for h in raw.split(",") if h.strip())))
-    except ValueError:
-        logger.warning("Invalid SILENT_SCRAPE_HOURS=%r, using default", raw)
-        return (6, 8, 10, 12, 16, 18, 20, 22)
-
-SILENT_SCRAPE_HOURS = _parse_silent_hours()
-
 # Kaupungit joista kerätään halvin + keskihinta jokaisessa capturessa
 TRACKED_CITIES = ("Helsinki", "Espoo", "Vantaa", "Tampere", "Turku", "Lahti")
-
-
-def _demand_context_sync() -> dict:
-    """STORE-ONLY kysyntäkonteksti per capture (sää + liikenne).
-
-    Kerätään daily_tracker-dokumenttiin tulevaa kalibrointia varten — EI
-    syötetä ennusteeseen, koska kysyntä→hinta-kertoimia ei ole mitattu
-    tästä markkinasta (ks. weather.py / traffic.py docstringit). Kun
-    captureita kertyy, ennustevirheet voidaan regressoida näitä vasten ja
-    vasta mitattu kerroin viedään malliin.
-
-    Tallennetaan vain AIDOT lukemat: API-katkossa kenttä jää pois
-    (ei neutraaleja täytearvoja)."""
-    ctx: dict = {}
-    try:
-        conditions = weather_mod.fetch_weather_conditions()
-        # fetch_weather_conditions palauttaa kaupungeille neutraalit
-        # oletusarvot myös API-katkossa → vaadi vähintään yksi AITO
-        # lämpötilalukema ennen kuin indeksi tallennetaan.
-        has_real_reading = any(
-            v.get("temp_celsius") is not None for v in conditions.values()
-        )
-        if has_real_reading:
-            # fetch_weather_conditions on välimuistitettu (3 h), joten
-            # winter_severity_index ei tee tuplahakua
-            ctx["winter_severity"] = round(weather_mod.winter_severity_index(), 3)
-    except Exception:
-        pass
-    try:
-        proxy = traffic_mod.traffic_demand_proxy()
-        if proxy is not None:
-            ctx["traffic_demand_proxy"] = round(float(proxy), 4)
-    except Exception:
-        pass
-    return ctx
-
-# Järkevät rajat Suomen polttoainehinnoille (€/L) — pudota parsintavirheet
-_PRICE_MIN = 1.10
-_PRICE_MAX = 3.50
-
 
 def helsinki_today() -> date:
     return datetime.now(HELSINKI).date()
 
 
 def next_scheduled_run(now_utc: datetime | None = None) -> datetime:
-    """Return UTC datetime of the next scheduled event (SCHEDULED_HOURS + SILENT_SCRAPE_HOURS)."""
+    """Return the next scheduled capture in UTC."""
     now_utc = now_utc or datetime.now(timezone.utc)
     now_hel = now_utc.astimezone(HELSINKI)
-    all_hours = sorted(set(SCHEDULED_HOURS) | set(SILENT_SCRAPE_HOURS))
     candidates = []
     for offset in range(2):  # tänään + huomenna
         day = (now_hel + timedelta(days=offset)).date()
-        for hour in all_hours:
+        for hour in SCHEDULED_HOURS:
             t = datetime.combine(day, datetime.min.time(), tzinfo=HELSINKI).replace(hour=hour)
             if t > now_hel:
                 candidates.append(t)
     if not candidates:
         # fallback: huomenna ensimmäinen tunti
         d = (now_hel + timedelta(days=1)).date()
-        first_hour = all_hours[0] if all_hours else 0
+        first_hour = SCHEDULED_HOURS[0]
         candidates.append(datetime.combine(
             d, datetime.min.time(), tzinfo=HELSINKI
         ).replace(hour=first_hour))
     return min(candidates).astimezone(timezone.utc)
 
-
-def next_18_helsinki(now_utc: datetime | None = None) -> datetime:
-    """Compat alias - now returns next_scheduled_run."""
-    return next_scheduled_run(now_utc)
-
-
 def _sane(rows: list) -> list:
-    """Drop parse errors and statistical price outliers."""
-    return validate_scraped_data(rows, source="tracker")
+    """Drop stale observations, parse errors, and statistical outliers."""
+    return filter_fresh_rows(validate_scraped_data(rows, source="tracker"))
 
 
 def _city_breakdown(rows: list) -> dict:
@@ -155,16 +86,25 @@ def _city_breakdown(rows: list) -> dict:
         lst = by_city.get(city)
         if not lst:
             out[city] = {"cheapest": None, "average": None, "count": 0,
-                         "station": None, "source": None}
+                         "station": None, "source": None, "observed": False}
             continue
         prices = [x["price"] for x in lst]
         cheapest = min(lst, key=lambda x: x["price"])
+        source_mins = {}
+        for row in lst:
+            source = row.get("source") or "unknown"
+            source_mins[source] = min(source_mins.get(source, row["price"]), row["price"])
         out[city] = {
             "cheapest": round(min(prices), 3),
             "average": round(sum(prices) / len(prices), 3),
             "count": len(lst),
             "station": cheapest.get("station"),
             "source": cheapest.get("source"),
+            "chain": cheapest.get("chain"),
+            "age_hours": cheapest.get("age_hours"),
+            "sources_count": len(source_mins),
+            "source_spread": round(max(source_mins.values()) - min(source_mins.values()), 3),
+            "observed": True,
         }
     return out
 
@@ -203,81 +143,8 @@ async def _scrape_cheapest(fuel: str, executor) -> dict:
     }
 
 
-async def realized_method_mae(db, fuel: str, region: str = "Suomi",
-                              days: int = 30) -> dict:
-    """Menetelmäkohtainen TOTEUTUNUT MAE viimeisen `days` päivän ajalta.
-
-    Vertaa tallennettuja `predictions.methods`-pisteitä AITOON toteumaan
-    (`daily_tracker.actual_cheapest`, myöhäisin capture/päivä) — EI synteettistä
-    eikä mallinnettua dataa. Palauttaa {menetelmä: {"n": int, "mae": float|None}}
-    jonka ensemble käyttää itsekalibrointiin. Sama totuuslähde kuin
-    /api/accuracy:lla; tyhjä historia → kaikki n=0 (ensemble palaa kiinteisiin
-    painoihin)."""
-    methods = ("moving_average", "linear_regression", "exp_smoothing",
-               "fundamental_anchor", "ai_llm", "weekly_cycle", "ensemble")
-    errs: dict[str, list] = {m: [] for m in methods}
-    rows = await accuracy_mod.realized_prediction_rows(
-        db, fuel, region, days=days, methods=methods
-    )
-    for row in rows:
-        actual = row.get("actual")
-        for m, v in (row.get("methods") or {}).items():
-            if m in errs and v is not None:
-                errs[m].append(abs(v - actual))
-    return {
-        m: {"n": len(e), "mae": (sum(e) / len(e)) if e else None}
-        for m, e in errs.items()
-    }
-
-
-async def silent_scrape(db, executor, fuel: str, hour: int) -> dict:
-    """Silent scrape: capture observation without prediction or notification.
-
-    Writes to price_observations collection:
-    - date, hour, fuel
-    - cheapest price + station + city
-    - per-city breakdown
-    - timestamp
-
-    No predictions, no ntfy push.
-    """
-    now_hel = datetime.now(HELSINKI)
-    today = now_hel.date()
-    today_iso = today.isoformat()
-
-    # Scrape current prices
-    cheapest = await _scrape_cheapest(fuel, executor)
-
-    # Store observation
-    doc = {
-        "date": today_iso,
-        "hour": hour,
-        "fuel": fuel,
-        "scraped_at": datetime.now(timezone.utc).isoformat(),
-        "cheapest": cheapest["price"],
-        "cheapest_station": cheapest.get("station"),
-        "cheapest_city": cheapest.get("city"),
-        "cheapest_source": cheapest.get("source"),
-        "stations_scanned": cheapest.get("count", 0),
-        "by_city": cheapest.get("by_city", {}),
-    }
-
-    await db.price_observations.update_one(
-        {"date": today_iso, "hour": hour, "fuel": fuel},
-        {"$set": doc},
-        upsert=True,
-    )
-
-    logger.info(
-        "silent scrape %s @%02dh: cheapest=%s (%s)",
-        fuel, hour, cheapest["price"], cheapest.get("city")
-    )
-
-    return doc
-
-
 async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
-                        hour: int | None = None) -> dict:
+                        hour: int | None = None, canonical: bool = False) -> dict:
     """One scheduled capture (14:00 or 21:00 Helsinki). Idempotent on
     (date, fuel, region, hour) - re-running the same slot overwrites it."""
     now_hel = datetime.now(HELSINKI)
@@ -287,6 +154,12 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         cur_h = now_hel.hour
         hour = min(SCHEDULED_HOURS, key=lambda h: abs(h - cur_h))
     today_iso = today.isoformat()
+    capture_key = {"date": today_iso, "hour": hour, "fuel": fuel, "region": region}
+
+    if not canonical:
+        existing = await db.daily_tracker.find_one(capture_key, {"_id": 0})
+        if existing and existing.get("capture_canonical") is True:
+            return existing
 
     # 1) skraapaa
     cheapest = await _scrape_cheapest(fuel, executor)
@@ -342,30 +215,32 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         {"_id": 0},
     ).sort([("date", 1), ("hour", 1)]).to_list(length=600)
 
-    # the "predicted_cheapest_for_today" line on the chart compares the latest
-    # prior prediction to this slot's actual. We pick the most recent doc whose
-    # (date, hour) is strictly before this one and that has a tomorrow_prediction.
+    # Compare only yesterday's canonical 21:00 forecast with today's 21:00 actual.
     predicted_for_now = None
-    for r in reversed(tracker_hist):
-        r_date = r.get("date")
-        r_hour = r.get("hour", 20)  # legacy rows treated as evening
-        if (r_date, r_hour) < (today_iso, hour):
-            predicted_for_now = r.get("prediction_for_tomorrow_cheapest")
-            if predicted_for_now is not None:
-                break
+    source_date = (today - timedelta(days=1)).isoformat()
+    if hour == TARGET_HOUR:
+        source = next(
+            (row for row in reversed(tracker_hist)
+             if row.get("date") == source_date and row.get("hour") == TARGET_HOUR),
+            None,
+        )
+        predicted_for_now = (source or {}).get("prediction_for_tomorrow_cheapest")
+
+    actual_status = (
+        "missing" if cheapest["price"] is None
+        else "imputed" if cheapest.get("verification_override")
+        else "observed"
+    )
 
     # 3) build series for prediction
-    series = [(r["date"], r["actual_cheapest"]) for r in tracker_hist
-              if r.get("actual_cheapest") is not None]
-    if cheapest["price"] is not None:
-        series.append((today_iso, cheapest["price"]))
+    series = daily_series(tracker_hist, region)
+    if cheapest["price"] is not None and actual_status == "observed":
+        series = sorted({**dict(series), today_iso: cheapest["price"]}.items())
 
     prediction_tomorrow = None
     prediction_full = None
-    hourly_predictions = None
-    best_window = None
     
-    if cheapest["price"] is not None and len(series) >= 1:
+    if cheapest["price"] is not None and actual_status == "observed" and len(series) >= 1:
         dates = [d for d, _ in series]
         prices = [p for _, p in series]
         loop = asyncio.get_event_loop()
@@ -389,16 +264,17 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
         crack_val = factors_mod.crack_spread_eur_per_l(product_val, brent_val, fx_val)
 
         # Tunnetut veromuutokset: huomenna voimaan tuleva askel + 30 pv ikkuna
-        today_iso_dt = datetime.now(timezone.utc).date().isoformat()
-        target_iso = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+        today_iso_dt = today_iso
+        target_iso = target_date(now_hel).isoformat()
         tax_step = tax_events_mod.applicable_step(fuel, today_iso_dt, target_iso)
         tax_step_eur_l = tax_step["delta_eur_per_l"] if tax_step else None
         tax_upcoming = tax_events_mod.upcoming(today_iso_dt, lookahead_days=30, fuel=fuel)
 
-        # itsekalibrointi: menetelmien toteutunut MAE aidoista captureista
-        mae = await realized_method_mae(db, fuel, region)
-        # Self-training: aiempien ennusteiden vs. toteumien track record
         track_rec = await learn_mod.track_record(db, fuel, region, days=30)
+        mae = {
+            method: {"n": stats.get("n", 0), "mae": stats.get("mae")}
+            for method, stats in track_rec["stats"].items()
+        }
         
         # Check for breaking news severity (within last 6 hours)
         breaking_severity = news_mod.get_max_severity(headlines, max_age_hours=6.0)
@@ -412,10 +288,8 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
                               item.get("source", ""),
                               item.get("age_hours", 0))
         
-        # Call predict_by_hour instead of predict_tomorrow
-        hourly_result = await predict_mod.predict_by_hour(
+        full = await predict_mod.predict_tomorrow(
             fuel, dates, prices,
-            target_hours=list(SCHEDULED_HOURS),
             brent=brent_val,
             eur_usd=fx_val,
             live_today_price=cheapest["price"],
@@ -432,77 +306,116 @@ async def capture_daily(db, executor, fuel: str, region: str = "Suomi",
             tax_step_eur_l=tax_step_eur_l,
             track_record=track_rec,
             breaking_news_severity=breaking_severity,
+            target_date_iso=target_iso,
         )
-        
-        full = hourly_result["base_prediction"]
-        hourly_predictions = hourly_result.get("hourly", {})
-        
-        # Use base ensemble for tomorrow's overall prediction
         prediction_tomorrow = full["ensemble"].get("value")
         prediction_full = full
-        
-        # Find best hour window
-        best_window = predict_mod.find_best_window(
-            hourly_predictions,
-            current_price=cheapest["price"]
-        )
 
-    # Store-only kysyntäkonteksti (sää + liikenne) kalibrointia varten.
-    # Aikaraja pitää capture-polun nopeana; katkossa jää tyhjäksi.
-    demand_context: dict = {}
-    try:
-        demand_context = await asyncio.wait_for(
-            asyncio.get_event_loop().run_in_executor(executor, _demand_context_sync),
-            timeout=30,
-        )
-    except Exception:
-        demand_context = {}
+    target_iso = target_date(now_hel).isoformat()
+    captured_at = datetime.now(timezone.utc).isoformat()
+    by_city = cheapest.get("by_city", {})
+    for city in TRACKED_CITIES:
+        city_row = by_city.get(city) or {}
+        value = city_row.get("cheapest")
+        city_row["prediction_for_tomorrow_cheapest"] = value
+        city_row["prediction_target_date"] = target_iso
+        city_row["prediction_target_hour"] = TARGET_HOUR
 
     doc = {
         "date": today_iso,
         "hour": hour,
         "fuel": fuel,
         "region": region,
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": captured_at,
         "actual_cheapest": cheapest["price"],
         "actual_cheapest_station": cheapest.get("station"),
         "actual_cheapest_city": cheapest.get("city"),
         "actual_cheapest_source": cheapest.get("source"),
         "stations_scanned": cheapest.get("count", 0),
-        "by_city": cheapest.get("by_city", {}),
+        "by_city": by_city,
         "predicted_cheapest_for_today": predicted_for_now,
         "prediction_for_tomorrow_cheapest": (
             round(prediction_tomorrow, 3) if prediction_tomorrow else None
         ),
         "prediction_full": prediction_full,
-        "hourly_predictions": hourly_predictions,
-        "best_window": best_window,
+        "prediction_target_date": target_iso,
+        "prediction_target_hour": TARGET_HOUR,
+        "prediction_issued_hour": hour,
+        "prediction_model_version": MODEL_VERSION,
+        "prediction_evaluation_eligible": canonical and hour == TARGET_HOUR,
+        "capture_canonical": canonical,
         # Verification metadata (if price was overridden)
         "verification_override": cheapest.get("verification_override", False),
         "original_scraped_price": cheapest.get("original_scraped_price"),
         "verification_failed": cheapest.get("verification_failed", False),
-        # Store-only demand context for future calibration (see _demand_context_sync)
-        "demand_context": demand_context,
+        "actual_status": actual_status,
     }
-    await db.daily_tracker.update_one(
-        {"date": today_iso, "hour": hour, "fuel": fuel, "region": region},
-        {"$set": doc},
-        upsert=True,
-    )
+    write_filter = capture_key if canonical else {
+        **capture_key,
+        "capture_canonical": {"$ne": True},
+    }
+    try:
+        await db.daily_tracker.update_one(write_filter, {"$set": doc}, upsert=True)
+    except DuplicateKeyError:
+        existing = await db.daily_tracker.find_one(capture_key, {"_id": 0})
+        if existing and existing.get("capture_canonical") is True:
+            return existing
+        raise
+    for city, city_row in by_city.items():
+        value = city_row.get("prediction_for_tomorrow_cheapest")
+        if value is None:
+            continue
+        persistence = predict_mod.persistence_forecast(value)
+        canonical_prediction = {
+            "target_hour": TARGET_HOUR,
+            "issued_at": captured_at,
+            "issued_hour": hour,
+            "model_version": MODEL_VERSION,
+            "evaluation_eligible": canonical and hour == TARGET_HOUR,
+            "methods": {"persistence": value},
+            "methods_full": {"persistence": persistence},
+            "ensemble": value,
+            "ensemble_full": persistence,
+        }
+        prediction_doc = {
+            "target_date": target_iso,
+            "target_hour": TARGET_HOUR,
+            "fuel": fuel,
+            "region": city,
+            "generated_at": captured_at,
+            "issued_at": captured_at,
+            "issued_hour": hour,
+            "model_version": MODEL_VERSION,
+            "evaluation_eligible": canonical and hour == TARGET_HOUR,
+            "methods": {"persistence": value},
+            "methods_full": {"persistence": persistence},
+            "ensemble": value,
+            "ensemble_full": persistence,
+            "current_price": value,
+            "live_anchor": value,
+            "data_sources": {
+                "source": "daily_tracker_city_capture",
+                "combined_points": len(daily_series(tracker_hist + [doc], city)),
+                "sources_count": city_row.get("sources_count"),
+                "stations_count": city_row.get("count"),
+                "most_recent_scrape": captured_at,
+            },
+        }
+        if canonical and hour == TARGET_HOUR:
+            prediction_doc["canonical"] = canonical_prediction
+        await db.predictions.update_one(
+            {"target_date": target_iso, "fuel": fuel, "region": city},
+            {"$set": prediction_doc},
+            upsert=True,
+        )
     return doc
 
 
-async def unified_scheduler_loop(db, executor, fuels=("95E10", "diesel")):
-    """Background task: sleep until next scheduled event (notification capture or silent scrape).
-
-    - SCHEDULED_HOURS (14, 21): full capture with prediction and notification
-    - SILENT_SCRAPE_HOURS (6,8,10,12,16,18,20,22): observation only, no prediction/notification
-    """
-    all_hours = sorted(set(SCHEDULED_HOURS) | set(SILENT_SCRAPE_HOURS))
+async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
+    """Run full captures and notifications at the scheduled Helsinki hours."""
     logger.info(
-        "unified scheduler started — notification: %s, silent: %s (all Helsinki time)",
+        "scheduler started: %s Helsinki time",
         ", ".join(f"{h:02d}:00" for h in SCHEDULED_HOURS),
-        ", ".join(f"{h:02d}:00" for h in SILENT_SCRAPE_HOURS)
     )
 
     while True:
@@ -513,63 +426,36 @@ async def unified_scheduler_loop(db, executor, fuels=("95E10", "diesel")):
             target_hel = target.astimezone(HELSINKI)
             run_hour = target_hel.hour
 
-            is_notification_hour = run_hour in SCHEDULED_HOURS
-            is_silent_hour = run_hour in SILENT_SCRAPE_HOURS
-
-            event_type = []
-            if is_notification_hour:
-                event_type.append("notification")
-            if is_silent_hour:
-                event_type.append("silent")
-            event_label = "+".join(event_type) if event_type else "unknown"
-
             logger.info(
-                "scheduler: sleeping %.0fs until %s Helsinki (%s)",
-                wait, target_hel.strftime("%Y-%m-%d %H:%M"), event_label
+                "scheduler: sleeping %.0fs until %s Helsinki",
+                wait, target_hel.strftime("%Y-%m-%d %H:%M")
             )
             await asyncio.sleep(wait)
 
-            if is_notification_hour:
-                # Full capture with prediction and notification
-                captured_docs: list[dict] = []
-                for fuel in fuels:
-                    try:
-                        doc = await capture_daily(db, executor, fuel, hour=run_hour)
-                        captured_docs.append(doc)
-                        logger.info(
-                            "notification capture %s @%02dh: actual=%s predicted_tomorrow=%s",
-                            fuel, run_hour, doc.get("actual_cheapest"),
-                            doc.get("prediction_for_tomorrow_cheapest")
-                        )
-                    except Exception as e:
-                        logger.exception("notification capture failed for %s: %s", fuel, e)
-
-                # Send consolidated push notification
+            for fuel in fuels:
                 try:
-                    notify_mod.send_daily_summary(captured_docs)
+                    doc = await capture_daily(
+                        db, executor, fuel, hour=run_hour, canonical=True
+                    )
+                    logger.info(
+                        "capture %s @%02dh: actual=%s predicted_tomorrow=%s",
+                        fuel, run_hour, doc.get("actual_cheapest"),
+                        doc.get("prediction_for_tomorrow_cheapest")
+                    )
                 except Exception as e:
-                    logger.exception("ntfy send failed: %s", e)
+                    logger.exception("capture failed for %s: %s", fuel, e)
 
-            elif is_silent_hour:
-                # Silent scrape only (no prediction, no notification)
-                for fuel in fuels:
-                    try:
-                        await silent_scrape(db, executor, fuel, hour=run_hour)
-                    except Exception as e:
-                        logger.exception("silent scrape failed for %s @%02dh: %s", fuel, run_hour, e)
+            try:
+                notify_mod.send_daily_summary()
+            except Exception as e:
+                logger.exception("ntfy send failed: %s", e)
 
         except asyncio.CancelledError:
-            logger.info("unified scheduler stopped")
+            logger.info("scheduler stopped")
             return
         except Exception as e:
             logger.exception("scheduler loop error: %s", e)
             await asyncio.sleep(300)
-
-
-async def scheduler_loop(db, executor, fuels=("95E10", "diesel")):
-    """Legacy alias for unified_scheduler_loop — maintained for backward compatibility."""
-    return await unified_scheduler_loop(db, executor, fuels)
-
 
 def _news_signature(items) -> frozenset:
     """Vakaakuvaus suodatetuista uutisotsikoista (news_mod suodattaa jo
@@ -587,9 +473,8 @@ async def news_watch_loop(db, executor, fuels, predict_fn,
     """Tarkkaile polttoaine-/öljyuutisia ja aja AI-analyysi (ennuste)
     uudelleen kun suodatettu otsikkojoukko MUUTTUU.
 
-    - `predict_fn(fuel)` : async-callable joka ajaa tuoreen ennusteen ja
-      tallentaa sen `predictions`-kokoelmaan (sama mitä /api/predict/run tekee;
-      UI lukee tämän /api/predict/latest -kautta).
+    - `predict_fn(fuel)` : async-callable joka ajaa tuoreen ennusteen,
+      tallentaa sen `predictions`-kokoelmaan ja päivittää UI:n lukeman.
     - Poll-väli `NEWS_WATCH_SECONDS` (oletus 1800 s); 0 = pois käytöstä.
     - `min_rerun_seconds` rajoittaa LLM-kustannusta: ennustetta ei aja
       uudelleen useammin kuin tämän välein vaikka uutisia tulisi tiuhaan.

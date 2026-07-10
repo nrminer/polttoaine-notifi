@@ -8,6 +8,7 @@ comparisons. The fixes under test:
   - fundamental_anchor: noise-damped anchor (live blended with 3-day
     median), momentum shrinkage, RMSE-calibrated confidence band
 """
+import asyncio
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -157,3 +158,19 @@ def test_fa_band_capped():
 
     band = out["confidence_high"] - out["value"]
     assert abs(band - predict._FA_BAND_MAX) < 1e-6
+
+
+def test_persistence_is_production_champion(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    dates, prices = _daily_series([1.70, 1.71, 1.69, 1.68])
+
+    result = asyncio.run(predict.predict_tomorrow(
+        "95E10", dates, prices, brent=None, eur_usd=None,
+        live_today_price=1.68,
+        target_date_iso="2026-06-11",
+    ))
+
+    assert result["methods"]["persistence"]["value"] == 1.68
+    assert result["ensemble"]["value"] == 1.68
+    assert result["challenger_ensemble"]["value"] is not None

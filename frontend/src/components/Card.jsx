@@ -38,24 +38,6 @@ export function CardLabel({ children, className = "", ...rest }) {
   );
 }
 
-export function StatNumber({ value, suffix = " EUR/L", digits = 3, testId, className = "" }) {
-  const formatted =
-    value === null || value === undefined || isNaN(value)
-      ? "-"
-      : Number(value).toFixed(digits);
-  return (
-    <div
-      data-testid={testId}
-      className={cn("hero-num tnum text-[44px] md:text-[52px] leading-none", className)}
-    >
-      {formatted}
-      <span className="text-[18px] text-secondary font-mono font-medium ml-2 align-baseline">
-        {suffix}
-      </span>
-    </div>
-  );
-}
-
 export function DeltaBadge({ delta, unit = "EUR/L", suffix = "" }) {
   if (delta === null || delta === undefined || isNaN(delta)) {
     return (

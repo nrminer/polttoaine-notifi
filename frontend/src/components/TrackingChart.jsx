@@ -48,12 +48,12 @@ export default function TrackingChart({
   rows = [],
   tomorrow,
   city = "Suomi",
-  height = "var(--tracking-chart-height, 360px)",
+  height = "var(--tracking-chart-height, 320px)",
 }) {
   const isCity = city && city !== "Suomi";
 
   const data = rows.map((r) => {
-    const hour = r.hour ?? 20;
+    const hour = r.hour ?? 21;
     const slot = `${r.date} ${String(hour).padStart(2, "0")}`;
     if (isCity) {
       const c = (r.by_city && r.by_city[city]) || {};
@@ -82,7 +82,7 @@ export default function TrackingChart({
     const lo = tomorrowConfidence.low ?? null;
     const hi = tomorrowConfidence.high ?? null;
     data.push({
-      slot: `${tomorrow.date} 14`,
+      slot: `${tomorrow.date} 21`,
       date: tomorrow.date,
       hour: 14,
       tomorrow: tomorrow.value,
@@ -124,12 +124,13 @@ export default function TrackingChart({
   const confidenceBandStyle = getConfidenceBandColor();
 
   return (
-    <div className="w-full" style={{ height }} data-testid="tracking-chart">
+    <div className="w-full" style={{ height }} data-testid="tracking-chart" role="img" aria-label={`${city} polttoainehinnan kehitys`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
           <CartesianGrid stroke="#E2E8F0" strokeDasharray="2 4" vertical={false} />
           <XAxis
             dataKey="slot"
+            padding={{ left: 8, right: 24 }}
             tickFormatter={(s) => {
               if (!s) return "";
               const [d, h] = s.split(" ");
@@ -139,7 +140,7 @@ export default function TrackingChart({
             tick={{ fontSize: 11, fill: "#64748B" }}
             tickLine={false}
             axisLine={{ stroke: "#CBD5E1" }}
-            minTickGap={24}
+            minTickGap={30}
           />
           <YAxis
             domain={[min, max]}
@@ -165,23 +166,23 @@ export default function TrackingChart({
                 type="monotone"
                 dataKey="cheapest"
                 name={`${city} · halvin`}
-                stroke="#002FA7"
+                 stroke="var(--chart-primary)"
                 strokeWidth={3}
-                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1.5 }}
+                 dot={{ r: 3, fill: "var(--chart-primary)", stroke: "var(--panel)", strokeWidth: 1.5 }}
                 activeDot={{ r: 6 }}
                 connectNulls
-                isAnimationActive
+                 isAnimationActive={false}
               />
               <Line
                 type="monotone"
                 dataKey="average"
                 name={`${city} · keskihinta`}
-                stroke="#F59E0B"
+                 stroke="var(--chart-secondary)"
                 strokeWidth={2.5}
                 strokeDasharray="5 4"
-                dot={{ r: 3, fill: "#F59E0B", stroke: "#fff", strokeWidth: 1 }}
+                 dot={{ r: 2, fill: "var(--chart-secondary)", stroke: "var(--panel)", strokeWidth: 1 }}
                 connectNulls
-                isAnimationActive
+                 isAnimationActive={false}
               />
             </>
           ) : (
@@ -194,18 +195,18 @@ export default function TrackingChart({
                 fill={confidenceBandStyle.fill}
                 fillOpacity={confidenceBandStyle.opacity}
                 connectNulls
-                isAnimationActive
+                 isAnimationActive={false}
               />
               <Line
                 type="monotone"
                 dataKey="actual"
                 name="Toteutunut halvin"
-                stroke="#002FA7"
+                 stroke="var(--chart-primary)"
                 strokeWidth={3}
-                dot={{ r: 4, fill: "#002FA7", stroke: "#fff", strokeWidth: 1.5 }}
+                 dot={{ r: 3, fill: "var(--chart-primary)", stroke: "var(--panel)", strokeWidth: 1.5 }}
                 activeDot={{ r: 6 }}
                 connectNulls
-                isAnimationActive
+                 isAnimationActive={false}
               />
               <Scatter
                 name="Edellisen päivän ennuste"
@@ -222,7 +223,7 @@ export default function TrackingChart({
                 strokeDasharray="6 4"
                 dot={{ r: 6, fill: "#FDE047", stroke: "#0F172A", strokeWidth: 2 }}
                 connectNulls
-                isAnimationActive
+                 isAnimationActive={false}
               />
             </>
           )}

@@ -1,6 +1,0 @@
-C:\Users\adama\Downloads\poltto\polttoaine-notifi\.superpowers\brainstorm\1184-1780408972\content\layout-options.html
-C:\Users\adama\Downloads\poltto\polttoaine-notifi\backend\requirements.txt
-C:\Users\adama\Downloads\poltto\polttoaine-notifi\backend\tests\fixtures\hintatutka_sample.html
-C:\Users\adama\Downloads\poltto\polttoaine-notifi\docs\superpowers\plans\2026-06-02-frontend-dashboard-redesign.md
-C:\Users\adama\Downloads\poltto\polttoaine-notifi\docs\superpowers\specs\2026-06-02-frontend-dashboard-redesign-design.md
-C:\Users\adama\Downloads\poltto\polttoaine-notifi\memory\PRD.md

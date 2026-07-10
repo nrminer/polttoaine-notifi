@@ -1,8 +1,8 @@
 """
-Experimental scraper for hintatutka.fi - Finnish fuel price comparison site.
+Experimental scraper for hintatutka.net - Finnish fuel price comparison site.
 
 Site-specific notes:
-- hintatutka.fi aggregates station prices with city/region filtering
+- hintatutka.net aggregates station prices with city/region filtering
 - Prices are displayed in a sortable table or card layout
 - Timestamps are typically shown as relative time ("X tuntia sitten")
 - Station names often include chain prefix (e.g., "ABC Express", "Neste Oil")
@@ -10,7 +10,7 @@ Site-specific notes:
 
 This scraper is not part of the production scrape path unless
 ENABLE_HINTATUTKA_EXPERIMENTAL=1 is set. It still needs verification against
-live hintatutka.fi HTML before it can be promoted to a production data source.
+live hintatutka.net HTML before it can be promoted to a production data source.
 Key unknowns (to be filled after manual site inspection):
 - Exact URL patterns for fuel types and cities
 - HTML structure (table rows vs div cards)
@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
 
-BASE_URL = "https://hintatutka.fi"
+BASE_URL = "https://hintatutka.net"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; BensaVahti/2.0; personal use)"
 }
@@ -58,7 +58,7 @@ def _parse_price(text: str) -> Optional[float]:
 
 def _freshness_hours(date_text: str) -> float:
     """
-    Parse timestamp from hintatutka.fi format.
+    Parse timestamp from hintatutka.net format.
 
     Examples:
       "19 h sitten"                -> 19.0
@@ -138,7 +138,7 @@ def _extract_chain(station_name: str) -> str:
 
 
 def _scrape_city(city: str, fuel: str) -> List[Dict]:
-    """Scrape hintatutka.fi national page and filter for target city."""
+    """Scrape hintatutka.net national page and filter for target city."""
 
     fuel_display = FUEL_MAP.get(fuel)
     if not fuel_display:
@@ -199,7 +199,7 @@ def _scrape_city(city: str, fuel: str) -> List[Dict]:
             "date": timestamp_text,
             "age_hours": _freshness_hours(timestamp_text),
             "fuel": fuel,
-            "source": "hintatutka.fi",
+            "source": "hintatutka.net",
             "chain": _extract_chain(station_cell),
             "raw_name": station_cell,
         })
@@ -209,7 +209,7 @@ def _scrape_city(city: str, fuel: str) -> List[Dict]:
 
 def fetch_prices(fuel: str = "95E10", cities: Optional[List[str]] = None) -> List[Dict]:
     """
-    Fetch fuel prices from hintatutka.fi for specified cities.
+    Fetch fuel prices from hintatutka.net for specified cities.
 
     Args:
         fuel: Fuel type ("95E10" or "diesel")
@@ -225,7 +225,7 @@ def fetch_prices(fuel: str = "95E10", cities: Optional[List[str]] = None) -> Lis
             "date": str,
             "age_hours": float,
             "fuel": str,
-            "source": "hintatutka.fi",
+            "source": "hintatutka.net",
             "chain": str,          # Additional field
             "raw_name": str,       # Additional field
         }
@@ -256,7 +256,7 @@ if __name__ == "__main__":
     fuel = sys.argv[1] if len(sys.argv) > 1 else "95E10"
     cities = sys.argv[2:] if len(sys.argv) > 2 else ["Helsinki", "Espoo"]
 
-    print(f"# Scraping hintatutka.fi for {fuel} in {cities}", file=sys.stderr)
+    print(f"# Scraping hintatutka.net for {fuel} in {cities}", file=sys.stderr)
     data = fetch_prices(fuel, cities)
     print(json.dumps(data, indent=2, ensure_ascii=False))
     print(f"# Found {len(data)} stations", file=sys.stderr)

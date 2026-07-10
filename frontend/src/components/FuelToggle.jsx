@@ -3,15 +3,15 @@ import { Droplet, Fuel } from "lucide-react";
 import { cn } from "../lib/utils";
 
 const FUELS = [
-  { id: "95E10", label: "95E10", Icon: Fuel },
-  { id: "diesel", label: "Diesel", Icon: Droplet },
+  { id: "95E10", label: "95 E10", Icon: Fuel },
+  { id: "diesel", label: "diesel", Icon: Droplet },
 ];
 
 export default function FuelToggle({ value, onChange, testIdPrefix = "fuel" }) {
   return (
     <div
       className="fuel-switch"
-      role="tablist"
+      role="group"
       aria-label="Polttoaine"
       data-testid={`${testIdPrefix}-toggle`}
     >
@@ -21,8 +21,7 @@ export default function FuelToggle({ value, onChange, testIdPrefix = "fuel" }) {
           <button
             key={id}
             type="button"
-            role="tab"
-            aria-selected={active}
+            aria-pressed={active}
             onClick={() => onChange(id)}
             data-testid={`${testIdPrefix}-toggle-${id.toLowerCase()}`}
             className={cn("fuel-switch__button", active && "fuel-switch__button--active")}

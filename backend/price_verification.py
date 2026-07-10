@@ -161,42 +161,6 @@ async def verify_price(
     )
 
 
-def verify_batch_iqr(prices: list[float], label: str = "") -> list[int]:
-    """
-    IQR-based outlier detection on a batch of prices.
-    
-    Returns:
-        List of indices that are outliers (should be removed)
-    """
-    if len(prices) < 4:
-        return []  # not enough data for IQR
-    
-    sorted_prices = sorted(prices)
-    n = len(sorted_prices)
-    q1_idx = n // 4
-    q3_idx = (3 * n) // 4
-    q1 = sorted_prices[q1_idx]
-    q3 = sorted_prices[q3_idx]
-    iqr = q3 - q1
-    
-    if iqr < 0.001:  # essentially no variance
-        return []
-    
-    lower = q1 - 1.5 * iqr
-    upper = q3 + 1.5 * iqr
-    
-    outliers = []
-    for i, p in enumerate(prices):
-        if p < lower or p > upper:
-            outliers.append(i)
-            logger.warning(
-                "IQR outlier[%s]: %.3f EUR/L (bounds [%.3f, %.3f])",
-                label, p, lower, upper
-            )
-    
-    return outliers
-
-
 async def get_verification_context(db, fuel: str, region: str = "Suomi") -> dict:
     """
     Get historical context for verification logging and human review.

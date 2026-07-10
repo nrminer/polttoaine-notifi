@@ -7,7 +7,6 @@ Antaa rinnakkaisia ennusteita huomisen hinnalle:
     - exp_smoothing      : Holt-tyylinen taso + trendi (päivätason häntä)
     - fundamental_anchor : live-hinta + Brent-EUR-pass-through + viikonpäivä + momentum
     - ai_llm             : Claude Fable 5 + 10k token extended thinking (uutiset + geopoliittinen riski)
-    - weekly_cycle       : viikoittainen hinnoittelurytmi (hypyt, syklivaihe)
 
 Sekä datalaatutietoinen ensemble-yhdistelmä, joka ankkuroidaan live-hintaan.
 
@@ -27,8 +26,8 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 from llm_client import LLMConfigError, configured_model, send_message
-import weekly_cycle as wc_mod
 import fi_holidays
+from forecast_contract import MODEL_VERSION, target_date
 
 
 # ---------------- yleiset apurit ----------------
@@ -39,6 +38,23 @@ def _safe_prices(prices: list[float]) -> list[float]:
 
 def _parse_date(s: str):
     return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
+
+
+def persistence_forecast(value: float | None, band: float = 0.02) -> dict:
+    """Tomorrow equals the latest fresh price until a challenger beats it."""
+    if value is None:
+        return {"value": None, "confidence_low": None, "confidence_high": None,
+                "explanation": "Ei tuoretta hintaa persistence-ennusteeseen."}
+    value = float(value)
+    return {
+        "value": round(value, 4),
+        "confidence_low": round(value - band, 4),
+        "confidence_high": round(value + band, 4),
+        "weights": {"persistence": 1.0},
+        "n_methods": 1,
+        "model": MODEL_VERSION,
+        "explanation": "Tuorein 21:00 hinta jatkuu huomiselle.",
+    }
 
 
 def _daily_tail(dates, prices, max_gap: int = 3, min_len: int = 4):
@@ -585,7 +601,8 @@ async def ai_llm_predict(fuel: str, prices: list[float],
                          crack_eur_l: float | None = None,
                          tax_events: list[dict] | None = None,
                          tax_step_eur_l: float | None = None,
-                         track_record: dict | None = None) -> dict:
+                         track_record: dict | None = None,
+                         target_date_iso: str | None = None) -> dict:
     """Claude Fable 5 -ennuste (extended thinking, 10k token budget). 
     Hoitaa ETUPAINOTTEISEN geopoliittisen riskin:
     konflikti-/tarjontahäiriöuutiset jotka Brent ei vielä täysin hinnoittele."""
@@ -781,14 +798,15 @@ async def ai_llm_predict(fuel: str, prices: list[float],
             "  (ei vielä riittävää historiaa — kerätään tästä päivästä alkaen)"
         )
 
-    today_iso = datetime.now(timezone.utc).date().isoformat()
+    tomorrow = _parse_date(target_date_iso) if target_date_iso else target_date()
+    today_iso = (tomorrow - timedelta(days=1)).isoformat()
     wd = ["maanantai", "tiistai", "keskiviikko", "torstai",
           "perjantai", "lauantai", "sunnuntai"]
-    weekday_fi = wd[datetime.now(timezone.utc).weekday()]
-    tomorrow_weekday_fi = wd[(datetime.now(timezone.utc).weekday() + 1) % 7]
+    weekday_fi = wd[(tomorrow - timedelta(days=1)).weekday()]
+    tomorrow_weekday_fi = wd[tomorrow.weekday()]
 
     # Pyhäkalenteri: tunnettu deterministinen kysyntäsignaali (vrt. verot)
-    tomorrow_date = datetime.now(timezone.utc).date() + timedelta(days=1)
+    tomorrow_date = tomorrow
     cal_profile = fi_holidays.demand_profile(tomorrow_date)
     if cal_profile:
         kind, cal_name = cal_profile
@@ -875,7 +893,7 @@ async def ai_llm_predict(fuel: str, prices: list[float],
     )
 
     prompt = (
-        f"Ennusta {fuel}-pump-hinta huomiselle ({today_iso}, "
+        f"Ennusta {fuel}-pump-hinta huomiselle ({tomorrow.isoformat()}, "
         f"{tomorrow_weekday_fi}) alueella {region}. Tänään {weekday_fi}.\n\n"
         f"=== HINTA-ANKKURI (pääankkuri) ===\nLive nyt: {live_line}\n\n"
         f"=== LAG-PIIKIT (eksplisiittiset viiveet aidosta päivähännästä) ===\n"
@@ -1065,22 +1083,20 @@ def ensemble(predictions: dict, live_anchor: float | None = None,
     if n_daily >= 14:
         weights = {
             "fundamental_anchor": 0.28,
-            "ai_llm": 0.20,
-            "weekly_cycle": 0.15,
-            "exp_smoothing": 0.16,
-            "linear_regression": 0.12,
-            "moving_average": 0.09,
+            "ai_llm": 0.26,
+            "exp_smoothing": 0.20,
+            "linear_regression": 0.15,
+            "moving_average": 0.11,
         }
         mode = "riittävä päivädata"
     else:
         # ohut / kuukausivetoinen: luota ankkuriin + AI:hin
         weights = {
-            "fundamental_anchor": 0.45,
-            "ai_llm": 0.28,
-            "weekly_cycle": 0.12,
-            "moving_average": 0.08,
+            "fundamental_anchor": 0.50,
+            "ai_llm": 0.32,
+            "moving_average": 0.10,
             "exp_smoothing": 0.05,
-            "linear_regression": 0.02,
+            "linear_regression": 0.03,
         }
         mode = "ohut päivädata → ankkuripainotus"
 
@@ -1149,7 +1165,8 @@ async def predict_tomorrow(fuel: str,
                            tax_events: list[dict] | None = None,
                            tax_step_eur_l: float | None = None,
                            track_record: dict | None = None,
-                           breaking_news_severity: int = 0) -> dict:
+                           breaking_news_severity: int = 0,
+                           target_date_iso: str | None = None) -> dict:
     """Aja kaikki menetelmät ja palauta ennusteet + datalaatutietoinen ensemble.
 
     `brent_chg` / `eur_usd_chg` = murto-osamuutos (esim. 0.03 = +3 %) viim.
@@ -1169,9 +1186,9 @@ async def predict_tomorrow(fuel: str,
         prices = list(prices)
         prices[-1] = float(live_today_price)
 
-    tomorrow_weekday = (datetime.now(timezone.utc).weekday() + 1) % 7
-    tomorrow_date_iso = (datetime.now(timezone.utc).date()
-                         + timedelta(days=1)).isoformat()
+    tomorrow_date = _parse_date(target_date_iso) if target_date_iso else target_date()
+    tomorrow_weekday = tomorrow_date.weekday()
+    tomorrow_date_iso = tomorrow_date.isoformat()
     conflict = bool(_scan_conflict(news_headlines))
     n_daily = len(_daily_tail(dates, prices, max_gap=3, min_len=4))
 
@@ -1195,23 +1212,19 @@ async def predict_tomorrow(fuel: str,
         product_label=product_label, crack_eur_l=crack_eur_l,
         tax_events=tax_events, tax_step_eur_l=tax_step_eur_l,
         track_record=track_record,
+        target_date_iso=tomorrow_date_iso,
     )
-    wc = wc_mod.weekly_cycle_predict(
-        dates, prices,
-        live_anchor=live_today_price,
-        tomorrow_weekday=tomorrow_weekday,
-    )
-
     predictions = {
+        "persistence": persistence_forecast(live_today_price if live_today_price is not None else (prices[-1] if prices else None)),
         "moving_average": ma,
         "linear_regression": lr,
         "exp_smoothing": es,
         "fundamental_anchor": fa,
         "ai_llm": ai,
-        "weekly_cycle": wc,
     }
-    ens = ensemble(predictions, live_anchor=live_today_price, n_daily=n_daily,
-                   method_mae=method_mae, breaking_news_severity=breaking_news_severity)
+    challenger = ensemble(predictions, live_anchor=live_today_price, n_daily=n_daily,
+                          method_mae=method_mae, breaking_news_severity=breaking_news_severity)
+    champion = predictions["persistence"]
     return {
         "fuel": fuel,
         "region": region,
@@ -1237,178 +1250,7 @@ async def predict_tomorrow(fuel: str,
             "stats": track_stats or {},
         },
         "methods": predictions,
-        "ensemble": ens,
-    }
-
-# ---------------- hourly predictions ----------------
-
-def _hour_adjustment(hour: int, tomorrow_weekday: int) -> float:
-    """Hour-of-day price adjustment (€/L).
-    
-    Uncalibrated prior based on general market observation:
-    - Morning (6-10): slightly lower
-    - Midday (11-15): baseline
-    - Evening (16-21): slightly higher (commute demand)
-    - Night (22-5): lower (fewer stations open)
-    
-    These are NOT Finland-measured coefficients — replace with data-calibrated
-    values once hourly captures accumulate.
-    """
-    if 6 <= hour <= 10:
-        return -0.003  # morning dip
-    elif 16 <= hour <= 21:
-        return +0.004  # evening peak
-    elif 22 <= hour or hour <= 5:
-        return -0.005  # night low
-    else:
-        return 0.0  # midday baseline
-
-
-async def predict_by_hour(fuel: str,
-                          dates: list[str],
-                          prices: list[float],
-                          target_hours: list[int],
-                          brent: float | None,
-                          eur_usd: float | None,
-                          live_today_price: float | None = None,
-                          news_headlines: list[dict] | None = None,
-                          region: str = "Suomi",
-                          brent_chg: float | None = None,
-                          eur_usd_chg: float | None = None,
-                          method_mae: dict | None = None,
-                          product_usd_gal: float | None = None,
-                          product_chg: float | None = None,
-                          product_label: str | None = None,
-                          crack_eur_l: float | None = None,
-                          tax_events: list[dict] | None = None,
-                          tax_step_eur_l: float | None = None,
-                          track_record: dict | None = None,
-                          breaking_news_severity: int = 0) -> dict:
-    """Predict fuel price for specific hours of tomorrow.
-    
-    Returns:
-    {
-        "base_prediction": <predict_tomorrow result>,
-        "hourly": {
-            14: {"value": float, "confidence_low": float, "confidence_high": float},
-            21: {"value": float, "confidence_low": float, "confidence_high": float},
-        }
-    }
-    """
-    # Get base day-ahead prediction
-    base = await predict_tomorrow(
-        fuel, dates, prices, brent, eur_usd,
-        live_today_price=live_today_price,
-        news_headlines=news_headlines,
-        region=region,
-        brent_chg=brent_chg,
-        eur_usd_chg=eur_usd_chg,
-        method_mae=method_mae,
-        product_usd_gal=product_usd_gal,
-        product_chg=product_chg,
-        product_label=product_label,
-        crack_eur_l=crack_eur_l,
-        tax_events=tax_events,
-        tax_step_eur_l=tax_step_eur_l,
-        track_record=track_record,
-        breaking_news_severity=breaking_news_severity,
-    )
-    
-    base_value = base["ensemble"].get("value")
-    if base_value is None:
-        return {"base_prediction": base, "hourly": {}}
-    
-    tomorrow_weekday = (datetime.now(timezone.utc).weekday() + 1) % 7
-    hourly = {}
-    
-    for hour in target_hours:
-        adj = _hour_adjustment(hour, tomorrow_weekday)
-        val = base_value + adj
-        
-        # Widen confidence interval slightly for hourly granularity
-        base_low = base["ensemble"].get("confidence_low", val - 0.02)
-        base_high = base["ensemble"].get("confidence_high", val + 0.02)
-        spread = (base_high - base_low) / 2
-        hourly_spread = spread * 1.15  # 15% wider for intra-day uncertainty
-        
-        # MongoDB requires string keys
-        hourly[str(hour)] = {
-            "value": round(val, 4),
-            "confidence_low": round(val - hourly_spread, 4),
-            "confidence_high": round(val + hourly_spread, 4),
-            "hour_adjustment": round(adj, 4),
-        }
-    
-    return {
-        "base_prediction": base,
-        "hourly": hourly,
-    }
-
-
-def find_best_window(hourly_predictions: dict, current_price: float | None = None) -> dict:
-    """Find the hour with minimum predicted price.
-    
-    Args:
-        hourly_predictions: {hour_str: {"value": float, ...}} (string keys from MongoDB)
-        current_price: current live price for savings calculation
-    
-    Returns:
-        {
-            "best_hour": int,
-            "best_price": float,
-            "label_fi": str,  # "Aamulla" / "Iltapäivällä" / "Illalla"
-            "savings_vs_now": float | None,  # €/L difference vs current
-        }
-    """
-    if not hourly_predictions:
-        return {
-            "best_hour": None,
-            "best_price": None,
-            "label_fi": None,
-            "savings_vs_now": None,
-        }
-    
-    # Find hour with minimum value
-    best_hour = None
-    best_price = None
-    for hour_key, pred in hourly_predictions.items():
-        # Convert string key back to int for comparisons
-        try:
-            hour = int(hour_key)
-        except (ValueError, TypeError):
-            continue
-        
-        val = pred.get("value")
-        if val is not None:
-            if best_price is None or val < best_price:
-                best_hour = hour
-                best_price = val
-    
-    if best_hour is None:
-        return {
-            "best_hour": None,
-            "best_price": None,
-            "label_fi": None,
-            "savings_vs_now": None,
-        }
-    
-    # Finnish time label
-    if 6 <= best_hour <= 11:
-        label_fi = "Aamulla"
-    elif 12 <= best_hour <= 17:
-        label_fi = "Iltapäivällä"
-    elif 18 <= best_hour <= 23:
-        label_fi = "Illalla"
-    else:
-        label_fi = "Yöllä"
-    
-    savings = None
-    if current_price is not None and best_price is not None:
-        savings = current_price - best_price
-    
-    return {
-        "best_hour": best_hour,
-        "best_price": round(best_price, 4) if best_price else None,
-        "label_fi": label_fi,
-        "savings_vs_now": round(savings, 4) if savings is not None else None,
+        "ensemble": champion,
+        "challenger_ensemble": challenger,
+        "model_version": MODEL_VERSION,
     }

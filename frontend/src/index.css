@@ -4,33 +4,36 @@
 
 :root {
   color-scheme: light;
-  --grain-opacity: 0.045;
+  --grain-opacity: 0.02;
 
   --font-display: "Saira Condensed", sans-serif;
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --bg: #E8E1CF;
-  --bg2: #EDE6D4;
-  --panel: #F4EEDE;
-  --panel-2: #ECE5D2;
-  --line: #CBBF9F;
-  --line-strong: #1B1712;
-  --ink: #1B1712;
-  --ink-dim: #5C5647;
-  --ink-faint: #8A8369;
-  --amber: #9A5B00;
-  --amber-soft: #B26B00;
-  --go: #0E8C72;
-  --stop: #C2412A;
+  --bg: #F3F5F4;
+  --bg2: #E9EEEC;
+  --panel: #FFFFFF;
+  --panel-2: #EDEFEE;
+  --line: #CCD4D1;
+  --line-strong: #64706C;
+  --ink: #171B1A;
+  --ink-dim: #596460;
+  --ink-faint: #7A8581;
+  --amber: #B66C00;
+  --amber-soft: #D18415;
+  --go: #087966;
+  --stop: #BF4934;
+  --info: #2B6F9E;
+  --chart-primary: #2B6F9E;
+  --chart-secondary: #B66C00;
 
-  --c-ink: 27 23 18;
-  --c-secondary: 92 86 71;
-  --c-muted: 138 131 105;
-  --c-surface: 244 238 222;
-  --c-line: 203 191 159;
+  --c-ink: 23 27 26;
+  --c-secondary: 89 100 96;
+  --c-muted: 122 133 129;
+  --c-surface: 237 239 238;
+  --c-line: 204 212 209;
 
-  --cell-bg: #F4EEDE;
+  --cell-bg: #FFFFFF;
   --cell-shadow: inset 0 1px 0 rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.08);
   --digit-glow: none;
 
@@ -46,19 +49,22 @@
 html.dark {
   color-scheme: dark;
 
-  --bg: #0A0C10;
-  --bg2: #0C0F15;
-  --panel: #13171F;
-  --panel-2: #171C25;
-  --line: #262C37;
-  --line-strong: #39414F;
-  --ink: #F0EDE4;
-  --ink-dim: #9BA3B2;
-  --ink-faint: #646C7C;
+  --bg: #0B0E0D;
+  --bg2: #101412;
+  --panel: #141817;
+  --panel-2: #1B211F;
+  --line: #303835;
+  --line-strong: #66716D;
+  --ink: #F2F4F3;
+  --ink-dim: #A1AAA7;
+  --ink-faint: #717B77;
   --amber: #FFB000;
   --amber-soft: #FFC24D;
   --go: #43D6B5;
   --stop: #FF6B4A;
+  --info: #70B7E4;
+  --chart-primary: #70B7E4;
+  --chart-secondary: #FFB000;
 
   --c-ink: 240 237 228;
   --c-secondary: 155 163 178;

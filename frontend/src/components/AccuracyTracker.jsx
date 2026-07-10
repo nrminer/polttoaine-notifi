@@ -3,15 +3,17 @@ import { Card, CardLabel } from "./Card";
 import { Target, ChevronDown, ChevronUp } from "lucide-react";
 
 const METHOD_LABEL = {
+  persistence: "Muuttumattoman hinnan vertailutaso",
   moving_average: "Liukuva keskiarvo",
   linear_regression: "Lineaarinen regressio",
   exp_smoothing: "Eksponentiaalinen tasoitus",
   fundamental_anchor: "Fundamenttiankkuri",
   ai_llm: "Uutis- ja malliarvio",
-  ensemble: "Yhdistelmä",
+  ensemble: "Käytössä oleva ennuste",
 };
 
 const METHOD_EXPLAIN = {
+  persistence: "Käyttää edellisen päivän tuoretta klo 21 hintaa huomisen vertailutasona.",
   moving_average: "Lasketaan viimeisten toteutuneiden mittausten liukuvasta keskiarvosta ja verrataan saman päivän toteumaan.",
   linear_regression: "Sovittaa viimeaikaiseen hintasarjaan trendiviivan ja mittaa, kuinka kauas trendiennuste jäi toteumasta.",
   exp_smoothing: "Painottaa uusimpia mittauksia vanhoja enemmän ja vertaa tasoitettua ennustetta toteutuneeseen hintaan.",
@@ -81,9 +83,11 @@ export default function AccuracyTracker({ data }) {
       </div>
 
       <button
+        type="button"
         onClick={() => setShowDetails(!showDetails)}
         className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-brand hover:text-accent transition-colors"
         data-testid="accuracy-toggle-details"
+        aria-expanded={showDetails}
       >
         {showDetails ? (
           <>
@@ -129,6 +133,12 @@ export default function AccuracyTracker({ data }) {
                       onMouseEnter={() => setActiveMethod(key)}
                       onFocus={() => setActiveMethod(key)}
                       onClick={() => setActiveMethod(key)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveMethod(key);
+                        }
+                      }}
                     >
                       <td className="py-3 px-3">
                         <span className="text-xs text-ink">{METHOD_LABEL[key] || key}</span>

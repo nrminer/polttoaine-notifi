@@ -128,6 +128,19 @@ def validate_scraped_data(
     return filtered
 
 
+def filter_fresh_rows(rows: list[dict], max_age_hours: float = 24.0) -> list[dict]:
+    """Keep observations whose source supplied a usable age within the limit."""
+    fresh = []
+    for row in rows:
+        try:
+            age = float(row.get("age_hours"))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= age <= max_age_hours:
+            fresh.append(row)
+    return fresh
+
+
 def validate_cross_fuel_prices(diesel_price: Optional[float], 
                                gasoline_price: Optional[float],
                                min_diff: float = -0.30,

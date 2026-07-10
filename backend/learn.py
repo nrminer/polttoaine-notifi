@@ -11,6 +11,7 @@ import accuracy_utils as accuracy_mod
 
 
 _METHODS = (
+    "persistence",
     "moving_average",
     "linear_regression",
     "exp_smoothing",

@@ -28,45 +28,12 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 from scrapers import polttoaine, tankille
+from validation import validate_scraped_data
 
 logger = logging.getLogger("bensavahti.notify")
 
 WATCHED_CITIES = ("Helsinki", "Vantaa", "Espoo")
 FUEL_LABELS = {"95E10": "95E10", "diesel": "Diesel"}
-
-# sanity bounds for FI fuel prices (€/L) — drop parsing errors / stale junk
-PRICE_MIN_SANITY = 1.10
-PRICE_MAX_SANITY = 3.50
-PRICE_MEDIAN_DEV = 0.25
-
-
-def _sanity_filter(rows: list[dict], label: str = "") -> list[dict]:
-    if not rows:
-        return []
-    hard = []
-    for r in rows:
-        p = r.get("price")
-        if not isinstance(p, (int, float)):
-            continue
-        if PRICE_MIN_SANITY <= p <= PRICE_MAX_SANITY:
-            hard.append(r)
-        else:
-            logger.warning("notify sanity[%s] drop %.3f at %s/%s",
-                           label, p, r.get("city"), r.get("station"))
-    if len(hard) < 3:
-        return hard
-    sorted_p = sorted(r["price"] for r in hard)
-    median = sorted_p[len(sorted_p) // 2]
-    out = []
-    for r in hard:
-        dev = abs(r["price"] - median) / median if median else 0
-        if dev > PRICE_MEDIAN_DEV:
-            logger.warning("notify sanity[%s] drop %.3f vs median %.3f at %s",
-                           label, r["price"], median, r.get("station"))
-            continue
-        out.append(r)
-    return out
-
 
 def _config() -> tuple[str, str, str, str] | None:
     server = (os.environ.get("NTFY_SERVER") or "https://ntfy.sh").rstrip("/")
@@ -191,10 +158,10 @@ def build_detailed_message() -> tuple[str, str]:
         f_pd = ex.submit(polttoaine.fetch_prices, "diesel")
         f_t95 = ex.submit(tankille.fetch_prices, "95E10")
         f_td = ex.submit(tankille.fetch_prices, "diesel")
-        p95 = _sanity_filter(_safe(f_p95.result), "polttoaine-95E10")
-        pd = _sanity_filter(_safe(f_pd.result), "polttoaine-diesel")
-        t95 = _sanity_filter(_safe(f_t95.result), "tankille-95E10")
-        td = _sanity_filter(_safe(f_td.result), "tankille-diesel")
+        p95 = validate_scraped_data(_safe(f_p95.result), source="polttoaine-95E10")
+        pd = validate_scraped_data(_safe(f_pd.result), source="polttoaine-diesel")
+        t95 = validate_scraped_data(_safe(f_t95.result), source="tankille-95E10")
+        td = validate_scraped_data(_safe(f_td.result), source="tankille-diesel")
 
     # Header: cheapest 95E10 among WATCHED_CITIES — tankille primary, polttoaine
     # used only as backup or when tankille looks far off.
@@ -238,10 +205,8 @@ def _safe(call) -> list[dict]:
         return []
 
 
-def send_daily_summary(captures: list[dict] | None = None) -> bool:
-    """Build and publish today's notification.
-    `captures` is accepted for backwards compatibility but ignored — we always
-    do a fresh scrape so the message includes per-city + per-source detail."""
+def send_daily_summary() -> bool:
+    """Build and publish a fresh per-city and per-source summary."""
     cfg = _config()
     if cfg is None:
         return False

@@ -68,25 +68,6 @@ curl -X POST "$BACKEND_URL/api/admin/fix-capture" \
   }'
 ```
 
-### Fix via Python Script
-
-Use the provided `fix_diesel_via_api.py` script:
-
-```bash
-python fix_diesel_via_api.py \
-  https://polttoaine-notifi-production.up.railway.app \
-  YOUR_ADMIN_TOKEN \
-  2026-06-06 \
-  14 \
-  2.000
-```
-
-The script will:
-1. Show the latest 5 diesel captures
-2. Ask for confirmation
-3. Send the fix request to the API
-4. Show the result (original price → corrected price)
-
 ## Verification Module
 
 The core verification logic lives in `backend/price_verification.py`:
@@ -94,7 +75,6 @@ The core verification logic lives in `backend/price_verification.py`:
 ### Key Functions
 
 - `verify_price(price, fuel, db, ...)`: Main verification function, returns `VerificationResult`
-- `verify_batch_iqr(prices, label)`: IQR-based outlier detection for batches
 - `get_verification_context(db, fuel, region)`: Get historical context for logging
 
 ### VerificationResult
@@ -146,8 +126,8 @@ DIESEL_PREMIUM_MAX = 0.30       # Max diesel premium over 95E10
 
 The verification system is integrated at:
 
-1. **tracker.py**: `capture_daily()` function (lines ~267-320)
-2. **server.py**: Admin endpoint `/api/admin/fix-capture` (lines ~1259-1316)
+1. **tracker.py**: `capture_daily()` validates scheduled captures
+2. **server.py**: Admin endpoint `/api/admin/fix-capture`
 3. **price_verification.py**: Core verification logic
 
 ## Monitoring

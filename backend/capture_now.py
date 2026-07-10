@@ -125,7 +125,7 @@ async def main() -> int:
 
         if args.notify and captured:
             try:
-                ok = notify_mod.send_daily_summary(captured)
+                ok = notify_mod.send_daily_summary()
                 status = ("lähetetty" if ok else
                           "ei lähetetty (NTFY_TOPIC/NTFY_TOKEN puuttuu?)")
                 print(f"ntfy: {status}")

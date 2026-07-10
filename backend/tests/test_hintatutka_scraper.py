@@ -1,4 +1,4 @@
-"""Tests for hintatutka.fi scraper.
+"""Tests for hintatutka.net scraper.
 
 Covers contract compliance, fuel mapping, chain extraction, error handling,
 and live scraping (integration test marked separately).
@@ -60,7 +60,7 @@ def test_scrape_hintatutka_contract():
                 "date", "age_hours", "fuel", "source"
             }
             assert required_keys.issubset(record.keys())
-            assert record["source"] == "hintatutka.fi"
+            assert record["source"] == "hintatutka.net"
             assert isinstance(record["price"], float)
             assert isinstance(record["age_hours"], float)
             assert record["fuel"] == "95E10"
@@ -96,7 +96,7 @@ def test_scrape_hintatutka_empty_on_malformed_html():
 # ----------- Fuel mapping -----------
 
 def test_scrape_hintatutka_fuel_mapping():
-    """'95E10' and 'Diesel' map correctly to hintatutka.fi identifiers."""
+    """'95E10' and 'Diesel' map correctly to hintatutka.net identifiers."""
     assert "95E10" in FUEL_MAP
     assert "diesel" in FUEL_MAP
     assert FUEL_MAP["95E10"] == "95 E10"
@@ -200,23 +200,23 @@ def test_freshness_hours_edge_cases():
 
 @pytest.mark.integration
 def test_scrape_hintatutka_real():
-    """Live scrape test against actual hintatutka.fi site.
+    """Live scrape test against actual hintatutka.net site.
 
     Marked with @pytest.mark.integration - skip by default.
     Run with: pytest -v -m integration
     """
     results = fetch_prices(fuel="95E10", cities=["Helsinki"])
 
-    # NOTE: This test depends on hintatutka.fi being live and having data.
+    # NOTE: This test depends on hintatutka.net being live and having data.
     # If the site is down or the scraper is still placeholder, this may fail.
     # The test validates structure, not exact content.
 
     if not results:
-        pytest.skip("No results from hintatutka.fi (site may be down or scraper is placeholder)")
+        pytest.skip("No results from hintatutka.net (site may be down or scraper is placeholder)")
 
     # Validate at least one result has correct structure
     record = results[0]
-    assert record["source"] == "hintatutka.fi"
+    assert record["source"] == "hintatutka.net"
     assert record["fuel"] == "95E10"
     assert record["city"] == "Helsinki"
     assert 1.0 <= record["price"] <= 3.5  # Sanity bounds
@@ -224,7 +224,7 @@ def test_scrape_hintatutka_real():
     assert isinstance(record["station"], str)
     assert len(record["station"]) > 0
 
-    print(f"\n[integration] Scraped {len(results)} stations from hintatutka.fi")
+    print(f"\n[integration] Scraped {len(results)} stations from hintatutka.net")
     print(f"[integration] Sample: {results[0]}")
 
 
@@ -244,7 +244,7 @@ def test_scrape_hintatutka_with_fixture(mock_html):
         # Adjust assertions based on fixture structure
         if results:
             record = results[0]
-            assert record["source"] == "hintatutka.fi"
+            assert record["source"] == "hintatutka.net"
             assert record["fuel"] == "95E10"
             assert record["city"] == "Helsinki"
             assert isinstance(record["price"], float)
